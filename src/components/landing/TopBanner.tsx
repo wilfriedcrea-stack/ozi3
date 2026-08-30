@@ -3,7 +3,7 @@ import { useData } from '../../context/DataContext';
 
 export const TopBanner: React.FC = () => {
   const { series, openReader } = useData();
-  const [imgSrc, setImgSrc] = useState('https://ozibd.net/ban.jpg');
+  const [imgSrc, setImgSrc] = useState('https://ozibd.net/testo.png');
 
   const handleBannerClick = () => {
     const featured = series[0];
@@ -16,9 +16,11 @@ export const TopBanner: React.FC = () => {
   };
 
   const handleImageError = () => {
-    if (imgSrc === 'https://ozibd.net/ban.jpg') {
-      setImgSrc('/ban.jpg');
-    } else if (imgSrc === '/ban.jpg') {
+    if (imgSrc === 'https://ozibd.net/testo.png') {
+      setImgSrc('/testo.png');
+    } else if (imgSrc === '/testo.png') {
+      setImgSrc('https://ozibd.net/ban.jpg');
+    } else {
       setImgSrc('/images/ozi_mosaic_banner.jpg');
     }
   };

@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+      - master
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -15,11 +17,10 @@ jobs:
       - name: Configuration de Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: 22
 
       - name: Installation des dépendances
-        run: npm ci
+        run: npm install
 
       - name: Compilation du site (Build)
         run: npm run build
@@ -33,3 +34,4 @@ jobs:
           local-dir: ./dist/
           server-dir: ./htdocs/
           dangerous-clean-slate: false
+
