@@ -32,6 +32,6 @@ jobs:
           username: ${{ secrets.LWS_FTP_USERNAME }}
           password: ${{ secrets.LWS_FTP_PASSWORD }}
           local-dir: ./dist/
-          server-dir: ./htdocs/
+          server-dir: ./
           dangerous-clean-slate: false
 
