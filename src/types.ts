@@ -58,6 +58,8 @@ export interface Series {
   country: string;
   synopsis: string;
   genre: SeriesGenre;
+  format?: 'série' | 'film' | 'manga' | 'webtoon' | 'one-shot';
+  mediaType?: string;
   secondaryGenres?: SeriesGenre[];
   tags: string[];
   coverUrl: string;
@@ -100,6 +102,23 @@ export interface Teaser {
 }
 
 export type VideoTeaser = Teaser;
+
+export interface Article {
+  id: string;
+  title: string;
+  slug: string;
+  image: string;
+  publishedAt: string;
+  category?: string;
+  excerpt?: string;
+  featured?: boolean;
+  published?: boolean;
+  layoutSize?: 'hero' | 'grid' | 'asymmetric-large' | 'asymmetric-small';
+  alt?: string;
+  author?: string;
+  readTime?: string;
+  content?: string;
+}
 
 export interface PressRelease {
   id: string;

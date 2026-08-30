@@ -1,6 +1,6 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore, collection, doc, setDoc, deleteDoc, onSnapshot, getDocFromServer } from 'firebase/firestore';
-import { Series, Teaser, PressRelease, AppVersionInfo, CreatorSubmission } from '../types';
+import { Series, Teaser, PressRelease, AppVersionInfo, CreatorSubmission, Article } from '../types';
 
 export enum OperationType {
   CREATE = 'create',
@@ -137,3 +137,24 @@ export async function syncSubmissionToFirestore(db: Firestore, sub: CreatorSubmi
     return { success: false, error: err };
   }
 }
+
+export async function syncArticleToFirestore(db: Firestore, article: Article) {
+  try {
+    await setDoc(doc(db, 'articles', article.id), article, { merge: true });
+    return { success: true };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `articles/${article.id}`);
+    return { success: false, error: err };
+  }
+}
+
+export async function deleteArticleFromFirestore(db: Firestore, articleId: string) {
+  try {
+    await deleteDoc(doc(db, 'articles', articleId));
+    return { success: true };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `articles/${articleId}`);
+    return { success: false, error: err };
+  }
+}
+

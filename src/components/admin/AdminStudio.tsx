@@ -14,6 +14,7 @@ import { AdminMonetizationManager } from './AdminMonetizationManager';
 import { AdminUsersManager } from './AdminUsersManager';
 import { AdminAdsManager } from './AdminAdsManager';
 import { AdminStorageManager } from './AdminStorageManager';
+import { AdminArticlesManager } from './AdminArticlesManager';
 import { useData } from '../../context/DataContext';
 
 export const AdminStudio: React.FC = () => {
@@ -50,6 +51,8 @@ export const AdminStudio: React.FC = () => {
           )}
 
           {activeTab === 'series' && <AdminSeriesManager />}
+
+          {activeTab === 'articles' && <AdminArticlesManager />}
 
           {activeTab === 'monetization' && <AdminMonetizationManager />}
 

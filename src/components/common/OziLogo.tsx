@@ -7,6 +7,7 @@ interface OziLogoProps {
   showText?: boolean;
   showSubtitle?: boolean;
   showBadge?: boolean;
+  src?: string;
 }
 
 export const OziLogo: React.FC<OziLogoProps> = ({ 
@@ -14,16 +15,32 @@ export const OziLogo: React.FC<OziLogoProps> = ({
   size = 'md',
   showText = false,
   showSubtitle = false,
-  showBadge = false
+  showBadge = false,
+  src
 }) => {
+  const [currentSrc, setCurrentSrc] = useState(src || 'https://ozibd.net/logoweb.png');
   const [imgError, setImgError] = useState(false);
 
+  const handleImageError = () => {
+    if (currentSrc === 'https://ozibd.net/logoweb.png' || currentSrc === 'http://ozibd.net/logoweb.png') {
+      setCurrentSrc('/logoweb.png');
+    } else if (currentSrc === '/logoweb.png') {
+      if (OZI_LOGO_URL) {
+        setCurrentSrc(OZI_LOGO_URL);
+      } else {
+        setImgError(true);
+      }
+    } else {
+      setImgError(true);
+    }
+  };
+
   const sizeClasses = {
-    xs: 'h-7 sm:h-8 w-auto max-w-[100px]',
-    sm: 'h-9 sm:h-10 w-auto max-w-[130px]',
-    md: 'h-12 sm:h-14 w-auto max-w-[190px]',
-    lg: 'h-16 sm:h-18 w-auto max-w-[260px]',
-    xl: 'h-22 sm:h-26 w-auto max-w-[360px]',
+    xs: 'h-7 sm:h-8 w-auto max-w-[110px]',
+    sm: 'h-8 sm:h-9 w-auto max-w-[145px]',
+    md: 'h-10 sm:h-12 w-auto max-w-[185px]',
+    lg: 'h-14 sm:h-16 w-auto max-w-[250px]',
+    xl: 'h-20 sm:h-24 w-auto max-w-[340px]',
   }[size];
 
   const iconSizes = {
@@ -38,9 +55,9 @@ export const OziLogo: React.FC<OziLogoProps> = ({
     <div className={`inline-flex items-center gap-3 select-none ${className}`}>
       {!imgError ? (
         <img
-          src={OZI_LOGO_URL || '/images/ozi-logo.png'}
+          src={currentSrc}
           alt="OZI Logo"
-          onError={() => setImgError(true)}
+          onError={handleImageError}
           className={`${sizeClasses} object-contain transition-transform hover:scale-105 duration-200 shrink-0 drop-shadow-md`}
           loading="eager"
         />

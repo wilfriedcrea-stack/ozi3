@@ -19,7 +19,8 @@ import {
   UserAccount,
   CoinTransaction,
   AdBanner,
-  LwsStorageFile
+  LwsStorageFile,
+  Article
 } from '../types';
 import { 
   INITIAL_SERIES, 
@@ -38,6 +39,7 @@ import {
   INITIAL_ADS,
   INITIAL_LWS_FILES
 } from '../data/initialData';
+import { initialArticles } from '../data/initialArticles';
 import { 
   initializeFirebaseCustom, 
   testFirestoreConnection, 
@@ -46,7 +48,9 @@ import {
   syncAppVersionToFirestore, 
   syncPressToFirestore, 
   syncTeaserToFirestore, 
-  syncSubmissionToFirestore 
+  syncSubmissionToFirestore,
+  syncArticleToFirestore,
+  deleteArticleFromFirestore
 } from '../services/firebaseService';
 
 interface AdminAuthState {
@@ -76,6 +80,7 @@ interface DataContextType {
   coinTransactions: CoinTransaction[];
   ads: AdBanner[];
   lwsFiles: LwsStorageFile[];
+  articles: Article[];
 
   // Auth actions
   loginWithGoogle: () => Promise<boolean>;
@@ -109,6 +114,11 @@ interface DataContextType {
   addTeaser: (teaser: Omit<Teaser, 'id' | 'viewsCount' | 'releaseDate'>) => void;
   updateTeaser: (id: string, updates: Partial<Teaser>) => void;
   deleteTeaser: (id: string) => void;
+
+  // Articles actions
+  addArticle: (article: Omit<Article, 'id' | 'slug'>) => void;
+  updateArticle: (id: string, updates: Partial<Article>) => void;
+  deleteArticle: (id: string) => void;
 
   // Press actions
   addPressRelease: (press: Omit<PressRelease, 'id' | 'slug' | 'date'>) => void;
@@ -183,7 +193,8 @@ const STORAGE_KEYS = {
   USERS: 'ozi_users_data_v1',
   TRANSACTIONS: 'ozi_transactions_v1',
   ADS: 'ozi_ads_banners_v1',
-  LWS_FILES: 'ozi_lws_files_v1'
+  LWS_FILES: 'ozi_lws_files_v1',
+  ARTICLES: 'ozi_articles_data_v1'
 };
 
 const getInitialViewMode = (): 'accueil' | 'oeuvres' | 'articles' | 'admin' => {
@@ -265,6 +276,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return saved ? JSON.parse(saved) : INITIAL_PRESS_RELEASES;
     } catch {
       return INITIAL_PRESS_RELEASES;
+    }
+  });
+
+  const [articles, setArticles] = useState<Article[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.ARTICLES);
+      return saved ? JSON.parse(saved) : initialArticles;
+    } catch {
+      return initialArticles;
     }
   });
 
@@ -509,6 +529,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.ADS, JSON.stringify(ads));
   }, [ads]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.ARTICLES, JSON.stringify(articles));
+  }, [articles]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.LWS_FILES, JSON.stringify(lwsFiles));
@@ -764,6 +788,53 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deletePressRelease = useCallback((id: string) => {
     setPressReleases(prev => prev.filter(p => p.id !== id));
   }, []);
+
+  // Articles CRUD
+  const addArticle = useCallback((articleData: Omit<Article, 'id' | 'slug'>) => {
+    const id = `art-${Date.now()}`;
+    const slug = articleData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const newArticle: Article = {
+      ...articleData,
+      id,
+      slug,
+      published: articleData.published !== undefined ? articleData.published : true,
+      publishedAt: articleData.publishedAt || new Date().toISOString().split('T')[0]
+    };
+    setArticles(prev => [newArticle, ...prev]);
+
+    if (firebaseConfig.isConnected) {
+      const fb = initializeFirebaseCustom({ projectId: firebaseConfig.projectId, databaseId: firebaseConfig.databaseId });
+      if (fb.success && fb.db) {
+        syncArticleToFirestore(fb.db, newArticle);
+      }
+    }
+  }, [firebaseConfig]);
+
+  const updateArticle = useCallback((id: string, updates: Partial<Article>) => {
+    setArticles(prev => prev.map(a => {
+      if (a.id === id) {
+        const updated = { ...a, ...updates };
+        if (firebaseConfig.isConnected) {
+          const fb = initializeFirebaseCustom({ projectId: firebaseConfig.projectId, databaseId: firebaseConfig.databaseId });
+          if (fb.success && fb.db) {
+            syncArticleToFirestore(fb.db, updated);
+          }
+        }
+        return updated;
+      }
+      return a;
+    }));
+  }, [firebaseConfig]);
+
+  const deleteArticle = useCallback((id: string) => {
+    setArticles(prev => prev.filter(a => a.id !== id));
+    if (firebaseConfig.isConnected) {
+      const fb = initializeFirebaseCustom({ projectId: firebaseConfig.projectId, databaseId: firebaseConfig.databaseId });
+      if (fb.success && fb.db) {
+        deleteArticleFromFirestore(fb.db, id);
+      }
+    }
+  }, [firebaseConfig]);
 
   // Version Info
   const updateAppVersion = useCallback((updates: Partial<AppVersionInfo>) => {
@@ -1123,6 +1194,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (fb.success && fb.db) {
         // Sync all series in parallel
         await Promise.all(series.map(s => syncSeriesToFirestore(fb.db!, s)));
+        await Promise.all(articles.map(a => syncArticleToFirestore(fb.db!, a)));
         await syncAppVersionToFirestore(fb.db, appVersion);
         await Promise.all(pressReleases.map(p => syncPressToFirestore(fb.db!, p)));
         await Promise.all(teasers.map(t => syncTeaserToFirestore(fb.db!, t)));
@@ -1137,13 +1209,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       setFirebaseConfig(prev => ({ ...prev, syncState: 'error', errorMessage: 'Échec de synchronisation globale' }));
     }
-  }, [firebaseConfig, series, appVersion, pressReleases, teasers]);
+  }, [firebaseConfig, series, articles, appVersion, pressReleases, teasers]);
 
   return (
     <DataContext.Provider value={{
       series,
       teasers,
       pressReleases,
+      articles,
       mediaKit,
       appVersion,
       analytics,
@@ -1180,6 +1253,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addTeaser,
       updateTeaser,
       deleteTeaser,
+      addArticle,
+      updateArticle,
+      deleteArticle,
       addPressRelease,
       updatePressRelease,
       deletePressRelease,

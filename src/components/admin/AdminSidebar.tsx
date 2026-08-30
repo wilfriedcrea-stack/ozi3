@@ -12,7 +12,8 @@ import {
   ShieldAlert,
   Megaphone,
   HardDrive,
-  UserCheck
+  UserCheck,
+  FileText
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { OziLogo } from '../common/OziLogo';
@@ -23,7 +24,7 @@ interface AdminSidebarProps {
 }
 
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({ activeTab, setActiveTab }) => {
-  const { setViewMode, series, submissions, firebaseConfig, creatorPayouts, reportedComments, users, ads, lwsFiles } = useData();
+  const { setViewMode, series, submissions, firebaseConfig, creatorPayouts, reportedComments, users, ads, lwsFiles, articles } = useData();
 
   const pendingSubmissionsCount = submissions.filter(s => s.status === 'pending').length;
   const pendingPayoutsCount = creatorPayouts.filter(p => p.status === 'pending').length;
@@ -32,6 +33,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ activeTab, setActive
   const NAV_ITEMS = [
     { id: 'dashboard', label: 'Vue d\'ensemble', icon: BarChart3, badge: null },
     { id: 'series', label: 'Séries & Chapitres', icon: BookOpen, badge: `${series.length}` },
+    { id: 'articles', label: 'Articles & Magazine', icon: FileText, badge: `${articles.length}` },
     { id: 'monetization', label: 'Monétisation & Payouts', icon: Coins, badge: pendingPayoutsCount > 0 ? `${pendingPayoutsCount} virement` : null, badgeColor: 'bg-amber-500/20 text-amber-300 border border-amber-500/30' },
     { id: 'users', label: 'Utilisateurs & VIP', icon: UserCheck, badge: `${users.length}` },
     { id: 'moderation', label: 'Modération & Charte', icon: ShieldAlert, badge: pendingReportsCount > 0 ? `${pendingReportsCount} report` : null, badgeColor: 'bg-rose-500/20 text-rose-300 border border-rose-500/30' },
