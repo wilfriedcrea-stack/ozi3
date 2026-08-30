@@ -1,0 +1,24 @@
+{
+  "short_name": "OZI",
+  "name": "OZI — Webtoons, Mangas & Bandes Dessinées",
+  "description": "Plateforme officielle de lecture de Webtoons, Mangas et Bandes Dessinées.",
+  "icons": [
+    {
+      "src": "./images/ozi-logo.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./images/ozi-logo.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "./",
+  "background_color": "#07080c",
+  "theme_color": "#ff5a50",
+  "display": "standalone",
+  "orientation": "portrait"
+}
