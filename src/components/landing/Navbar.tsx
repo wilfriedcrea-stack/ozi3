@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
   Menu, 
-  X
+  X,
+  Search
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { OziLogo } from '../common/OziLogo';
@@ -10,7 +11,7 @@ export const Navbar: React.FC = () => {
   const { viewMode, setViewMode } = useData();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const navigateTo = (mode: 'accueil' | 'oeuvres' | 'articles' | 'admin') => {
+  const navigateTo = (mode: 'accueil' | 'oeuvres' | 'articles' | 'recherche' | 'admin') => {
     setMobileMenuOpen(false);
     setViewMode(mode);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -80,8 +81,36 @@ export const Navbar: React.FC = () => {
           </button>
         </nav>
 
-        {/* Right Side: Mobile hamburger (if on small screen) */}
-        <div className="flex items-center justify-end">
+        {/* Right Side: Search Button & Mobile Hamburger */}
+        <div className="flex items-center justify-end gap-2.5">
+          {/* Desktop Search Button */}
+          <button
+            id="nav-search-btn"
+            onClick={() => navigateTo('recherche')}
+            className={`hidden md:flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer border ${
+              viewMode === 'recherche'
+                ? 'bg-[#ff5a50]/15 text-[#ff5a50] border-[#ff5a50]/50 shadow-sm shadow-[#ff5a50]/10'
+                : 'bg-[#1a1b22] hover:bg-[#22232c] text-zinc-300 hover:text-white border-zinc-800 hover:border-zinc-700'
+            }`}
+            title="Rechercher une œuvre, un auteur, un article"
+          >
+            <Search className={`w-4 h-4 ${viewMode === 'recherche' ? 'text-[#ff5a50]' : 'text-zinc-400'}`} />
+            <span className="font-semibold">Recherche</span>
+          </button>
+
+          {/* Mobile Search Button */}
+          <button
+            id="nav-mobile-search-btn"
+            onClick={() => navigateTo('recherche')}
+            className={`md:hidden p-2 rounded-lg text-zinc-300 hover:text-white focus:outline-none cursor-pointer transition-colors ${
+              viewMode === 'recherche' ? 'text-[#ff5a50] bg-[#ff5a50]/10' : ''
+            }`}
+            aria-label="Rechercher"
+            title="Rechercher"
+          >
+            <Search className="w-5 h-5" />
+          </button>
+
           {/* Mobile Menu Trigger */}
           <button
             id="nav-mobile-toggle-btn"
@@ -120,11 +149,21 @@ export const Navbar: React.FC = () => {
 
           <button
             onClick={() => navigateTo('articles')}
-            className={`text-center py-2.5 text-base font-semibold ${
+            className={`text-center py-2.5 text-base font-semibold border-b border-zinc-800/60 ${
               viewMode === 'articles' ? 'text-[#ff5a50]' : 'text-zinc-200'
             }`}
           >
             Articles
+          </button>
+
+          <button
+            onClick={() => navigateTo('recherche')}
+            className={`flex items-center justify-center gap-2 text-center py-2.5 text-base font-semibold ${
+              viewMode === 'recherche' ? 'text-[#ff5a50]' : 'text-zinc-200'
+            }`}
+          >
+            <Search className="w-4 h-4" />
+            <span>Recherche</span>
           </button>
         </div>
       )}

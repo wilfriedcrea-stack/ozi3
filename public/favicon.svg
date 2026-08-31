@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <linearGradient id="oziFaviconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF6B5B"/>
+      <stop offset="100%" stop-color="#FF3829"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Square badge background with balanced rounded corners -->
+  <rect width="100" height="100" rx="22" fill="url(#oziFaviconGrad)"/>
+
+  <!-- Outer concentric ring -->
+  <circle cx="50" cy="50" r="32" fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/>
+  <!-- Inner concentric ring -->
+  <circle cx="50" cy="50" r="18" fill="none" stroke="#FFFFFF" stroke-width="5.5"/>
+  <!-- Center comic iris dot -->
+  <circle cx="50" cy="50" r="6.5" fill="#FFFFFF"/>
+
+  <!-- Dynamic Lightning Flash Accent -->
+  <path d="M72 26 L82 40 L74 42 L80 54 L66 45 L74 43 Z" fill="#FFE27A"/>
+</svg>

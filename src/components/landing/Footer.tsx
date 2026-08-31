@@ -15,7 +15,7 @@ export const Footer: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const navigateTo = (mode: 'accueil' | 'oeuvres' | 'articles' | 'admin', anchorId?: string) => {
+  const navigateTo = (mode: 'accueil' | 'oeuvres' | 'articles' | 'recherche' | 'admin', anchorId?: string) => {
     setViewMode(mode);
     setTimeout(() => {
       if (anchorId) {
@@ -66,6 +66,11 @@ export const Footer: React.FC = () => {
               <li>
                 <button onClick={() => navigateTo('articles')} className="hover:text-[#ff6b5b] transition-colors cursor-pointer">
                   Articles & Carnets de Création
+                </button>
+              </li>
+              <li>
+                <button onClick={() => navigateTo('recherche')} className="hover:text-[#ff6b5b] transition-colors cursor-pointer">
+                  Recherche globale
                 </button>
               </li>
               <li>

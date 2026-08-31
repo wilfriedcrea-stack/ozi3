@@ -88,8 +88,8 @@ interface DataContextType {
   setAdminUser: (user: AdminUser) => void;
 
   // View state & standalone pages
-  viewMode: 'accueil' | 'oeuvres' | 'articles' | 'admin' | 'article-detail' | 'oeuvre-detail';
-  setViewMode: (mode: 'accueil' | 'oeuvres' | 'articles' | 'admin' | 'article-detail' | 'oeuvre-detail') => void;
+  viewMode: 'accueil' | 'oeuvres' | 'articles' | 'recherche' | 'admin' | 'article-detail' | 'oeuvre-detail';
+  setViewMode: (mode: 'accueil' | 'oeuvres' | 'articles' | 'recherche' | 'admin' | 'article-detail' | 'oeuvre-detail') => void;
   selectedArticleId: string | null;
   selectedOeuvreId: string | null;
   openArticlePage: (articleIdOrSlug: string) => void;
@@ -201,7 +201,7 @@ const STORAGE_KEYS = {
   ARTICLES: 'ozi_articles_data_v1'
 };
 
-type ViewModeType = 'accueil' | 'oeuvres' | 'articles' | 'admin' | 'article-detail' | 'oeuvre-detail';
+type ViewModeType = 'accueil' | 'oeuvres' | 'articles' | 'recherche' | 'admin' | 'article-detail' | 'oeuvre-detail';
 
 interface ParsedRoute {
   mode: ViewModeType;
@@ -244,17 +244,22 @@ const parseCurrentRoute = (): ParsedRoute => {
     return { mode: 'oeuvre-detail', id: oeuvreParam };
   }
 
-  // 3. Admin view check
+  // 3. Search page check (#/recherche or #/search or /recherche or /search or ?search= or ?q=)
+  if (path === '/recherche' || path.startsWith('/recherche/') || path === '/search' || path.startsWith('/search/') || hash.includes('recherche') || hash.includes('search') || searchParams.has('search') || searchParams.has('q')) {
+    return { mode: 'recherche', id: null };
+  }
+
+  // 4. Admin view check
   if (path === '/admin' || path.startsWith('/admin/') || path.includes('/admin') || hash.includes('admin') || searchParams.has('admin')) {
     return { mode: 'admin', id: null };
   }
 
-  // 4. Oeuvres list catalog check
+  // 5. Oeuvres list catalog check
   if (path === '/oeuvres' || path.startsWith('/oeuvres/') || hash === '#oeuvres' || hash === '#/oeuvres' || searchParams.has('oeuvres')) {
     return { mode: 'oeuvres', id: null };
   }
 
-  // 5. Articles list check
+  // 6. Articles list check
   if (path === '/articles' || path.startsWith('/articles/') || hash === '#articles' || hash === '#/articles' || searchParams.has('articles')) {
     return { mode: 'articles', id: null };
   }
@@ -280,6 +285,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (mode === 'admin') targetHash = '#admin';
       else if (mode === 'oeuvres') targetHash = '#oeuvres';
       else if (mode === 'articles') targetHash = '#articles';
+      else if (mode === 'recherche') targetHash = '#recherche';
       else if (mode === 'accueil') targetHash = '';
 
       if (targetHash) {
