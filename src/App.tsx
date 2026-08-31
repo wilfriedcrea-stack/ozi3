@@ -5,6 +5,8 @@ import { Navbar } from './components/landing/Navbar';
 import { AccueilPage } from './components/landing/AccueilPage';
 import { OeuvresPage } from './components/landing/OeuvresPage';
 import { ArticlesPage } from './components/landing/ArticlesPage';
+import { ArticleDetailPage } from './components/landing/ArticleDetailPage';
+import { OeuvreDetailPage } from './components/landing/OeuvreDetailPage';
 import { Footer } from './components/landing/Footer';
 import { WebtoonReaderModal } from './components/landing/WebtoonReaderModal';
 import { TeaserVideoModal } from './components/landing/TeaserVideoModal';
@@ -31,6 +33,8 @@ const MainLayout: React.FC = () => {
           {viewMode === 'accueil' && <AccueilPage />}
           {viewMode === 'oeuvres' && <OeuvresPage />}
           {viewMode === 'articles' && <ArticlesPage />}
+          {viewMode === 'article-detail' && <ArticleDetailPage />}
+          {viewMode === 'oeuvre-detail' && <OeuvreDetailPage />}
         </main>
       </div>
 

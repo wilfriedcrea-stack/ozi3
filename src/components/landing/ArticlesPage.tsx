@@ -11,8 +11,7 @@ import { ArticlePagination } from '../articles/ArticlePagination';
 const ITEMS_PER_PAGE = 6;
 
 export const ArticlesPage: React.FC = () => {
-  const { articles } = useData();
-  const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+  const { articles, openArticlePage } = useData();
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const gridTopRef = useRef<HTMLDivElement | null>(null);
@@ -117,7 +116,7 @@ export const ArticlesPage: React.FC = () => {
           <section aria-label="Article à la une" className="w-full pb-4 sm:pb-6">
             <FeaturedArticle
               article={heroArticle}
-              onSelect={(art) => setSelectedArticle(art)}
+              onSelect={(art) => openArticlePage(art.slug || art.id)}
             />
           </section>
         )}
@@ -144,7 +143,7 @@ export const ArticlesPage: React.FC = () => {
                   >
                     <ArticleCard
                       article={article}
-                      onSelect={(art) => setSelectedArticle(art)}
+                      onSelect={(art) => openArticlePage(art.slug || art.id)}
                       aspectRatioClass={
                         isWideOnDesktop 
                           ? 'aspect-[4/3] sm:aspect-[16/10]' 
@@ -175,12 +174,6 @@ export const ArticlesPage: React.FC = () => {
         )}
 
       </div>
-
-      {/* Reader Modal for full article reading */}
-      <ArticleDetailModal
-        article={selectedArticle}
-        onClose={() => setSelectedArticle(null)}
-      />
     </main>
   );
 };

@@ -16,7 +16,7 @@ import { useData } from '../../context/DataContext';
 import { ApkDownloadModal } from './ApkDownloadModal';
 
 export const HeroSection: React.FC = () => {
-  const { series, appVersion, recordApkDownload, openReader, openTeaserModal, teasers, setViewMode } = useData();
+  const { series, appVersion, recordApkDownload, openReader, openTeaserModal, teasers, setViewMode, openOeuvrePage } = useData();
   const [downloading, setDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [activeHeroIndex, setActiveHeroIndex] = useState(0);
@@ -25,7 +25,7 @@ export const HeroSection: React.FC = () => {
   const featuredSeries = series.filter(s => s.isFeatured).slice(0, 3);
   const currentHero = featuredSeries[activeHeroIndex] || series[0];
 
-  const apkUrl = appVersion.downloadUrl || appVersion.apkDownloadUrl || './ozi-reader.apk';
+  const apkUrl = appVersion.downloadUrl || appVersion.apkDownloadUrl || 'https://ozibd.net/ozi-reader.apk';
 
   const handleDownloadApk = () => {
     setDownloading(true);
@@ -218,7 +218,10 @@ export const HeroSection: React.FC = () => {
             <div className="relative rounded-3xl bg-[#0d0e15] border border-slate-800 overflow-hidden shadow-2xl">
               
               {/* Series Poster Showcase */}
-              <div className="relative h-96 sm:h-[420px] overflow-hidden group">
+              <div 
+                onClick={() => openOeuvrePage(currentHero.slug || currentHero.id)}
+                className="relative h-96 sm:h-[420px] overflow-hidden group cursor-pointer"
+              >
                 <img
                   src={currentHero.bannerUrl || currentHero.coverUrl}
                   alt={currentHero.title}
@@ -247,7 +250,7 @@ export const HeroSection: React.FC = () => {
                     <span>•</span>
                     <span>{currentHero.country}</span>
                   </div>
-                  <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight font-almodobar line-clamp-1">
+                  <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight font-almodobar line-clamp-1 group-hover:text-purple-300 transition-colors">
                     {currentHero.title}
                   </h3>
                 </div>
@@ -275,10 +278,10 @@ export const HeroSection: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <button
                       id="hero-read-chapter1-btn"
-                      onClick={() => openReader(currentHero, currentHero.chapters[0])}
+                      onClick={() => openOeuvrePage(currentHero.slug || currentHero.id)}
                       className="flex items-center justify-center gap-1.5 py-3 px-5 rounded-xl bg-ozi-primary hover:opacity-95 text-white font-bold text-xs shadow-lg glow-ozi transition-all tap-active font-almodobar cursor-pointer"
                     >
-                      <span>Lire Chapitre 1</span>
+                      <span>Fiche Oeuvre</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
 

@@ -27,7 +27,7 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({ isOpen, onCl
 
   if (!isOpen) return null;
 
-  const apkUrl = appVersion.downloadUrl || appVersion.apkDownloadUrl || './ozi-reader.apk';
+  const apkUrl = appVersion.downloadUrl || appVersion.apkDownloadUrl || 'https://ozibd.net/ozi-reader.apk';
 
   const triggerDirectDownload = () => {
     recordApkDownload();

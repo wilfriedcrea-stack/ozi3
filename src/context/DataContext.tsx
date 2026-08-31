@@ -87,9 +87,13 @@ interface DataContextType {
   logoutAdmin: () => void;
   setAdminUser: (user: AdminUser) => void;
 
-  // View state
-  viewMode: 'accueil' | 'oeuvres' | 'articles' | 'admin';
-  setViewMode: (mode: 'accueil' | 'oeuvres' | 'articles' | 'admin') => void;
+  // View state & standalone pages
+  viewMode: 'accueil' | 'oeuvres' | 'articles' | 'admin' | 'article-detail' | 'oeuvre-detail';
+  setViewMode: (mode: 'accueil' | 'oeuvres' | 'articles' | 'admin' | 'article-detail' | 'oeuvre-detail') => void;
+  selectedArticleId: string | null;
+  selectedOeuvreId: string | null;
+  openArticlePage: (articleIdOrSlug: string) => void;
+  openOeuvrePage: (seriesIdOrSlug: string) => void;
 
   // Webtoon Reader State
   activeReaderSeries: Series | null;
@@ -197,49 +201,124 @@ const STORAGE_KEYS = {
   ARTICLES: 'ozi_articles_data_v1'
 };
 
-const getInitialViewMode = (): 'accueil' | 'oeuvres' | 'articles' | 'admin' => {
-  if (typeof window === 'undefined') return 'accueil';
+type ViewModeType = 'accueil' | 'oeuvres' | 'articles' | 'admin' | 'article-detail' | 'oeuvre-detail';
+
+interface ParsedRoute {
+  mode: ViewModeType;
+  id: string | null;
+}
+
+const parseCurrentRoute = (): ParsedRoute => {
+  if (typeof window === 'undefined') return { mode: 'accueil', id: null };
   const path = window.location.pathname.toLowerCase().replace(/\/+$/, '');
   const hash = window.location.hash.toLowerCase();
-  const search = window.location.search.toLowerCase();
+  const searchParams = new URLSearchParams(window.location.search);
 
-  if (path === '/admin' || path.startsWith('/admin/') || path.includes('/admin') || hash.includes('admin') || search.includes('admin')) {
-    return 'admin';
+  // 1. Article standalone page check (#/article/slug or /article/slug or ?article=slug)
+  const articleHashMatch = window.location.hash.match(/#\/?article\/([a-zA-Z0-9_-]+)/i);
+  const articlePathMatch = window.location.pathname.match(/\/article\/([a-zA-Z0-9_-]+)/i);
+  const articleParam = searchParams.get('article');
+
+  if (articleHashMatch && articleHashMatch[1]) {
+    return { mode: 'article-detail', id: articleHashMatch[1] };
   }
-  if (path === '/oeuvres' || path.startsWith('/oeuvres/') || hash.includes('oeuvres') || search.includes('oeuvres')) {
-    return 'oeuvres';
+  if (articlePathMatch && articlePathMatch[1]) {
+    return { mode: 'article-detail', id: articlePathMatch[1] };
   }
-  if (path === '/articles' || path.startsWith('/articles/') || hash.includes('articles') || search.includes('articles')) {
-    return 'articles';
+  if (articleParam) {
+    return { mode: 'article-detail', id: articleParam };
   }
-  return 'accueil';
+
+  // 2. Oeuvre / Series standalone page check (#/oeuvre/slug or #/series/slug or /oeuvre/slug or ?oeuvre=slug)
+  const oeuvreHashMatch = window.location.hash.match(/#\/?(oeuvre|series)\/([a-zA-Z0-9_-]+)/i);
+  const oeuvrePathMatch = window.location.pathname.match(/\/(oeuvre|series)\/([a-zA-Z0-9_-]+)/i);
+  const oeuvreParam = searchParams.get('oeuvre') || searchParams.get('series');
+
+  if (oeuvreHashMatch && oeuvreHashMatch[2]) {
+    return { mode: 'oeuvre-detail', id: oeuvreHashMatch[2] };
+  }
+  if (oeuvrePathMatch && oeuvrePathMatch[2]) {
+    return { mode: 'oeuvre-detail', id: oeuvrePathMatch[2] };
+  }
+  if (oeuvreParam) {
+    return { mode: 'oeuvre-detail', id: oeuvreParam };
+  }
+
+  // 3. Admin view check
+  if (path === '/admin' || path.startsWith('/admin/') || path.includes('/admin') || hash.includes('admin') || searchParams.has('admin')) {
+    return { mode: 'admin', id: null };
+  }
+
+  // 4. Oeuvres list catalog check
+  if (path === '/oeuvres' || path.startsWith('/oeuvres/') || hash === '#oeuvres' || hash === '#/oeuvres' || searchParams.has('oeuvres')) {
+    return { mode: 'oeuvres', id: null };
+  }
+
+  // 5. Articles list check
+  if (path === '/articles' || path.startsWith('/articles/') || hash === '#articles' || hash === '#/articles' || searchParams.has('articles')) {
+    return { mode: 'articles', id: null };
+  }
+
+  return { mode: 'accueil', id: null };
 };
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Navigation & Modal state initialized from URL
-  const [viewMode, setViewModeState] = useState<'accueil' | 'oeuvres' | 'articles' | 'admin'>(() => getInitialViewMode());
+  // Navigation & Page routing state
+  const initialRoute = parseCurrentRoute();
+  const [viewMode, setViewModeState] = useState<ViewModeType>(initialRoute.mode);
+  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(initialRoute.mode === 'article-detail' ? initialRoute.id : null);
+  const [selectedOeuvreId, setSelectedOeuvreId] = useState<string | null>(initialRoute.mode === 'oeuvre-detail' ? initialRoute.id : null);
+
   const [activeReaderSeries, setActiveReaderSeries] = useState<Series | null>(null);
   const [activeReaderChapter, setActiveReaderChapter] = useState<Chapter | null>(null);
   const [activeVideoTeaser, setActiveVideoTeaser] = useState<Teaser | null>(null);
 
-  const setViewMode = useCallback((mode: 'accueil' | 'oeuvres' | 'articles' | 'admin') => {
+  const setViewMode = useCallback((mode: ViewModeType) => {
     setViewModeState(mode);
     if (typeof window !== 'undefined') {
-      let targetPath = '/';
-      if (mode === 'admin') targetPath = '/admin';
-      else if (mode === 'oeuvres') targetPath = '/oeuvres';
-      else if (mode === 'articles') targetPath = '/articles';
+      let targetHash = '';
+      if (mode === 'admin') targetHash = '#admin';
+      else if (mode === 'oeuvres') targetHash = '#oeuvres';
+      else if (mode === 'articles') targetHash = '#articles';
+      else if (mode === 'accueil') targetHash = '';
 
-      if (window.location.pathname !== targetPath) {
-        window.history.pushState({ viewMode: mode }, '', targetPath);
+      if (targetHash) {
+        window.location.hash = targetHash;
+      } else if (mode === 'accueil' && window.location.hash) {
+        window.history.pushState(null, '', window.location.pathname + window.location.search);
       }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
+
+  const openArticlePage = useCallback((articleIdOrSlug: string) => {
+    setSelectedArticleId(articleIdOrSlug);
+    setViewModeState('article-detail');
+    if (typeof window !== 'undefined') {
+      window.location.hash = `#/article/${articleIdOrSlug}`;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
+
+  const openOeuvrePage = useCallback((seriesIdOrSlug: string) => {
+    setSelectedOeuvreId(seriesIdOrSlug);
+    setViewModeState('oeuvre-detail');
+    if (typeof window !== 'undefined') {
+      window.location.hash = `#/oeuvre/${seriesIdOrSlug}`;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, []);
 
   // Listen to browser navigation (back/forward buttons)
   useEffect(() => {
     const handlePopState = () => {
-      setViewModeState(getInitialViewMode());
+      const route = parseCurrentRoute();
+      setViewModeState(route.mode);
+      if (route.mode === 'article-detail' && route.id) {
+        setSelectedArticleId(route.id);
+      } else if (route.mode === 'oeuvre-detail' && route.id) {
+        setSelectedOeuvreId(route.id);
+      }
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -301,10 +380,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const saved = localStorage.getItem(STORAGE_KEYS.VERSION);
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Ensure valid relative path if previous placeholder was set
-        if (!parsed.downloadUrl || parsed.downloadUrl.includes('ozi-app.lws.fr')) {
-          parsed.downloadUrl = './ozi-reader.apk';
-          parsed.apkDownloadUrl = './ozi-reader.apk';
+        // Ensure valid official APK download URL
+        if (!parsed.downloadUrl || parsed.downloadUrl.includes('ozi-app.lws.fr') || parsed.downloadUrl === './ozi-reader.apk' || parsed.downloadUrl.includes('ozi-reader.apk')) {
+          parsed.downloadUrl = 'https://ozibd.net/ozi-reader.apk';
+          parsed.apkDownloadUrl = 'https://ozibd.net/ozi-reader.apk';
         }
         return parsed;
       }
@@ -1243,6 +1322,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAdminUser,
       viewMode,
       setViewMode,
+      selectedArticleId,
+      selectedOeuvreId,
+      openArticlePage,
+      openOeuvrePage,
       activeReaderSeries,
       activeReaderChapter,
       openReader,

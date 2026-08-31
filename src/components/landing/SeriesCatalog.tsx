@@ -27,12 +27,11 @@ const GENRES: Array<'Tous' | SeriesGenre> = [
 type FormatFilter = 'all' | 'série' | 'film';
 
 export const SeriesCatalog: React.FC = () => {
-  const { series, openReader } = useData();
+  const { series, openOeuvrePage } = useData();
   const [selectedFormat, setSelectedFormat] = useState<FormatFilter>('all');
   const [selectedGenre, setSelectedGenre] = useState<'Tous' | SeriesGenre>('Tous');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'popular' | 'rating' | 'recent'>('popular');
-  const [selectedSeriesForDetail, setSelectedSeriesForDetail] = useState<Series | null>(null);
 
   const filteredSeries = useMemo(() => {
     return series.filter(s => {
@@ -182,13 +181,11 @@ export const SeriesCatalog: React.FC = () => {
         {filteredSeries.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4 sm:gap-5 lg:gap-6">
             {filteredSeries.map((s) => {
-              const displayFormat = s.format || (s.chaptersCount > 1 ? 'série' : 'film');
-
               return (
                 <div
                   key={s.id}
                   id={`series-poster-${s.id}`}
-                  onClick={() => setSelectedSeriesForDetail(s)}
+                  onClick={() => openOeuvrePage(s.slug || s.id)}
                   className="group flex flex-col items-center cursor-pointer select-none"
                 >
                   {/* Poster Card Container */}
@@ -202,11 +199,6 @@ export const SeriesCatalog: React.FC = () => {
                       loading="lazy"
                     />
 
-                    {/* Top-Left Pill Badge ("film" or "série" like in reference) */}
-                    <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full bg-black/75 backdrop-blur-md border border-white/15 text-white text-[11px] font-semibold tracking-wide shadow-md">
-                      {displayFormat}
-                    </div>
-
                     {/* Top-Right Rating Badge */}
                     <div className="absolute top-2.5 right-2.5 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/70 backdrop-blur-md border border-white/15 text-amber-400 text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity">
                       <Star className="w-3 h-3 fill-amber-400" />
@@ -217,7 +209,7 @@ export const SeriesCatalog: React.FC = () => {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center p-3">
                       <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 text-white text-xs font-bold shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-transform">
                         <Play className="w-3.5 h-3.5 fill-white" />
-                        <span>Découvrir</span>
+                        <span>Fiche complète</span>
                       </div>
                     </div>
                   </div>
@@ -251,12 +243,6 @@ export const SeriesCatalog: React.FC = () => {
         )}
 
       </div>
-
-      {/* Series Detail Modal */}
-      <SeriesDetailModal 
-        series={selectedSeriesForDetail} 
-        onClose={() => setSelectedSeriesForDetail(null)} 
-      />
     </section>
   );
 };
