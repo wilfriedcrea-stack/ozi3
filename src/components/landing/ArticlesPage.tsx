@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useData } from '../../context/DataContext';
 import { Article } from '../../types';
 import { FeaturedArticle } from '../articles/FeaturedArticle';
@@ -6,16 +6,16 @@ import { ArticleCard } from '../articles/ArticleCard';
 import { ArticleDetailModal } from '../articles/ArticleDetailModal';
 import { ArticleSkeleton } from '../articles/ArticleSkeleton';
 import { EmptyArticles } from '../articles/EmptyArticles';
-import { ChevronDown, Sparkles } from 'lucide-react';
+import { ArticlePagination } from '../articles/ArticlePagination';
 
-const INITIAL_PAGE_SIZE = 12;
-const PAGE_INCREMENT = 9;
+const ITEMS_PER_PAGE = 6;
 
 export const ArticlesPage: React.FC = () => {
   const { articles } = useData();
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
-  const [visibleCount, setVisibleCount] = useState<number>(INITIAL_PAGE_SIZE);
+  const [currentPage, setCurrentPage] = useState<number>(1);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const gridTopRef = useRef<HTMLDivElement | null>(null);
 
   // Scroll to top on component mount
   useEffect(() => {
@@ -33,7 +33,6 @@ export const ArticlesPage: React.FC = () => {
 
     // Sort descending by date
     return [...valid].sort((a, b) => {
-      // Check for custom priority or featured flag first if same date
       const dateA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
       const dateB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
 
@@ -41,7 +40,6 @@ export const ArticlesPage: React.FC = () => {
         return dateB - dateA;
       }
 
-      // Fallback comparison for strings like "01 JANVIER 2026" or ids
       return b.id.localeCompare(a.id);
     });
   }, [articles]);
@@ -62,15 +60,32 @@ export const ArticlesPage: React.FC = () => {
     return { heroArticle: hero, remainingArticles: remaining };
   }, [sortedArticles]);
 
-  // 3. Paginated slice of remaining articles
+  // 3. Total pages calculation and page clamping
+  const totalPages = Math.max(1, Math.ceil(remainingArticles.length / ITEMS_PER_PAGE));
+
+  // Reset page if filtered results decrease
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(1);
+    }
+  }, [currentPage, totalPages]);
+
+  // 4. Paginated slice of remaining articles for current page
   const paginatedArticles = useMemo(() => {
-    return remainingArticles.slice(0, visibleCount);
-  }, [remainingArticles, visibleCount]);
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return remainingArticles.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [remainingArticles, currentPage]);
 
-  const hasMore = remainingArticles.length > visibleCount;
-
-  const handleLoadMore = () => {
-    setVisibleCount(prev => prev + PAGE_INCREMENT);
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+    // Smooth scroll to top of articles grid
+    if (gridTopRef.current) {
+      const rect = gridTopRef.current.getBoundingClientRect();
+      const offsetTop = window.pageYOffset + rect.top - 80;
+      window.scrollTo({ top: Math.max(0, offsetTop), behavior: 'smooth' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   if (isLoading) {
@@ -84,7 +99,7 @@ export const ArticlesPage: React.FC = () => {
   if (!heroArticle && remainingArticles.length === 0) {
     return (
       <main id="articles-page" className="min-h-screen bg-[#0e0e12] text-white pt-4 pb-20">
-        <EmptyArticles onRefresh={() => setVisibleCount(INITIAL_PAGE_SIZE)} />
+        <EmptyArticles onRefresh={() => setCurrentPage(1)} />
       </main>
     );
   }
@@ -97,8 +112,8 @@ export const ArticlesPage: React.FC = () => {
       {/* Centered Editorial Container with responsive margins */}
       <div className="w-full max-w-[860px] mx-auto px-2.5 sm:px-4 md:px-6">
         
-        {/* 1. Dynamic Featured Top Hero (No duplication in grid) */}
-        {heroArticle && (
+        {/* 1. Dynamic Featured Top Hero (Displayed on Page 1 or with subtle badge) */}
+        {heroArticle && currentPage === 1 && (
           <section aria-label="Article à la une" className="w-full pb-4 sm:pb-6">
             <FeaturedArticle
               article={heroArticle}
@@ -107,19 +122,16 @@ export const ArticlesPage: React.FC = () => {
           </section>
         )}
 
+        {/* Scroll anchor for pagination transitions */}
+        <div ref={gridTopRef} id="articles-grid-anchor" className="scroll-mt-20" />
+
         {/* 2. Dynamically Flowing Magazine Grid */}
         {paginatedArticles.length > 0 && (
           <section aria-label="Tous les articles récents" className="w-full">
-            {/* 
-              Responsive CSS Grid:
-              - Mobile: 2 columns (grid-cols-2)
-              - Tablet / Desktop: 3 columns (sm:grid-cols-3)
-              - Rhythm: every 7th item takes col-span-2 on desktop, col-span-1 on mobile
-            */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3.5 md:gap-4 items-start">
               {paginatedArticles.map((article, index) => {
-                // Editorial rhythm: inject a wide 2-column card every 7th item (e.g. index 4, 11, etc.) on desktop
-                const isWideOnDesktop = index % 7 === 4;
+                // Editorial rhythm: wide 2-column card for visual interest
+                const isWideOnDesktop = index % 5 === 2;
 
                 return (
                   <div
@@ -151,22 +163,15 @@ export const ArticlesPage: React.FC = () => {
           </section>
         )}
 
-        {/* 3. Pagination / "Charger plus d'articles" */}
-        {hasMore && (
-          <div className="mt-10 sm:mt-12 text-center flex flex-col items-center justify-center">
-            <button
-              id="load-more-articles-btn"
-              onClick={handleLoadMore}
-              className="group inline-flex items-center gap-2.5 px-6 py-3 rounded-full bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700 text-zinc-100 font-semibold text-xs sm:text-sm transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg"
-            >
-              <Sparkles className="w-4 h-4 text-[#ff5a50] transition-transform group-hover:rotate-12" />
-              <span>Afficher plus d'articles</span>
-              <span className="px-2 py-0.5 rounded-full bg-zinc-800 text-[10px] text-zinc-400 font-bold border border-zinc-700">
-                +{remainingArticles.length - visibleCount}
-              </span>
-              <ChevronDown className="w-4 h-4 text-zinc-400 group-hover:translate-y-0.5 transition-transform" />
-            </button>
-          </div>
+        {/* 3. Numbered Page Pagination */}
+        {totalPages > 1 && (
+          <ArticlePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+            totalArticles={remainingArticles.length}
+            itemsPerPage={ITEMS_PER_PAGE}
+          />
         )}
 
       </div>

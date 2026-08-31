@@ -3,7 +3,7 @@ import { useData } from '../../context/DataContext';
 
 export const TopBanner: React.FC = () => {
   const { series, openReader } = useData();
-  const [imgSrc, setImgSrc] = useState('https://ozibd.net/testo.png');
+  const [imgSrc, setImgSrc] = useState('https://ozibd.net/REF.png');
 
   const handleBannerClick = () => {
     const featured = series[0];
@@ -16,10 +16,12 @@ export const TopBanner: React.FC = () => {
   };
 
   const handleImageError = () => {
-    if (imgSrc === 'https://ozibd.net/testo.png') {
-      setImgSrc('/testo.png');
-    } else if (imgSrc === '/testo.png') {
-      setImgSrc('https://ozibd.net/ban.jpg');
+    if (imgSrc === 'https://ozibd.net/REF.png') {
+      setImgSrc('http://ozibd.net/REF.png');
+    } else if (imgSrc === 'http://ozibd.net/REF.png') {
+      setImgSrc('/REF.png');
+    } else if (imgSrc === '/REF.png') {
+      setImgSrc('https://ozibd.net/testo.png');
     } else {
       setImgSrc('/images/ozi_mosaic_banner.jpg');
     }
@@ -44,8 +46,8 @@ export const TopBanner: React.FC = () => {
           referrerPolicy="no-referrer"
         />
 
-        {/* Subtle top & bottom shadow gradient for smooth blend */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#141418]/60 via-transparent to-black/30 pointer-events-none" />
+        {/* Subtle top & bottom shadow gradient for smooth blend with reduced opacity */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#141418]/20 via-transparent to-black/10 pointer-events-none" />
       </div>
     </aside>
   );

@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "OZI - Webtoons, Mangas & BD",
+  "description": "Plateforme officielle de lecture de Webtoons, Mangas et Bandes Dessinées avec Studio Créateur et Magazine d'actualités",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

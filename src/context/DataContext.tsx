@@ -282,7 +282,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [articles, setArticles] = useState<Article[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.ARTICLES);
-      return saved ? JSON.parse(saved) : initialArticles;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+      return initialArticles;
     } catch {
       return initialArticles;
     }
