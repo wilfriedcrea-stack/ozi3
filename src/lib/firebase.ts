@@ -2,21 +2,24 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import firebaseAppletConfig from '../../firebase-applet-config.json';
 
 export const firebaseConfig = {
-  apiKey: (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_FIREBASE_API_KEY || "AIzaSyDCab5xg3OmPDRRv_PZa7gLFfjH79IHFrA",
-  authDomain: (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_FIREBASE_AUTH_DOMAIN || "4RAuuM96XwXNa4LchaSmR6OrXDz2.firebaseapp.com",
-  projectId: (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_FIREBASE_PROJECT_ID || "4RAuuM96XwXNa4LchaSmR6OrXDz2",
-  storageBucket: (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_FIREBASE_STORAGE_BUCKET || "4RAuuM96XwXNa4LchaSmR6OrXDz2.firebasestorage.app",
-  messagingSenderId: (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_FIREBASE_MESSAGING_SENDER_ID || "402737712210",
-  appId: (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_FIREBASE_APP_ID || "1:402737712210:web:797eca50aa3708aa6d638b"
+  apiKey: (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_FIREBASE_API_KEY || firebaseAppletConfig.apiKey,
+  authDomain: (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_FIREBASE_AUTH_DOMAIN || firebaseAppletConfig.authDomain,
+  projectId: (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_FIREBASE_PROJECT_ID || firebaseAppletConfig.projectId,
+  storageBucket: (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_FIREBASE_STORAGE_BUCKET || firebaseAppletConfig.storageBucket,
+  messagingSenderId: (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseAppletConfig.messagingSenderId,
+  appId: (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_FIREBASE_APP_ID || firebaseAppletConfig.appId
 };
 
 export const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
-export const db = getFirestore(app);
+export const db = firebaseAppletConfig.firestoreDatabaseId 
+  ? getFirestore(app, firebaseAppletConfig.firestoreDatabaseId)
+  : getFirestore(app);
 export const storage = getStorage(app);
 
 export default db;

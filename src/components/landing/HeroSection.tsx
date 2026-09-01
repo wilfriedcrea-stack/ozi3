@@ -86,16 +86,6 @@ export const HeroSection: React.FC = () => {
           
           {/* Left Column: Copy, Tagline & Main CTAs (7 cols) */}
           <div className="lg:col-span-7 flex flex-col items-start text-left">
-            
-            {/* Live Status Pill */}
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#181926] border border-slate-700/80 text-xs font-semibold text-slate-300 mb-6 shadow-md">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-[#ff6b5b] font-bold uppercase tracking-wider text-[11px] font-almodobar">
-                Version {appVersion.version} Disponible
-              </span>
-              <span className="text-slate-500">•</span>
-              <span className="font-heading">APK Android & PWA</span>
-            </div>
 
             {/* Main Punchy Heading */}
             <h1 className="text-4xl sm:text-6xl xl:text-7xl font-black text-white tracking-tight leading-[1.08] font-almodobar mb-6">

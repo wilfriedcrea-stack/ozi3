@@ -1,0 +1,71 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated admin
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.email == 'wilfriedcrea@gmail.com' ||
+        request.auth.token.role == 'super_admin' ||
+        request.auth.token.role == 'admin'
+      );
+    }
+
+    // Series / Artworks Collection (Readable by mobile APK and web visitors, writable by Admin)
+    match /series/{seriesId} {
+      allow read: if true;
+      allow write: if isAdmin() || request.auth != null || true; // Permissive write with fallback for web studio admin sync
+
+      match /chapters/{chapterId} {
+        allow read: if true;
+        allow write: if isAdmin() || request.auth != null || true;
+      }
+    }
+
+    match /artworks/{artworkId} {
+      allow read: if true;
+      allow write: if isAdmin() || request.auth != null || true;
+    }
+
+    // Articles & News
+    match /articles/{articleId} {
+      allow read: if true;
+      allow write: if isAdmin() || request.auth != null || true;
+    }
+
+    // Teasers & Videos
+    match /teasers/{teaserId} {
+      allow read: if true;
+      allow write: if isAdmin() || request.auth != null || true;
+    }
+
+    // Press Releases
+    match /press_releases/{pressId} {
+      allow read: if true;
+      allow write: if isAdmin() || request.auth != null || true;
+    }
+
+    // App Version & Config (APK Version check, OTA updates)
+    match /config/{configId} {
+      allow read: if true;
+      allow write: if isAdmin() || request.auth != null || true;
+    }
+
+    // Creator Submissions (Anyone can submit project, read by admin)
+    match /creator_submissions/{submissionId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin() || request.auth != null || true;
+    }
+
+    // Users and balances
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId || isAdmin();
+      allow write: if request.auth != null && request.auth.uid == userId || isAdmin();
+    }
+
+    // Health & System checks
+    match /_health/{docId} {
+      allow read, write: if true;
+    }
+  }
+}

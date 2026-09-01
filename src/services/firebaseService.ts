@@ -1,6 +1,7 @@
-import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getFirestore, Firestore, collection, doc, setDoc, deleteDoc, onSnapshot, getDocFromServer } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { Firestore, collection, doc, setDoc, deleteDoc, onSnapshot, getDocFromServer, getDocs, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { Series, Teaser, PressRelease, AppVersionInfo, CreatorSubmission, Article } from '../types';
+import firebaseAppletConfig from '../../firebase-applet-config.json';
 
 export enum OperationType {
   CREATE = 'create',
@@ -29,45 +30,28 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   return errInfo;
 }
 
-let firebaseAppInstance: FirebaseApp | null = null;
-let firestoreDbInstance: Firestore | null = null;
+export function getAppFirestoreDb(): Firestore {
+  return db;
+}
 
-export function initializeFirebaseCustom(config: {
+export function initializeFirebaseCustom(config?: {
   apiKey?: string;
   projectId?: string;
   authDomain?: string;
   storageBucket?: string;
   databaseId?: string;
 }) {
-  try {
-    if (getApps().length > 0) {
-      firebaseAppInstance = getApps()[0];
-    } else if (config.projectId) {
-      firebaseAppInstance = initializeApp({
-        apiKey: config.apiKey || 'AIzaSyDemo-Key-For-Preview-Only',
-        projectId: config.projectId,
-        authDomain: config.authDomain || `${config.projectId}.firebaseapp.com`,
-        storageBucket: config.storageBucket || `${config.projectId}.appspot.com`,
-      });
-    }
-
-    if (firebaseAppInstance) {
-      firestoreDbInstance = config.databaseId 
-        ? getFirestore(firebaseAppInstance, config.databaseId)
-        : getFirestore(firebaseAppInstance);
-      return { success: true, db: firestoreDbInstance };
-    }
-  } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, 'init');
-    return { success: false, error: err instanceof Error ? err.message : String(err) };
-  }
-  return { success: false, error: 'Configuration manquante' };
+  return { success: true, db };
 }
 
-export async function testFirestoreConnection(db: Firestore): Promise<{ connected: boolean; message: string }> {
+export async function testFirestoreConnection(databaseInstance: Firestore = db): Promise<{ connected: boolean; message: string }> {
   try {
-    await getDocFromServer(doc(db, '_health', 'status'));
-    return { connected: true, message: 'Connexion Firestore établie avec succès !' };
+    await setDoc(doc(databaseInstance, '_health', 'status'), {
+      status: 'online',
+      lastPing: new Date().toISOString(),
+      projectId: firebaseAppletConfig.projectId
+    }, { merge: true });
+    return { connected: true, message: `Connexion Firestore établie avec succès ! (Projet: ${firebaseAppletConfig.projectId})` };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     if (msg.includes('the client is offline') || msg.includes('permission-denied') || msg.includes('unavailable')) {
@@ -77,10 +61,55 @@ export async function testFirestoreConnection(db: Firestore): Promise<{ connecte
   }
 }
 
-// Firestore CRUD operations with safe handling
-export async function syncSeriesToFirestore(db: Firestore, series: Series) {
+// Subscribe to real-time series changes (for Web and mobile APK readers)
+export function subscribeToFirestoreSeries(onUpdate: (seriesList: Series[]) => void) {
   try {
-    await setDoc(doc(db, 'series', series.id), series, { merge: true });
+    const seriesCol = collection(db, 'series');
+    return onSnapshot(seriesCol, (snapshot) => {
+      if (!snapshot.empty) {
+        const loadedSeries: Series[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as Series;
+          loadedSeries.push({
+            ...data,
+            id: docSnap.id
+          });
+        });
+        onUpdate(loadedSeries);
+      }
+    }, (err) => {
+      console.warn('Firestore real-time subscription error:', err);
+    });
+  } catch (err) {
+    console.warn('Firestore subscription unavailable:', err);
+    return () => {};
+  }
+}
+
+// Subscribe to real-time APK Version
+export function subscribeToFirestoreAppVersion(onUpdate: (version: AppVersionInfo) => void) {
+  try {
+    const versionDoc = doc(db, 'config', 'app_version');
+    return onSnapshot(versionDoc, (docSnap) => {
+      if (docSnap.exists()) {
+        onUpdate(docSnap.data() as AppVersionInfo);
+      }
+    }, (err) => {
+      console.warn('Firestore version watch notice:', err);
+    });
+  } catch {
+    return () => {};
+  }
+}
+
+// Firestore CRUD operations with safe handling
+export async function syncSeriesToFirestore(databaseInstance: Firestore = db, series: Series) {
+  try {
+    await setDoc(doc(databaseInstance, 'series', series.id), {
+      ...series,
+      updatedAt: series.updatedAt || new Date().toISOString().split('T')[0],
+      firestoreSyncedAt: new Date().toISOString()
+    }, { merge: true });
     return { success: true };
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `series/${series.id}`);
@@ -88,9 +117,9 @@ export async function syncSeriesToFirestore(db: Firestore, series: Series) {
   }
 }
 
-export async function deleteSeriesFromFirestore(db: Firestore, seriesId: string) {
+export async function deleteSeriesFromFirestore(databaseInstance: Firestore = db, seriesId: string) {
   try {
-    await deleteDoc(doc(db, 'series', seriesId));
+    await deleteDoc(doc(databaseInstance, 'series', seriesId));
     return { success: true };
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, `series/${seriesId}`);
@@ -98,9 +127,12 @@ export async function deleteSeriesFromFirestore(db: Firestore, seriesId: string)
   }
 }
 
-export async function syncAppVersionToFirestore(db: Firestore, versionInfo: AppVersionInfo) {
+export async function syncAppVersionToFirestore(databaseInstance: Firestore = db, versionInfo: AppVersionInfo) {
   try {
-    await setDoc(doc(db, 'config', 'app_version'), versionInfo, { merge: true });
+    await setDoc(doc(databaseInstance, 'config', 'app_version'), {
+      ...versionInfo,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
     return { success: true };
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, 'config/app_version');
@@ -108,9 +140,9 @@ export async function syncAppVersionToFirestore(db: Firestore, versionInfo: AppV
   }
 }
 
-export async function syncPressToFirestore(db: Firestore, press: PressRelease) {
+export async function syncPressToFirestore(databaseInstance: Firestore = db, press: PressRelease) {
   try {
-    await setDoc(doc(db, 'press_releases', press.id), press, { merge: true });
+    await setDoc(doc(databaseInstance, 'press_releases', press.id), press, { merge: true });
     return { success: true };
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `press_releases/${press.id}`);
@@ -118,9 +150,9 @@ export async function syncPressToFirestore(db: Firestore, press: PressRelease) {
   }
 }
 
-export async function syncTeaserToFirestore(db: Firestore, teaser: Teaser) {
+export async function syncTeaserToFirestore(databaseInstance: Firestore = db, teaser: Teaser) {
   try {
-    await setDoc(doc(db, 'teasers', teaser.id), teaser, { merge: true });
+    await setDoc(doc(databaseInstance, 'teasers', teaser.id), teaser, { merge: true });
     return { success: true };
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `teasers/${teaser.id}`);
@@ -128,9 +160,9 @@ export async function syncTeaserToFirestore(db: Firestore, teaser: Teaser) {
   }
 }
 
-export async function syncSubmissionToFirestore(db: Firestore, sub: CreatorSubmission) {
+export async function syncSubmissionToFirestore(databaseInstance: Firestore = db, sub: CreatorSubmission) {
   try {
-    await setDoc(doc(db, 'creator_submissions', sub.id), sub, { merge: true });
+    await setDoc(doc(databaseInstance, 'creator_submissions', sub.id), sub, { merge: true });
     return { success: true };
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `creator_submissions/${sub.id}`);
@@ -138,9 +170,9 @@ export async function syncSubmissionToFirestore(db: Firestore, sub: CreatorSubmi
   }
 }
 
-export async function syncArticleToFirestore(db: Firestore, article: Article) {
+export async function syncArticleToFirestore(databaseInstance: Firestore = db, article: Article) {
   try {
-    await setDoc(doc(db, 'articles', article.id), article, { merge: true });
+    await setDoc(doc(databaseInstance, 'articles', article.id), article, { merge: true });
     return { success: true };
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `articles/${article.id}`);
@@ -148,13 +180,14 @@ export async function syncArticleToFirestore(db: Firestore, article: Article) {
   }
 }
 
-export async function deleteArticleFromFirestore(db: Firestore, articleId: string) {
+export async function deleteArticleFromFirestore(databaseInstance: Firestore = db, articleId: string) {
   try {
-    await deleteDoc(doc(db, 'articles', articleId));
+    await deleteDoc(doc(databaseInstance, 'articles', articleId));
     return { success: true };
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, `articles/${articleId}`);
     return { success: false, error: err };
   }
 }
+
 

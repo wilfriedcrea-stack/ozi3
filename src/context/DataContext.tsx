@@ -50,8 +50,12 @@ import {
   syncTeaserToFirestore, 
   syncSubmissionToFirestore,
   syncArticleToFirestore,
-  deleteArticleFromFirestore
+  deleteArticleFromFirestore,
+  subscribeToFirestoreSeries,
+  subscribeToFirestoreAppVersion,
+  getAppFirestoreDb
 } from '../services/firebaseService';
+import firebaseAppletConfig from '../../firebase-applet-config.json';
 
 interface AdminAuthState {
   isAuthenticated: boolean;
@@ -537,10 +541,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.FIREBASE);
       return saved ? JSON.parse(saved) : {
-        projectId: 'ai-studio-oziplateformeweb',
-        databaseId: 'ai-studio-oziplateformeweb-6556be3f-d3e6-4173-80a0-da1cbbf6f644',
-        authDomain: 'ai-studio-oziplateformeweb.firebaseapp.com',
-        storageBucket: 'ai-studio-oziplateformeweb.appspot.com',
+        projectId: firebaseAppletConfig.projectId,
+        databaseId: firebaseAppletConfig.firestoreDatabaseId,
+        authDomain: firebaseAppletConfig.authDomain,
+        storageBucket: firebaseAppletConfig.storageBucket,
         isConnected: true,
         lastSyncedAt: new Date().toISOString(),
         autoSyncEnabled: true,
@@ -548,10 +552,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     } catch {
       return {
-        projectId: 'ai-studio-oziplateformeweb',
-        databaseId: 'ai-studio-oziplateformeweb-6556be3f-d3e6-4173-80a0-da1cbbf6f644',
-        authDomain: 'ai-studio-oziplateformeweb.firebaseapp.com',
-        storageBucket: 'ai-studio-oziplateformeweb.appspot.com',
+        projectId: firebaseAppletConfig.projectId,
+        databaseId: firebaseAppletConfig.firestoreDatabaseId,
+        authDomain: firebaseAppletConfig.authDomain,
+        storageBucket: firebaseAppletConfig.storageBucket,
         isConnected: true,
         lastSyncedAt: new Date().toISOString(),
         autoSyncEnabled: true,
@@ -559,6 +563,34 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
   });
+
+  // Real-time Firestore sync listener (keeps Web and APK synchronized immediately)
+  useEffect(() => {
+    const unsubscribeSeries = subscribeToFirestoreSeries((firestoreSeries) => {
+      if (firestoreSeries && firestoreSeries.length > 0) {
+        setSeries((prevLocal) => {
+          // Merge remote firestore items with local items
+          const map = new Map<string, Series>();
+          // Put initial/local first
+          prevLocal.forEach((s) => map.set(s.id, s));
+          // Overwrite/Add remote items from Firestore
+          firestoreSeries.forEach((s) => map.set(s.id, { ...map.get(s.id), ...s }));
+          return Array.from(map.values());
+        });
+      }
+    });
+
+    const unsubscribeVersion = subscribeToFirestoreAppVersion((remoteVersion) => {
+      if (remoteVersion && remoteVersion.version) {
+        setAppVersion((prev) => ({ ...prev, ...remoteVersion }));
+      }
+    });
+
+    return () => {
+      unsubscribeSeries();
+      unsubscribeVersion();
+    };
+  }, []);
 
   // LocalStorage sync
   useEffect(() => {
@@ -1248,19 +1280,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const testFirebaseConnection = useCallback(async () => {
     setFirebaseConfig(prev => ({ ...prev, syncState: 'syncing' }));
-    const fb = initializeFirebaseCustom({
-      projectId: firebaseConfig.projectId,
-      databaseId: firebaseConfig.databaseId
-    });
+    const fb = initializeFirebaseCustom();
 
     if (!fb.success || !fb.db) {
       setFirebaseConfig(prev => ({
         ...prev,
         isConnected: false,
         syncState: 'error',
-        errorMessage: fb.error || 'Erreur d\'initialisation'
+        errorMessage: 'Impossible d\'initialiser le client Firestore'
       }));
-      return { success: false, message: fb.error || 'Impossible d\'initialiser Firebase' };
+      return { success: false, message: 'Impossible d\'initialiser le client Firestore' };
     }
 
     const testRes = await testFirestoreConnection(fb.db);
@@ -1273,7 +1302,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
 
     return { success: testRes.connected, message: testRes.message };
-  }, [firebaseConfig.projectId, firebaseConfig.databaseId]);
+  }, []);
 
   const triggerManualSync = useCallback(async () => {
     setFirebaseConfig(prev => ({ ...prev, syncState: 'syncing' }));
