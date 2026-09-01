@@ -662,25 +662,26 @@ export const INITIAL_MEDIA_KIT: MediaKitAsset[] = [
 ];
 
 export const INITIAL_APP_VERSION: AppVersionInfo = {
-  version: 'v2.4.0',
-  buildNumber: 2040,
-  releaseDate: '2026-08-25',
-  apkDownloadUrl: 'https://ozibd.net/ozi-reader.apk',
-  apkSizeMb: 14.8,
+  version: 'v2.4.1',
+  buildNumber: 2041,
+  releaseDate: '2026-09-01',
+  apkDownloadUrl: 'http://ozibd.net/ozi-reader.apk',
+  apkSizeMb: 15.2,
   minAndroidVersion: 'Android 6.0 (Marshmallow) ou supérieur',
   checksumSha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
   isForceUpdateRequired: false,
   pwaUrl: './',
   webAppUrl: './',
-  downloadUrl: 'https://ozibd.net/ozi-reader.apk',
+  downloadUrl: 'http://ozibd.net/ozi-reader.apk',
   changelog: [
+    '✨ Nouvelle icône d\'application officielle haute définition intégrée',
     '⚡ Mode lecteur plein écran ultra-rapide avec préchargement intelligent',
     '📥 Support du téléchargement hors-ligne des chapitres favoris',
+    '🔄 Synchronisation temps réel avec Firestore (euphoric-sector-gtvkm)',
     '🌙 Mode nuit OLED à contraste dynamique',
-    '🔄 Synchronisation temps réel avec Firestore (ai-studio-oziplateformeweb)',
-    '🔒 Système de sécurité renforcé et consommation de données réduite de 40%'
+    '🔒 Système de sécurité renforcé et consommation de données optimisée'
   ],
-  downloadsCount: 52400
+  downloadsCount: 52450
 };
 
 export const INITIAL_ANALYTICS: AnalyticsOverview = {

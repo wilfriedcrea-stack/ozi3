@@ -24,7 +24,7 @@ export const ApkDownloadSection: React.FC = () => {
   const [copiedChecksum, setCopiedChecksum] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
 
-  const apkUrl = appVersion.downloadUrl || appVersion.apkDownloadUrl || 'https://ozibd.net/ozi-reader.apk';
+  const apkUrl = appVersion.downloadUrl || appVersion.apkDownloadUrl || 'http://ozibd.net/ozi-reader.apk';
 
   const handleDownload = () => {
     setDownloading(true);

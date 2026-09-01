@@ -25,7 +25,7 @@ export const HeroSection: React.FC = () => {
   const featuredSeries = series.filter(s => s.isFeatured).slice(0, 3);
   const currentHero = featuredSeries[activeHeroIndex] || series[0];
 
-  const apkUrl = appVersion.downloadUrl || appVersion.apkDownloadUrl || 'https://ozibd.net/ozi-reader.apk';
+  const apkUrl = appVersion.downloadUrl || appVersion.apkDownloadUrl || 'http://ozibd.net/ozi-reader.apk';
 
   const handleDownloadApk = () => {
     setDownloading(true);

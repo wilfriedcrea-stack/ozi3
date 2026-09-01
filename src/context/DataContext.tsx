@@ -391,9 +391,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (saved) {
         const parsed = JSON.parse(saved);
         // Ensure valid official APK download URL
-        if (!parsed.downloadUrl || parsed.downloadUrl.includes('ozi-app.lws.fr') || parsed.downloadUrl === './ozi-reader.apk' || parsed.downloadUrl.includes('ozi-reader.apk')) {
-          parsed.downloadUrl = 'https://ozibd.net/ozi-reader.apk';
-          parsed.apkDownloadUrl = 'https://ozibd.net/ozi-reader.apk';
+        if (!parsed.downloadUrl || parsed.downloadUrl.includes('ozi-app.lws.fr') || parsed.downloadUrl === './ozi-reader.apk') {
+          parsed.downloadUrl = 'http://ozibd.net/ozi-reader.apk';
+          parsed.apkDownloadUrl = 'http://ozibd.net/ozi-reader.apk';
+        }
+        // Always make sure apkDownloadUrl is synced with downloadUrl
+        if (parsed.downloadUrl) {
+          parsed.apkDownloadUrl = parsed.downloadUrl;
         }
         return parsed;
       }
