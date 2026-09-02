@@ -66,15 +66,15 @@ export function subscribeToFirestoreSeries(onUpdate: (seriesList: Series[]) => v
   try {
     const seriesCol = collection(db, 'series');
     return onSnapshot(seriesCol, (snapshot) => {
-      if (!snapshot.empty) {
-        const loadedSeries: Series[] = [];
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data() as Series;
-          loadedSeries.push({
-            ...data,
-            id: docSnap.id
-          });
+      const loadedSeries: Series[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as Series;
+        loadedSeries.push({
+          ...data,
+          id: docSnap.id
         });
+      });
+      if (loadedSeries.length > 0) {
         onUpdate(loadedSeries);
       }
     }, (err) => {
@@ -83,6 +83,26 @@ export function subscribeToFirestoreSeries(onUpdate: (seriesList: Series[]) => v
   } catch (err) {
     console.warn('Firestore subscription unavailable:', err);
     return () => {};
+  }
+}
+
+// Direct fetch of all Series from Firestore (bypasses local cache for instant refresh)
+export async function fetchFirestoreSeriesNow(databaseInstance: Firestore = db): Promise<Series[]> {
+  try {
+    const seriesCol = collection(databaseInstance, 'series');
+    const snapshot = await getDocs(seriesCol);
+    const loadedSeries: Series[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as Series;
+      loadedSeries.push({
+        ...data,
+        id: docSnap.id
+      });
+    });
+    return loadedSeries;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.LIST, 'series');
+    return [];
   }
 }
 

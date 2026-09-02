@@ -52,6 +52,7 @@ import {
   syncArticleToFirestore,
   deleteArticleFromFirestore,
   subscribeToFirestoreSeries,
+  fetchFirestoreSeriesNow,
   subscribeToFirestoreAppVersion,
   getAppFirestoreDb
 } from '../services/firebaseService';
@@ -177,6 +178,8 @@ interface DataContextType {
   updateFirebaseConfig: (updates: Partial<FirebaseSyncConfig>) => void;
   testFirebaseConnection: () => Promise<{ success: boolean; message: string }>;
   triggerManualSync: () => Promise<void>;
+  refreshCatalogueFromFirestore: () => Promise<boolean>;
+  isRefreshingCatalogue: boolean;
 
   // Interactions
   likeSeries: (seriesId: string) => void;
@@ -568,8 +571,32 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
+  const [isRefreshingCatalogue, setIsRefreshingCatalogue] = useState(false);
+
   // Real-time Firestore sync listener (keeps Web and APK synchronized immediately)
   useEffect(() => {
+    // 1. Fetch immediately on launch to ensure latest catalog is active
+    const fetchInitial = async () => {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          const initialData = await fetchFirestoreSeriesNow(fb.db);
+          if (initialData && initialData.length > 0) {
+            setSeries((prevLocal) => {
+              const map = new Map<string, Series>();
+              prevLocal.forEach((s) => map.set(s.id, s));
+              initialData.forEach((s) => map.set(s.id, { ...map.get(s.id), ...s }));
+              return Array.from(map.values());
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Initial Firestore fetch note:', err);
+      }
+    };
+    fetchInitial();
+
+    // 2. Real-time persistent onSnapshot listener
     const unsubscribeSeries = subscribeToFirestoreSeries((firestoreSeries) => {
       if (firestoreSeries && firestoreSeries.length > 0) {
         setSeries((prevLocal) => {
@@ -1335,6 +1362,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [firebaseConfig, series, articles, appVersion, pressReleases, teasers]);
 
+  const refreshCatalogueFromFirestore = useCallback(async () => {
+    setIsRefreshingCatalogue(true);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        const latestSeries = await fetchFirestoreSeriesNow(fb.db);
+        if (latestSeries && latestSeries.length > 0) {
+          setSeries((prevLocal) => {
+            const map = new Map<string, Series>();
+            prevLocal.forEach(s => map.set(s.id, s));
+            latestSeries.forEach(s => map.set(s.id, { ...map.get(s.id), ...s }));
+            const merged = Array.from(map.values());
+            localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(merged));
+            return merged;
+          });
+        }
+      }
+      return true;
+    } catch {
+      return false;
+    } finally {
+      setTimeout(() => setIsRefreshingCatalogue(false), 500);
+    }
+  }, []);
+
   return (
     <DataContext.Provider value={{
       series,
@@ -1416,6 +1468,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateFirebaseConfig,
       testFirebaseConnection,
       triggerManualSync,
+      refreshCatalogueFromFirestore,
+      isRefreshingCatalogue,
       likeSeries,
       likeChapter
     }}>

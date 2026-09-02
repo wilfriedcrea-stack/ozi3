@@ -7,7 +7,8 @@ import {
   Play,
   Film,
   Tv,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 import { Series, SeriesGenre } from '../../types';
 import { useData } from '../../context/DataContext';
@@ -27,11 +28,18 @@ const GENRES: Array<'Tous' | SeriesGenre> = [
 type FormatFilter = 'all' | 'série' | 'film';
 
 export const SeriesCatalog: React.FC = () => {
-  const { series, openOeuvrePage } = useData();
+  const { series, openOeuvrePage, refreshCatalogueFromFirestore, isRefreshingCatalogue } = useData();
   const [selectedFormat, setSelectedFormat] = useState<FormatFilter>('all');
   const [selectedGenre, setSelectedGenre] = useState<'Tous' | SeriesGenre>('Tous');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'popular' | 'rating' | 'recent'>('popular');
+  const [refreshedNotice, setRefreshedNotice] = useState(false);
+
+  const handleManualRefresh = async () => {
+    await refreshCatalogueFromFirestore();
+    setRefreshedNotice(true);
+    setTimeout(() => setRefreshedNotice(false), 2500);
+  };
 
   const filteredSeries = useMemo(() => {
     return series.filter(s => {
@@ -80,39 +88,52 @@ export const SeriesCatalog: React.FC = () => {
               </h1>
             </div>
 
-            {/* Quick format selector pills (Tous / Films / Séries) */}
-            <div className="flex items-center gap-1.5 p-1 bg-[#10121a] border border-white/10 rounded-xl self-start sm:self-auto">
+            {/* Quick format selector pills (Tous / Films / Séries) + Quick Refresh */}
+            <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+              <div className="flex items-center gap-1.5 p-1 bg-[#10121a] border border-white/10 rounded-xl">
+                <button
+                  onClick={() => setSelectedFormat('all')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    selectedFormat === 'all'
+                      ? 'bg-purple-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Tous ({series.length})
+                </button>
+                <button
+                  onClick={() => setSelectedFormat('film')}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    selectedFormat === 'film'
+                      ? 'bg-purple-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Film className="w-3 h-3" />
+                  <span>Films</span>
+                </button>
+                <button
+                  onClick={() => setSelectedFormat('série')}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    selectedFormat === 'série'
+                      ? 'bg-purple-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Tv className="w-3 h-3" />
+                  <span>Séries</span>
+                </button>
+              </div>
+
+              {/* Discreet 1-Tap Cloud Refresh Button for Mobile APK & Web */}
               <button
-                onClick={() => setSelectedFormat('all')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  selectedFormat === 'all'
-                    ? 'bg-purple-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-white'
-                }`}
+                onClick={handleManualRefresh}
+                disabled={isRefreshingCatalogue}
+                title="Actualiser le catalogue en direct depuis le Cloud Firestore"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-amber-500/30 text-amber-400 hover:text-amber-300 text-xs font-bold transition-all active:scale-95 shadow-md shadow-amber-500/5 cursor-pointer"
               >
-                Tous ({series.length})
-              </button>
-              <button
-                onClick={() => setSelectedFormat('film')}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  selectedFormat === 'film'
-                    ? 'bg-purple-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Film className="w-3 h-3" />
-                <span>Films</span>
-              </button>
-              <button
-                onClick={() => setSelectedFormat('série')}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  selectedFormat === 'série'
-                    ? 'bg-purple-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Tv className="w-3 h-3" />
-                <span>Séries</span>
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingCatalogue ? 'animate-spin text-amber-300' : ''}`} />
+                <span className="hidden sm:inline">{isRefreshingCatalogue ? 'Actualisation...' : refreshedNotice ? 'À jour !' : 'Actualiser'}</span>
               </button>
             </div>
           </div>

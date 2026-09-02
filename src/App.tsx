@@ -12,6 +12,7 @@ import { Footer } from './components/landing/Footer';
 import { WebtoonReaderModal } from './components/landing/WebtoonReaderModal';
 import { TeaserVideoModal } from './components/landing/TeaserVideoModal';
 import { AdminStudio } from './components/admin/AdminStudio';
+import { PullToRefresh } from './components/landing/PullToRefresh';
 
 const MainLayout: React.FC = () => {
   const { viewMode } = useData();
@@ -21,32 +22,34 @@ const MainLayout: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-amber-500 selection:text-zinc-950 font-sans flex flex-col justify-between">
-      <div>
-        {/* Top Image Banner before Header */}
-        <TopBanner />
+    <PullToRefresh>
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-amber-500 selection:text-zinc-950 font-sans flex flex-col justify-between">
+        <div>
+          {/* Top Image Banner before Header */}
+          <TopBanner />
 
-        {/* Sticky Header Navbar */}
-        <Navbar />
+          {/* Sticky Header Navbar */}
+          <Navbar />
 
-        {/* Dynamic Page Views */}
-        <main>
-          {viewMode === 'accueil' && <AccueilPage />}
-          {viewMode === 'oeuvres' && <OeuvresPage />}
-          {viewMode === 'articles' && <ArticlesPage />}
-          {viewMode === 'recherche' && <SearchPage />}
-          {viewMode === 'article-detail' && <ArticleDetailPage />}
-          {viewMode === 'oeuvre-detail' && <OeuvreDetailPage />}
-        </main>
+          {/* Dynamic Page Views */}
+          <main>
+            {viewMode === 'accueil' && <AccueilPage />}
+            {viewMode === 'oeuvres' && <OeuvresPage />}
+            {viewMode === 'articles' && <ArticlesPage />}
+            {viewMode === 'recherche' && <SearchPage />}
+            {viewMode === 'article-detail' && <ArticleDetailPage />}
+            {viewMode === 'oeuvre-detail' && <OeuvreDetailPage />}
+          </main>
+        </div>
+
+        {/* Footer */}
+        <Footer />
+
+        {/* Global Modals */}
+        <WebtoonReaderModal />
+        <TeaserVideoModal />
       </div>
-
-      {/* Footer */}
-      <Footer />
-
-      {/* Global Modals */}
-      <WebtoonReaderModal />
-      <TeaserVideoModal />
-    </div>
+    </PullToRefresh>
   );
 };
 
