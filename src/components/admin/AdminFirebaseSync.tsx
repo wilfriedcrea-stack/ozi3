@@ -287,7 +287,18 @@ service cloud.firestore {
               <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
                 <div className="flex items-center gap-3">
                   <span className="font-mono text-xs font-bold text-amber-400">/series</span>
-                  <span className="text-xs text-zinc-400">Séries & Épisodes publiés</span>
+                  <span className="text-xs text-zinc-400">Séries & Épisodes (Mobile & Web)</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-bold text-white">{series.length} documents</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-xs font-bold text-amber-400">/works</span>
+                  <span className="text-xs text-zinc-400">Catalogue Œuvres (Miroir & Web)</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-bold text-white">{series.length} documents</span>

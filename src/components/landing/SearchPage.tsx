@@ -63,9 +63,11 @@ export const SearchPage: React.FC = () => {
     const cleanQuery = query.trim().toLowerCase();
     
     return series.filter((s) => {
+      const allSeriesGenres: string[] = [s.genre, ...(s.secondaryGenres || [])];
+
       // Genre filter
       if (selectedGenre !== 'Tous') {
-        const hasGenre = s.genres && s.genres.some(g => g.toLowerCase() === selectedGenre.toLowerCase());
+        const hasGenre = allSeriesGenres.some(g => g.toLowerCase() === selectedGenre.toLowerCase());
         if (!hasGenre) return false;
       }
 
@@ -74,7 +76,7 @@ export const SearchPage: React.FC = () => {
         const fmt = (s.format || '').toLowerCase();
         if (selectedFormat === 'film' && fmt !== 'film') return false;
         if (selectedFormat === 'série' && fmt !== 'série' && fmt !== 'serie') return false;
-        if (selectedFormat === 'webtoon' && !fmt.includes('webtoon') && !s.type?.includes('webtoon')) return false;
+        if (selectedFormat === 'webtoon' && !fmt.includes('webtoon')) return false;
       }
 
       if (!cleanQuery) return true;
@@ -84,7 +86,7 @@ export const SearchPage: React.FC = () => {
       const artistMatch = (s.artist || '').toLowerCase().includes(cleanQuery);
       const synopsisMatch = (s.synopsis || '').toLowerCase().includes(cleanQuery);
       const countryMatch = (s.country || '').toLowerCase().includes(cleanQuery);
-      const genreMatch = (s.genres || []).some(g => g.toLowerCase().includes(cleanQuery));
+      const genreMatch = allSeriesGenres.some(g => g.toLowerCase().includes(cleanQuery));
       const tagsMatch = (s.tags || []).some(t => t.toLowerCase().includes(cleanQuery));
       const studioMatch = (s.studio || '').toLowerCase().includes(cleanQuery);
 
@@ -97,7 +99,7 @@ export const SearchPage: React.FC = () => {
     const cleanQuery = query.trim().toLowerCase();
 
     return articles.filter((a) => {
-      if (a.status === 'draft') return false;
+      if (a.published === false) return false;
 
       if (!cleanQuery) return true;
 
@@ -105,10 +107,9 @@ export const SearchPage: React.FC = () => {
       const excerptMatch = (a.excerpt || '').toLowerCase().includes(cleanQuery);
       const contentMatch = (a.content || '').toLowerCase().includes(cleanQuery);
       const categoryMatch = (a.category || '').toLowerCase().includes(cleanQuery);
-      const authorMatch = (a.author?.name || '').toLowerCase().includes(cleanQuery);
-      const tagsMatch = (a.tags || []).some(t => t.toLowerCase().includes(cleanQuery));
+      const authorMatch = (a.author || '').toLowerCase().includes(cleanQuery);
 
-      return titleMatch || excerptMatch || contentMatch || categoryMatch || authorMatch || tagsMatch;
+      return titleMatch || excerptMatch || contentMatch || categoryMatch || authorMatch;
     });
   }, [articles, query]);
 
@@ -118,7 +119,10 @@ export const SearchPage: React.FC = () => {
   // Available unique genres from series
   const allGenres = useMemo(() => {
     const set = new Set<string>();
-    series.forEach(s => (s.genres || []).forEach(g => set.add(g)));
+    series.forEach(s => {
+      if (s.genre) set.add(s.genre);
+      (s.secondaryGenres || []).forEach(g => set.add(g));
+    });
     return ['Tous', ...Array.from(set)];
   }, [series]);
 
@@ -424,7 +428,7 @@ export const SearchPage: React.FC = () => {
                       {s.title}
                     </h3>
                     <p className="text-xs text-zinc-400 mt-0.5 line-clamp-1">
-                      {s.genres && s.genres.length > 0 ? s.genres.join(' • ') : (s.author || 'OZI Studio')}
+                      {s.genre || s.author || 'OZI Studio'}
                     </p>
                     <div className="flex items-center justify-center gap-2 mt-1 text-[11px] text-zinc-500 font-medium">
                       <span>{s.chaptersCount || s.chapters?.length || 0} ch.</span>
@@ -478,7 +482,7 @@ export const SearchPage: React.FC = () => {
                   {/* Article Thumbnail */}
                   <div className="relative aspect-[16/9] w-full overflow-hidden bg-zinc-900">
                     <img
-                      src={article.coverUrl}
+                      src={article.image}
                       alt={article.title}
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       loading="lazy"
@@ -504,7 +508,7 @@ export const SearchPage: React.FC = () => {
                       <div className="flex items-center gap-2 text-xs text-zinc-400 mb-2">
                         <span className="flex items-center gap-1">
                           <User className="w-3 h-3 text-zinc-500" />
-                          {article.author?.name || 'Rédaction OZI'}
+                          {article.author || 'Rédaction OZI'}
                         </span>
                         <span>•</span>
                         <span>{article.publishedAt || 'Récemment'}</span>

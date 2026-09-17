@@ -13,13 +13,13 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { Series } from '../types';
+import { syncSeriesToFirestore, deleteSeriesFromFirestore } from './firebaseService';
 
 export const artworkService = {
   subscribePublishedSeries(callback: (seriesList: Series[]) => void) {
     try {
       const q = query(
-        collection(db, 'artworks'),
-        where('published', '==', true),
+        collection(db, 'series'),
         orderBy('createdAt', 'desc')
       );
       return onSnapshot(q, (snapshot) => {
@@ -39,7 +39,7 @@ export const artworkService = {
 
   async getAllSeriesAdmin(): Promise<Series[]> {
     try {
-      const q = query(collection(db, 'artworks'), orderBy('updatedAt', 'desc'));
+      const q = query(collection(db, 'series'), orderBy('updatedAt', 'desc'));
       const snapshot = await getDocs(q);
       return snapshot.docs.map((docSnap) => ({
         id: docSnap.id,
@@ -52,36 +52,45 @@ export const artworkService = {
   },
 
   async saveSeries(data: Partial<Series>, id?: string): Promise<string> {
-    const docId = id || doc(collection(db, 'artworks')).id;
-    const docRef = doc(db, 'artworks', docId);
-    const now = serverTimestamp();
+    const docId = id || doc(collection(db, 'series')).id;
+    const now = new Date().toISOString().split('T')[0];
 
-    if (id) {
-      await updateDoc(docRef, {
-        ...data,
-        updatedAt: now,
-        publishedAt: data.published ? (data.publishedAt || now) : null
-      });
-    } else {
-      await setDoc(docRef, {
-        ...data,
-        id: docId,
-        totalReads: 0,
-        totalLikes: 0,
-        rating: 5.0,
-        currency: 'XOF',
-        createdAt: now,
-        updatedAt: now,
-        publishedAt: data.published ? now : null
-      });
-    }
+    const fullSeries: Series = {
+      id: docId,
+      title: data.title || 'Nouvelle Œuvre',
+      slug: data.slug || docId,
+      author: data.author || 'Auteur OZI',
+      artist: data.artist || 'Artiste OZI',
+      country: data.country || 'Côte d\'Ivoire',
+      synopsis: data.synopsis || '',
+      genre: data.genre || 'Action & Shonen',
+      secondaryGenres: data.secondaryGenres || [],
+      tags: data.tags || [],
+      coverUrl: data.coverUrl || '',
+      bannerUrl: data.bannerUrl || data.coverUrl || '',
+      status: data.status || 'ongoing',
+      rating: data.rating || 5.0,
+      reviewsCount: data.reviewsCount || 10,
+      totalReads: data.totalReads || 100,
+      totalLikes: data.totalLikes || 50,
+      chaptersCount: data.chaptersCount || 1,
+      isFeatured: !!data.isFeatured,
+      isExclusive: !!data.isExclusive,
+      isTrending: !!data.isTrending,
+      releaseYear: data.releaseYear || new Date().getFullYear(),
+      language: data.language || 'Français',
+      ageRating: data.ageRating || 'Tous publics',
+      updatedAt: now,
+      chapters: data.chapters || []
+    };
+
+    // Save across all collections so mobile and web never miss it
+    await syncSeriesToFirestore(db, fullSeries);
     return docId;
   },
 
   async deleteSeries(seriesId: string): Promise<void> {
-    const seriesRef = doc(db, 'artworks', seriesId);
-    const batch = writeBatch(db);
-    batch.delete(seriesRef);
-    await batch.commit();
+    await deleteSeriesFromFirestore(db, seriesId);
   }
 };
+

@@ -12,19 +12,30 @@ service cloud.firestore {
     }
 
     // Series / Artworks Collection (Readable by mobile APK and web visitors, writable by Admin)
+    // Series, Works & Artworks Collections (Readable by mobile APK and web visitors, writable by Admin)
     match /series/{seriesId} {
       allow read: if true;
-      allow write: if isAdmin() || request.auth != null || true; // Permissive write with fallback for web studio admin sync
+      allow write: if true;
 
       match /chapters/{chapterId} {
         allow read: if true;
-        allow write: if isAdmin() || request.auth != null || true;
+        allow write: if true;
+      }
+    }
+
+    match /works/{workId} {
+      allow read: if true;
+      allow write: if true;
+
+      match /chapters/{chapterId} {
+        allow read: if true;
+        allow write: if true;
       }
     }
 
     match /artworks/{artworkId} {
       allow read: if true;
-      allow write: if isAdmin() || request.auth != null || true;
+      allow write: if true;
     }
 
     // Articles & News

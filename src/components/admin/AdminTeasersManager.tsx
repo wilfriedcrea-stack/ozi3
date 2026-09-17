@@ -11,21 +11,30 @@ import {
   Sparkles
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
-import { VideoTeaser } from '../../types';
+import { VideoTeaser, Teaser } from '../../types';
 
 export const AdminTeasersManager: React.FC = () => {
   const { teasers, addTeaser, updateTeaser, deleteTeaser, openTeaserModal, series } = useData();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTeaser, setEditingTeaser] = useState<VideoTeaser | null>(null);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    title: string;
+    seriesTitle: string;
+    seriesId: string;
+    duration: string;
+    thumbnailUrl: string;
+    videoUrl: string;
+    type: Teaser['type'];
+    description: string;
+  }>({
     title: '',
     seriesTitle: '',
     seriesId: '',
     duration: '01:30',
     thumbnailUrl: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80',
     videoUrl: 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4',
-    type: 'trailer' as 'trailer' | 'motion_comic' | 'interview',
+    type: 'trailer',
     description: ''
   });
 
@@ -66,10 +75,7 @@ export const AdminTeasersManager: React.FC = () => {
     if (editingTeaser) {
       await updateTeaser(editingTeaser.id, formData);
     } else {
-      await addTeaser({
-        ...formData,
-        viewsCount: Math.floor(Math.random() * 2000) + 1200
-      });
+      await addTeaser(formData);
     }
 
     setModalOpen(false);

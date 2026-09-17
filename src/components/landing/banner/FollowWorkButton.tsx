@@ -17,7 +17,6 @@ export const FollowWorkButton: React.FC<FollowWorkButtonProps> = ({
   className = '',
   size = 'md'
 }) => {
-  const { toggleFollowSeries } = useData();
   const [isFollowed, setIsFollowed] = useState<boolean>(false);
   const [followersCount, setFollowersCount] = useState<number>(initialFollowersCount || 0);
 
@@ -57,9 +56,6 @@ export const FollowWorkButton: React.FC<FollowWorkButtonProps> = ({
         }
         setIsFollowed(true);
         setFollowersCount(prev => prev + 1);
-        if (typeof toggleFollowSeries === 'function') {
-          toggleFollowSeries(seriesId);
-        }
       }
 
       localStorage.setItem(FOLLOWED_SERIES_STORAGE_KEY, JSON.stringify(ids));

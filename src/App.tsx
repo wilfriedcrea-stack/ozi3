@@ -13,6 +13,7 @@ import { WebtoonReaderModal } from './components/landing/WebtoonReaderModal';
 import { TeaserVideoModal } from './components/landing/TeaserVideoModal';
 import { AdminStudio } from './components/admin/AdminStudio';
 import { PullToRefresh } from './components/landing/PullToRefresh';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 const MainLayout: React.FC = () => {
   const { viewMode } = useData();
@@ -55,8 +56,10 @@ const MainLayout: React.FC = () => {
 
 export default function App() {
   return (
-    <DataProvider>
-      <MainLayout />
-    </DataProvider>
+    <ErrorBoundary>
+      <DataProvider>
+        <MainLayout />
+      </DataProvider>
+    </ErrorBoundary>
   );
 }

@@ -14,6 +14,115 @@ import {
 
 export const INITIAL_SERIES: Series[] = [
   {
+    id: 'gantz',
+    title: 'Gantz',
+    slug: 'gantz',
+    author: 'Hiroya Oku & OZI Team',
+    artist: 'Hiroya Oku',
+    country: 'International / Japon',
+    synopsis: 'Après avoir été percutés par une rame de métro, Kei Kurono et Masaru Kato se réveillent dans une mystérieuse pièce avec une sphère noire appelée Gantz. Armés de combinaisons et d\'armes futuristes, ils sont contraints de participer à une traque mortelle contre des extraterrestres dissimulés sur Terre.',
+    genre: 'Sci-Fi & Cyberpunk',
+    format: 'série',
+    secondaryGenres: ['Action & Shonen', 'Horreur', 'Seinen'],
+    tags: ['Seinen', 'Alien', 'Survie', 'Action', 'Gantz', 'Combat'],
+    coverUrl: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80',
+    bannerUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1600&q=80',
+    status: 'ongoing',
+    rating: 4.98,
+    reviewsCount: 4210,
+    totalReads: 512000,
+    totalLikes: 98400,
+    chaptersCount: 38,
+    isFeatured: true,
+    isExclusive: false,
+    isTrending: true,
+    releaseYear: 2025,
+    language: 'Français',
+    ageRating: '18+',
+    updatedAt: '2026-08-30',
+    chapters: [
+      {
+        id: 'gantz-ch-1',
+        seriesId: 'gantz',
+        chapterNumber: 1,
+        title: 'Un accident fatal',
+        releaseDate: '2025-01-05',
+        isFree: true,
+        coinsRequired: 0,
+        likesCount: 15400,
+        readTimeMinutes: 7,
+        summary: 'Kei et Masaru se retrouvent soudain téléportés dans un appartement de Tokyo face à la sphère noire.',
+        pages: [
+          'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80',
+          'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?auto=format&fit=crop&w=800&q=80',
+          'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?auto=format&fit=crop&w=800&q=80'
+        ]
+      },
+      {
+        id: 'gantz-ch-2',
+        seriesId: 'gantz',
+        chapterNumber: 2,
+        title: 'L\'Alien Poireau',
+        releaseDate: '2025-01-12',
+        isFree: true,
+        coinsRequired: 0,
+        likesCount: 13200,
+        readTimeMinutes: 8,
+        summary: 'Le compte à rebours de Gantz commence. La première mission extraterrestre démarre dans la nuit tokyoïte.',
+        pages: [
+          'https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=800&q=80',
+          'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=800&q=80'
+        ]
+      }
+    ]
+  },
+  {
+    id: 'les-gonmons',
+    title: 'Les Gonmons',
+    slug: 'les-gonmons',
+    author: 'Wilfried & Studio OZI',
+    artist: 'Équipe OZI Création',
+    country: 'Côte d\'Ivoire',
+    synopsis: 'Dans les ruelles vibrantes et animées des faubourgs abidjanais, une bande d\'amis d\'enfance audacieux, surnommés « Les Gonmons », se retrouvent embarqués dans une aventure urbaine haletante mêlant humour, fraternité, défis de rue et culture populaire ivoirienne.',
+    genre: 'Action & Shonen',
+    format: 'série',
+    secondaryGenres: ['Comédie', 'Jeunesse & Aventure', 'Tranche de vie'],
+    tags: ['Abidjan', 'Rue', 'Jeunesse', 'Humour', 'Nouchi', 'Aventure Urbaine'],
+    coverUrl: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=800&q=80',
+    bannerUrl: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&w=1600&q=80',
+    status: 'ongoing',
+    rating: 4.95,
+    reviewsCount: 3100,
+    totalReads: 385000,
+    totalLikes: 72000,
+    chaptersCount: 15,
+    isFeatured: true,
+    isExclusive: true,
+    isTrending: true,
+    releaseYear: 2025,
+    language: 'Français & Nouchi',
+    ageRating: 'Tous publics',
+    updatedAt: '2026-08-30',
+    chapters: [
+      {
+        id: 'gonmons-ch-1',
+        seriesId: 'les-gonmons',
+        chapterNumber: 1,
+        title: 'L\'Affaire du Quartier',
+        releaseDate: '2025-02-10',
+        isFree: true,
+        coinsRequired: 0,
+        likesCount: 12800,
+        readTimeMinutes: 6,
+        summary: 'Tout commence lors d\'un après-midi ensoleillé à Yopougon où une mystérieuse découverte change le destin des Gonmons.',
+        pages: [
+          'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?auto=format&fit=crop&w=800&q=80',
+          'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80'
+        ]
+      }
+    ]
+  },
+  {
     id: 'kemet-legend',
     title: 'La Légende de Kemet',
     slug: 'la-legende-de-kemet',

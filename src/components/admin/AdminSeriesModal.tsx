@@ -10,7 +10,7 @@ import {
   ShieldCheck,
   Star
 } from 'lucide-react';
-import { Series, SeriesGenre } from '../../types';
+import { Series, SeriesGenre, SeriesStatus } from '../../types';
 
 interface AdminSeriesModalProps {
   series: Series | null;
@@ -36,8 +36,8 @@ export const AdminSeriesModal: React.FC<AdminSeriesModalProps> = ({ series, onCl
   const [genre, setGenre] = useState<SeriesGenre>(series?.genre || 'Afro-Fantasy');
   const [country, setCountry] = useState(series?.country || 'Côte d\'Ivoire');
   const [releaseYear, setReleaseYear] = useState(series?.releaseYear || new Date().getFullYear());
-  const [ageRating, setAgeRating] = useState(series?.ageRating || 'Tous publics');
-  const [status, setStatus] = useState<'ongoing' | 'completed'>(series?.status || 'ongoing');
+  const [ageRating, setAgeRating] = useState<Series['ageRating']>(series?.ageRating || 'Tous publics');
+  const [status, setStatus] = useState<SeriesStatus>(series?.status || 'ongoing');
   const [isExclusive, setIsExclusive] = useState(series?.isExclusive ?? true);
   const [synopsis, setSynopsis] = useState(series?.synopsis || '');
   const [coverUrl, setCoverUrl] = useState(series?.coverUrl || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80');
@@ -75,6 +75,7 @@ export const AdminSeriesModal: React.FC<AdminSeriesModalProps> = ({ series, onCl
       chapters: series?.chapters || [
         {
           id: `ch-1-${Date.now()}`,
+          seriesId: series?.id || 'new-series',
           chapterNumber: 1,
           title: 'Prologue : L\'Appel des Racines',
           pages: [
@@ -86,7 +87,6 @@ export const AdminSeriesModal: React.FC<AdminSeriesModalProps> = ({ series, onCl
           readTimeMinutes: 4,
           releaseDate: new Date().toISOString().split('T')[0],
           likesCount: 150,
-          viewsCount: 1200,
           summary: 'Le commencement de la légende.'
         }
       ]
@@ -199,7 +199,7 @@ export const AdminSeriesModal: React.FC<AdminSeriesModalProps> = ({ series, onCl
               <label className="text-xs font-semibold text-zinc-400 block mb-1">Classification d'âge</label>
               <select
                 value={ageRating}
-                onChange={(e) => setAgeRating(e.target.value)}
+                onChange={(e) => setAgeRating(e.target.value as any)}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-sm text-zinc-100 focus:outline-none focus:border-amber-500"
               >
                 <option value="Tous publics">Tous publics</option>

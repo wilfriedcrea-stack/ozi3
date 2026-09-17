@@ -347,7 +347,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [series, setSeries] = useState<Series[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.SERIES);
-      return saved ? JSON.parse(saved) : INITIAL_SERIES;
+      if (saved) {
+        const parsed: Series[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Merge INITIAL_SERIES with saved items so newly added initial series (like Gantz, Les Gonmons) are never omitted
+          const map = new Map<string, Series>();
+          INITIAL_SERIES.forEach((s) => map.set(s.id, s));
+          parsed.forEach((s) => {
+            const existing = map.get(s.id);
+            map.set(s.id, existing ? { ...existing, ...s } : s);
+          });
+          return Array.from(map.values());
+        }
+      }
+      return INITIAL_SERIES;
     } catch {
       return INITIAL_SERIES;
     }
