@@ -215,6 +215,14 @@ export const WebtoonReaderModal: React.FC = () => {
                   alt={`Planche ${idx + 1}`}
                   className="w-full h-auto object-cover block"
                   loading={idx < 2 ? 'eager' : 'lazy'}
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    // Fallback to series cover if chapter page is broken
+                    const target = e.currentTarget;
+                    if (target.src !== activeReaderSeries.coverUrl) {
+                      target.src = activeReaderSeries.coverUrl;
+                    }
+                  }}
                 />
                 <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-[#09090e]/80 backdrop-blur-md text-[10px] font-mono text-zinc-400 border border-[#242436]">
                   Page {idx + 1} / {activeReaderChapter.pages.length}

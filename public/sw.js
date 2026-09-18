@@ -1,6 +1,4 @@
-// Service Worker for OZI PWA
-const CACHE_NAME = 'ozi-cache-v2.4.0';
-
+// Service Worker for OZI PWA - Safe pass-through mode
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
@@ -8,24 +6,10 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cache) => {
-          if (cache !== CACHE_NAME) {
-            return caches.delete(cache);
-          }
-        })
-      );
+      return Promise.all(cacheNames.map((cache) => caches.delete(cache)));
     }).then(() => self.clients.claim())
   );
 });
 
-self.addEventListener('fetch', (event) => {
-  // Let network handle most dynamic requests
-  if (event.request.method !== 'GET') return;
-  
-  event.respondWith(
-    fetch(event.request).catch(() => {
-      return caches.match(event.request);
-    })
-  );
-});
+// Do not intercept fetches so live applet code, Vite assets, and Firestore always load reliably
+

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { 
   Series, 
+  SeriesGenre,
   Teaser, 
   PressRelease, 
   MediaKitAsset, 
@@ -343,6 +344,43 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  // Sanitization utilities to guarantee zero rendering crashes on bad/incomplete data
+  const cleanSeries = (s: any, fallback?: Series): Series => {
+    const base = fallback || INITIAL_SERIES[0];
+    const chapters = (Array.isArray(s?.chapters) && s.chapters.length > 0)
+      ? s.chapters
+      : (fallback?.chapters && fallback.chapters.length > 0 ? fallback.chapters : []);
+
+    return {
+      id: String(s?.id || fallback?.id || 'series-default'),
+      title: String(s?.title || s?.name || fallback?.title || 'Série OZI'),
+      slug: String(s?.slug || (s?.title ? s.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : fallback?.slug || 'serie')),
+      author: String(s?.author || s?.writer || fallback?.author || 'Auteur OZI'),
+      artist: String(s?.artist || s?.illustrator || fallback?.artist || 'Artiste OZI'),
+      country: String(s?.country || fallback?.country || 'Côte d\'Ivoire'),
+      synopsis: String(s?.synopsis || s?.description || fallback?.synopsis || 'Découvrez cette œuvre sur OZI.'),
+      genre: (s?.genre || fallback?.genre || 'Action & Shonen') as SeriesGenre,
+      secondaryGenres: Array.isArray(s?.secondaryGenres) ? s.secondaryGenres : (fallback?.secondaryGenres || []),
+      tags: Array.isArray(s?.tags) ? s.tags : (fallback?.tags || []),
+      coverUrl: String(s?.coverUrl || s?.cover || s?.thumbnailUrl || fallback?.coverUrl || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80'),
+      bannerUrl: String(s?.bannerUrl || s?.banner || s?.coverUrl || fallback?.bannerUrl || 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=1600&q=80'),
+      status: s?.status || fallback?.status || 'ongoing',
+      rating: typeof s?.rating === 'number' && !isNaN(s.rating) ? s.rating : (fallback?.rating ?? 4.9),
+      reviewsCount: typeof s?.reviewsCount === 'number' && !isNaN(s.reviewsCount) ? s.reviewsCount : (fallback?.reviewsCount ?? 120),
+      totalReads: typeof s?.totalReads === 'number' && !isNaN(s.totalReads) ? s.totalReads : (fallback?.totalReads ?? 1000),
+      totalLikes: typeof s?.totalLikes === 'number' && !isNaN(s.totalLikes) ? s.totalLikes : (fallback?.totalLikes ?? 250),
+      chaptersCount: typeof s?.chaptersCount === 'number' && !isNaN(s.chaptersCount) ? s.chaptersCount : (chapters.length || 1),
+      isFeatured: !!(s?.isFeatured ?? fallback?.isFeatured),
+      isExclusive: !!(s?.isExclusive ?? fallback?.isExclusive),
+      isTrending: !!(s?.isTrending ?? fallback?.isTrending),
+      releaseYear: typeof s?.releaseYear === 'number' ? s.releaseYear : (fallback?.releaseYear ?? 2026),
+      language: String(s?.language || fallback?.language || 'Français'),
+      ageRating: (s?.ageRating || fallback?.ageRating || 'Tous publics') as '18+' | 'Tous publics' | '16+' | '12+',
+      updatedAt: String(s?.updatedAt || fallback?.updatedAt || new Date().toISOString().split('T')[0]),
+      chapters
+    };
+  };
+
   // Core Data
   const [series, setSeries] = useState<Series[]>(() => {
     try {
@@ -350,17 +388,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (saved) {
         const parsed: Series[] = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Merge INITIAL_SERIES with saved items so newly added initial series (like Gantz, Les Gonmons) are never omitted
+          // Merge INITIAL_SERIES with saved items so newly added initial series are never omitted
           const map = new Map<string, Series>();
           INITIAL_SERIES.forEach((s) => map.set(s.id, s));
           parsed.forEach((s) => {
-            const existing = map.get(s.id);
-            map.set(s.id, existing ? { ...existing, ...s } : s);
+            if (s && s.id) {
+              const existing = map.get(s.id);
+              map.set(s.id, cleanSeries(s, existing));
+            }
           });
           return Array.from(map.values());
         }
       }
-      return INITIAL_SERIES;
+      return INITIAL_SERIES.map((s) => cleanSeries(s));
     } catch {
       return INITIAL_SERIES;
     }
@@ -408,8 +448,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const parsed = JSON.parse(saved);
         // Ensure valid official APK download URL
         if (!parsed.downloadUrl || parsed.downloadUrl.includes('ozi-app.lws.fr') || parsed.downloadUrl === './ozi-reader.apk') {
-          parsed.downloadUrl = 'http://ozibd.net/ozi-reader.apk';
-          parsed.apkDownloadUrl = 'http://ozibd.net/ozi-reader.apk';
+          parsed.downloadUrl = 'https://ozibd.net/ozi-reader.apk';
+          parsed.apkDownloadUrl = 'https://ozibd.net/ozi-reader.apk';
         }
         // Always make sure apkDownloadUrl is synced with downloadUrl
         if (parsed.downloadUrl) {
@@ -598,7 +638,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setSeries((prevLocal) => {
               const map = new Map<string, Series>();
               prevLocal.forEach((s) => map.set(s.id, s));
-              initialData.forEach((s) => map.set(s.id, { ...map.get(s.id), ...s }));
+              initialData.forEach((remote) => {
+                if (remote && remote.id) {
+                  const local = map.get(remote.id);
+                  const chapters = (remote.chapters && remote.chapters.length > 0)
+                    ? remote.chapters
+                    : (local?.chapters && local.chapters.length > 0 ? local.chapters : remote.chapters);
+                  map.set(remote.id, cleanSeries({
+                    ...local,
+                    ...remote,
+                    chapters: chapters || []
+                  }, local));
+                }
+              });
               return Array.from(map.values());
             });
           }
@@ -617,8 +669,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const map = new Map<string, Series>();
           // Put initial/local first
           prevLocal.forEach((s) => map.set(s.id, s));
-          // Overwrite/Add remote items from Firestore
-          firestoreSeries.forEach((s) => map.set(s.id, { ...map.get(s.id), ...s }));
+          // Overwrite/Add remote items from Firestore, preserving local chapters if remote is empty
+          firestoreSeries.forEach((remote) => {
+            if (remote && remote.id) {
+              const local = map.get(remote.id);
+              const chapters = (remote.chapters && remote.chapters.length > 0)
+                ? remote.chapters
+                : (local?.chapters && local.chapters.length > 0 ? local.chapters : remote.chapters);
+              map.set(remote.id, cleanSeries({
+                ...local,
+                ...remote,
+                chapters: chapters || []
+              }, local));
+            }
+          });
           return Array.from(map.values());
         });
       }
@@ -721,23 +785,49 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Webtoon Reader Controls
   const openReader = useCallback((seriesId: string, chapterId?: string) => {
-    const targetSeries = series.find(s => s.id === seriesId);
+    const targetSeries = series.find(s => s.id === seriesId || s.slug === seriesId);
     if (!targetSeries) return;
 
+    const availableChapters: Chapter[] = (targetSeries.chapters && targetSeries.chapters.length > 0)
+      ? targetSeries.chapters
+      : [
+          {
+            id: `${targetSeries.id}-ch-1`,
+            seriesId: targetSeries.id,
+            chapterNumber: 1,
+            title: 'Prologue & Chapitre 1',
+            releaseDate: targetSeries.updatedAt || '2026-08-20',
+            isFree: true,
+            coinsRequired: 0,
+            likesCount: Math.floor((targetSeries.totalLikes || 100) / 2),
+            readTimeMinutes: 5,
+            summary: `Découvrez les premières planches et l'univers captivant de ${targetSeries.title}.`,
+            pages: [
+              targetSeries.bannerUrl || targetSeries.coverUrl,
+              targetSeries.coverUrl
+            ]
+          }
+        ];
+
     let targetChapter: Chapter | undefined;
-    if (chapterId && targetSeries.chapters) {
-      targetChapter = targetSeries.chapters.find(c => c.id === chapterId);
+    if (chapterId) {
+      targetChapter = availableChapters.find(c => c.id === chapterId);
     }
-    if (!targetChapter && targetSeries.chapters && targetSeries.chapters.length > 0) {
-      targetChapter = targetSeries.chapters[0];
+    if (!targetChapter) {
+      targetChapter = availableChapters[0];
     }
 
-    setActiveReaderSeries(targetSeries);
-    setActiveReaderChapter(targetChapter || null);
+    const fullSeries: Series = {
+      ...targetSeries,
+      chapters: availableChapters
+    };
+
+    setActiveReaderSeries(fullSeries);
+    setActiveReaderChapter(targetChapter);
 
     // Increment read stats
-    setSeries(prev => prev.map(s => s.id === seriesId ? { ...s, totalReads: s.totalReads + 1 } : s));
-    setAnalytics(prev => ({ ...prev, totalReads: prev.totalReads + 1, activeReadersToday: prev.activeReadersToday + 1 }));
+    setSeries(prev => prev.map(s => s.id === targetSeries.id ? { ...s, totalReads: (s.totalReads || 0) + 1 } : s));
+    setAnalytics(prev => ({ ...prev, totalReads: (prev.totalReads || 0) + 1, activeReadersToday: (prev.activeReadersToday || 0) + 1 }));
   }, [series]);
 
   const closeReader = useCallback(() => {
@@ -1385,7 +1475,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setSeries((prevLocal) => {
             const map = new Map<string, Series>();
             prevLocal.forEach(s => map.set(s.id, s));
-            latestSeries.forEach(s => map.set(s.id, { ...map.get(s.id), ...s }));
+            latestSeries.forEach((remote) => {
+              const local = map.get(remote.id);
+              const chapters = (remote.chapters && remote.chapters.length > 0)
+                ? remote.chapters
+                : (local?.chapters && local.chapters.length > 0 ? local.chapters : remote.chapters);
+              map.set(remote.id, {
+                ...local,
+                ...remote,
+                chapters: chapters || []
+              });
+            });
             const merged = Array.from(map.values());
             localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(merged));
             return merged;

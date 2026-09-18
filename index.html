@@ -15,25 +15,54 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   </head>
   <body class="bg-[#07080c] text-slate-100 font-['Plus_Jakarta_Sans',sans-serif] antialiased selection:bg-[#ff5a50] selection:text-white overflow-x-hidden">
-    <div id="root"></div>
+    <div id="root">
+      <!-- Fast initial splash preventing black screen before React hydration -->
+      <div id="ozi-initial-loader" style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #07080c; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 24px;">
+        <div style="width: 72px; height: 72px; border-radius: 20px; background: linear-gradient(135deg, #ff5a50, #ff8a65); display: flex; align-items: center; justify-content: center; margin-bottom: 20px; box-shadow: 0 10px 25px rgba(255, 90, 80, 0.4); animation: pulse 1.8s infinite ease-in-out;">
+          <span style="font-size: 28px; font-weight: 900; letter-spacing: -1px; color: #ffffff;">OZI</span>
+        </div>
+        <h1 style="font-size: 20px; font-weight: 800; margin: 0 0 8px 0; color: #ffffff; letter-spacing: -0.5px;">OZI Webtoons & Mangas</h1>
+        <p style="font-size: 13px; color: #94a3b8; margin: 0 0 24px 0; max-width: 320px;">Chargement de votre univers graphique...</p>
+        <div style="width: 36px; height: 36px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #ff5a50; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+        <div id="ozi-failsafe-recovery" style="display: none; margin-top: 28px;">
+          <button onclick="localStorage.clear(); window.location.reload();" style="background-color: #ff5a50; color: #ffffff; border: none; padding: 10px 20px; border-radius: 12px; font-weight: 700; font-size: 13px; cursor: pointer; box-shadow: 0 4px 12px rgba(255,90,80,0.3);">
+            Réinitialiser le cache & Relancer
+          </button>
+        </div>
+      </div>
+      <style>
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.06); opacity: 0.9; }
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      </style>
+      <script>
+        // Show failsafe button if React takes more than 4 seconds
+        setTimeout(function() {
+          var failsafe = document.getElementById('ozi-failsafe-recovery');
+          if (failsafe) failsafe.style.display = 'block';
+        }, 4000);
+      </script>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
+      // Aggressively unregister any stale service workers and purge corrupted caches
       if ('serviceWorker' in navigator) {
-        if (window.location.hostname.includes('run.app') || window.location.hostname === 'localhost') {
-          // In development / preview iframe, unregister any existing service worker to guarantee live updates
-          navigator.serviceWorker.getRegistrations().then((registrations) => {
-            for (const registration of registrations) {
-              registration.unregister();
-            }
-          });
-        } else {
-          // Production PWA registration
-          window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./sw.js').then((reg) => {
-              reg.update();
-            }).catch(() => {});
-          });
-        }
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for (var i = 0; i < registrations.length; i++) {
+            registrations[i].unregister();
+          }
+        }).catch(function() {});
+      }
+      if ('caches' in window) {
+        caches.keys().then(function(keys) {
+          for (var i = 0; i < keys.length; i++) {
+            caches.delete(keys[i]);
+          }
+        }).catch(function() {});
       }
     </script>
   </body>

@@ -31,7 +31,7 @@ export const WorkBanner: React.FC<WorkBannerProps> = ({
   return (
     <div
       id="work-main-banner"
-      className={`work-banner hidden md:block relative w-full overflow-hidden bg-[#0c0d14] border-b border-zinc-800/80 select-none ${className}`}
+      className={`work-banner block relative w-full overflow-hidden bg-[#0c0d14] border-b border-zinc-800/80 select-none ${className}`}
       style={{
         minHeight: '270px'
       }}
@@ -41,6 +41,7 @@ export const WorkBanner: React.FC<WorkBannerProps> = ({
         src={displayBg}
         alt={`Bannière de l'œuvre ${work.title}`}
         onError={() => setBgImageError(true)}
+        referrerPolicy="no-referrer"
         className="work-banner__background absolute inset-0 w-full h-full object-cover object-center pointer-events-none transition-opacity duration-300"
       />
 
@@ -67,6 +68,7 @@ export const WorkBanner: React.FC<WorkBannerProps> = ({
                 <img
                   src={work.coverUrl}
                   alt={work.title}
+                  referrerPolicy="no-referrer"
                   className="w-full h-full object-cover"
                 />
               </div>

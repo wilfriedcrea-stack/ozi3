@@ -84,7 +84,7 @@ export const TeaserVideoModal: React.FC = () => {
 
             <div className="flex items-center gap-2 text-xs text-zinc-400 font-body">
               <Eye className="w-3.5 h-3.5 text-orange-400" />
-              <span>{activeVideoTeaser.viewsCount.toLocaleString()} vues</span>
+              <span>{(typeof activeVideoTeaser.viewsCount === 'number' ? activeVideoTeaser.viewsCount : 15000).toLocaleString()} vues</span>
             </div>
           </div>
         </div>

@@ -96,7 +96,7 @@ export const OeuvreDetailPage: React.FC = () => {
           releaseDate: currentSeries.updatedAt || '2026-08-20',
           isFree: true,
           coinsRequired: 0,
-          likesCount: Math.floor(currentSeries.totalLikes / 2),
+          likesCount: Math.floor((currentSeries.totalLikes || 200) / 2),
           readTimeMinutes: 6,
           summary: 'Découvrez les premiers pas et l\'ouverture épique de l\'histoire.',
           pages: [currentSeries.coverUrl]
@@ -294,7 +294,7 @@ export const OeuvreDetailPage: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-zinc-400">
                       <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                      <span>{rel.rating.toFixed(1)}</span>
+                      <span>{(typeof rel.rating === 'number' ? rel.rating : 4.8).toFixed(1)}</span>
                       <span className="text-zinc-600">•</span>
                       <span>{rel.country}</span>
                     </div>

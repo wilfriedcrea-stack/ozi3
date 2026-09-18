@@ -1,0 +1,156 @@
+{
+  "entities": {
+    "Series": {
+      "title": "Series",
+      "description": "Oeuvre de bande dessinée, webtoon ou manga",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "slug": { "type": "string" },
+        "author": { "type": "string" },
+        "artist": { "type": "string" },
+        "country": { "type": "string" },
+        "synopsis": { "type": "string" },
+        "genre": { "type": "string" },
+        "coverUrl": { "type": "string" },
+        "bannerUrl": { "type": "string" },
+        "status": { "type": "string" },
+        "rating": { "type": "number" },
+        "reviewsCount": { "type": "number" },
+        "totalReads": { "type": "number" },
+        "totalLikes": { "type": "number" },
+        "chaptersCount": { "type": "number" },
+        "isFeatured": { "type": "boolean" },
+        "isExclusive": { "type": "boolean" },
+        "isTrending": { "type": "boolean" },
+        "releaseYear": { "type": "number" },
+        "language": { "type": "string" },
+        "ageRating": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "title", "author", "coverUrl"]
+    },
+    "Chapter": {
+      "title": "Chapter",
+      "description": "Chapitre ou épisode d'une série",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "seriesId": { "type": "string" },
+        "chapterNumber": { "type": "number" },
+        "title": { "type": "string" },
+        "releaseDate": { "type": "string" },
+        "isFree": { "type": "boolean" },
+        "coinsRequired": { "type": "number" },
+        "pages": { "type": "array" },
+        "likesCount": { "type": "number" }
+      },
+      "required": ["id", "seriesId", "chapterNumber", "title"]
+    },
+    "Article": {
+      "title": "Article",
+      "description": "Article du magazine OZI Actu & Pop Culture",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "slug": { "type": "string" },
+        "excerpt": { "type": "string" },
+        "content": { "type": "string" },
+        "coverUrl": { "type": "string" },
+        "category": { "type": "string" },
+        "author": { "type": "string" },
+        "publishedAt": { "type": "string" },
+        "readTimeMinutes": { "type": "number" }
+      },
+      "required": ["id", "title", "content"]
+    },
+    "Teaser": {
+      "title": "Teaser",
+      "description": "Bande-annonce vidéo d'une oeuvre",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "duration": { "type": "string" },
+        "viewsCount": { "type": "number" }
+      },
+      "required": ["id", "title", "videoUrl"]
+    },
+    "PressRelease": {
+      "title": "PressRelease",
+      "description": "Communiqué de presse officiel OZI",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "content": { "type": "string" }
+      },
+      "required": ["id", "title", "content"]
+    },
+    "AppVersion": {
+      "title": "AppVersion",
+      "description": "Métadonnées de version APK et mise à jour",
+      "type": "object",
+      "properties": {
+        "version": { "type": "string" },
+        "buildNumber": { "type": "number" },
+        "apkDownloadUrl": { "type": "string" },
+        "apkSizeMb": { "type": "number" },
+        "downloadsCount": { "type": "number" },
+        "releaseDate": { "type": "string" },
+        "changelog": { "type": "array" }
+      },
+      "required": ["version", "apkDownloadUrl"]
+    },
+    "CreatorSubmission": {
+      "title": "CreatorSubmission",
+      "description": "Candidature de créateur pour publier sur OZI",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "creatorName": { "type": "string" },
+        "email": { "type": "string" },
+        "projectTitle": { "type": "string" },
+        "synopsis": { "type": "string" },
+        "portfolioUrl": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["creatorName", "email", "projectTitle"]
+    }
+  },
+  "firestore": {
+    "/series/{seriesId}": {
+      "schema": "Series",
+      "description": "Catalogue public des séries et webtoons"
+    },
+    "/series/{seriesId}/chapters/{chapterId}": {
+      "schema": "Chapter",
+      "description": "Chapitres et planches d'une série"
+    },
+    "/articles/{articleId}": {
+      "schema": "Article",
+      "description": "Articles du magazine OZI"
+    },
+    "/teasers/{teaserId}": {
+      "schema": "Teaser",
+      "description": "Teasers vidéos et trailers"
+    },
+    "/press_releases/{pressId}": {
+      "schema": "PressRelease",
+      "description": "Communiqués de presse"
+    },
+    "/config/{configId}": {
+      "schema": "AppVersion",
+      "description": "Configuration globale de l'app et version APK"
+    },
+    "/creator_submissions/{submissionId}": {
+      "schema": "CreatorSubmission",
+      "description": "Projets soumis par les auteurs et dessinateurs"
+    }
+  }
+}

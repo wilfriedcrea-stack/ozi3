@@ -40,6 +40,10 @@ const MainLayout: React.FC = () => {
             {viewMode === 'recherche' && <SearchPage />}
             {viewMode === 'article-detail' && <ArticleDetailPage />}
             {viewMode === 'oeuvre-detail' && <OeuvreDetailPage />}
+            {/* Fallback to Accueil if viewMode is unrecognized */}
+            {!['accueil', 'oeuvres', 'articles', 'recherche', 'article-detail', 'oeuvre-detail'].includes(viewMode) && (
+              <AccueilPage />
+            )}
           </main>
         </div>
 

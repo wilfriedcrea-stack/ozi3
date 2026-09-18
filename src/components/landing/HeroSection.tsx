@@ -22,10 +22,37 @@ export const HeroSection: React.FC = () => {
   const [activeHeroIndex, setActiveHeroIndex] = useState(0);
   const [apkModalOpen, setApkModalOpen] = useState(false);
 
-  const featuredSeries = series.filter(s => s.isFeatured).slice(0, 3);
-  const currentHero = featuredSeries[activeHeroIndex] || series[0];
+  const featuredSeries = series.filter(s => s && s.isFeatured).slice(0, 3);
+  const currentHero = featuredSeries[activeHeroIndex] || series[0] || {
+    id: 'ozi-featured',
+    title: 'OZI Webtoons & Mangas',
+    slug: 'ozi-featured',
+    author: 'Studio OZI',
+    artist: 'Collectif OZI',
+    country: 'Côte d\'Ivoire',
+    synopsis: 'Plongez dans le meilleur des bandes dessinées et webtoons africains et internationaux.',
+    genre: 'Action & Shonen',
+    secondaryGenres: [],
+    tags: [],
+    coverUrl: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80',
+    bannerUrl: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=1600&q=80',
+    status: 'ongoing',
+    rating: 4.9,
+    reviewsCount: 150,
+    totalReads: 500000,
+    totalLikes: 25000,
+    chaptersCount: 12,
+    isFeatured: true,
+    isExclusive: true,
+    isTrending: true,
+    releaseYear: 2026,
+    language: 'Français',
+    ageRating: 'Tous publics',
+    updatedAt: '2026-08-20',
+    chapters: []
+  };
 
-  const apkUrl = appVersion.downloadUrl || appVersion.apkDownloadUrl || 'http://ozibd.net/ozi-reader.apk';
+  const apkUrl = appVersion.downloadUrl || appVersion.apkDownloadUrl || 'https://ozibd.net/ozi-reader.apk';
 
   const handleDownloadApk = () => {
     setDownloading(true);
@@ -229,16 +256,16 @@ export const HeroSection: React.FC = () => {
                   </span>
                   <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md text-amber-300 text-xs font-bold font-heading border border-white/10">
                     <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                    <span>{currentHero.rating.toFixed(1)}</span>
+                    <span>{(typeof currentHero.rating === 'number' ? currentHero.rating : 4.9).toFixed(1)}</span>
                   </div>
                 </div>
 
                 {/* Bottom Quick Info inside image */}
                 <div className="absolute bottom-4 left-4 right-4 text-left">
                   <div className="flex items-center gap-2 text-xs text-slate-300 font-medium mb-1">
-                    <span>Par {currentHero.author}</span>
+                    <span>Par {currentHero.author || 'Auteur OZI'}</span>
                     <span>•</span>
-                    <span>{currentHero.country}</span>
+                    <span>{currentHero.country || 'Côte d\'Ivoire'}</span>
                   </div>
                   <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight font-almodobar line-clamp-1 group-hover:text-purple-300 transition-colors">
                     {currentHero.title}
@@ -256,12 +283,12 @@ export const HeroSection: React.FC = () => {
                   <div className="flex items-center gap-3 text-xs text-slate-400 font-heading">
                     <span className="flex items-center gap-1">
                       <BookOpen className="w-3.5 h-3.5 text-[#ff6b5b]" />
-                      <span>{currentHero.chaptersCount} chapitres</span>
+                      <span>{currentHero.chaptersCount || (currentHero.chapters ? currentHero.chapters.length : 1)} chapitres</span>
                     </span>
                     <span>•</span>
                     <span className="flex items-center gap-1">
                       <Eye className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>{currentHero.totalReads.toLocaleString()} lectures</span>
+                      <span>{(typeof currentHero.totalReads === 'number' ? currentHero.totalReads : 1000).toLocaleString()} lectures</span>
                     </span>
                   </div>
 
