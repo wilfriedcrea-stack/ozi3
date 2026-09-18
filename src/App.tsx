@@ -12,13 +12,17 @@ import { Footer } from './components/landing/Footer';
 import { WebtoonReaderModal } from './components/landing/WebtoonReaderModal';
 import { TeaserVideoModal } from './components/landing/TeaserVideoModal';
 import { AdminStudio } from './components/admin/AdminStudio';
+import { AdminLoginPage } from './components/admin/AdminLoginPage';
 import { PullToRefresh } from './components/landing/PullToRefresh';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 const MainLayout: React.FC = () => {
-  const { viewMode } = useData();
+  const { viewMode, adminAuth } = useData();
 
   if (viewMode === 'admin') {
+    if (!adminAuth.isAuthenticated) {
+      return <AdminLoginPage />;
+    }
     return <AdminStudio />;
   }
 

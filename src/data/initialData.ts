@@ -851,6 +851,13 @@ export const DEFAULT_ADMIN_USER: AdminUser = {
   is2FAEnabled: true
 };
 
+export const DEFAULT_ADMIN_CREDENTIALS = {
+  allowedUsernames: ['admin', 'wilfriedcrea@gmail.com', 'wilfried', 'ozi', 'ozibd'],
+  defaultPassword: 'OziAdmin2026!',
+  // SHA-256 of 'OziAdmin2026!'
+  defaultPasswordHash: '0c32b509bf0d4b79b940989f89e49c7bcfae6b21908a8a4746f1e29a39a03db1'
+};
+
 export const INITIAL_USERS: import('../types').UserAccount[] = [
   {
     id: 'usr-001',

@@ -232,6 +232,20 @@ export interface AdminUser {
   is2FAEnabled: boolean;
 }
 
+export interface AdminAuthState {
+  isAuthenticated: boolean;
+  user: AdminUser | null;
+  isSuperAdmin: boolean;
+  isBypassActive: boolean;
+  lastLoginAt?: string;
+}
+
+export interface AdminCredentials {
+  allowedUsernames: string[];
+  passwordHash: string;
+  lastChangedAt: string;
+}
+
 export interface PaymentGateway {
   id: string;
   name: string;

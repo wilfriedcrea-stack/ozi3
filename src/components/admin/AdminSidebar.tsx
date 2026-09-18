@@ -13,7 +13,8 @@ import {
   Megaphone,
   HardDrive,
   UserCheck,
-  FileText
+  FileText,
+  Eye
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { OziLogo } from '../common/OziLogo';
@@ -24,7 +25,7 @@ interface AdminSidebarProps {
 }
 
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({ activeTab, setActiveTab }) => {
-  const { setViewMode, series, submissions, firebaseConfig, creatorPayouts, reportedComments, users, ads, lwsFiles, articles } = useData();
+  const { setViewMode, series, submissions, firebaseConfig, creatorPayouts, reportedComments, users, ads, lwsFiles, articles, logoutAdmin } = useData();
 
   const pendingSubmissionsCount = submissions.filter(s => s.status === 'pending').length;
   const pendingPayoutsCount = creatorPayouts.filter(p => p.status === 'pending').length;
@@ -100,13 +101,25 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ activeTab, setActive
           <span className="text-emerald-400 font-bold text-[10px] font-almodobar">SYNC</span>
         </div>
 
-        <button
-          onClick={() => setViewMode('accueil')}
-          className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-[#0d0e15] hover:bg-[#161724] text-slate-400 hover:text-white border border-slate-800 text-xs font-bold transition-colors font-almodobar tap-active"
-        >
-          <LogOut className="w-3.5 h-3.5" />
-          <span>Quitter l'Admin</span>
-        </button>
+        <div className="flex flex-col gap-2">
+          <button
+            id="admin-sidebar-preview-btn"
+            onClick={() => setViewMode('accueil')}
+            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-[#0d0e15] hover:bg-[#161724] text-slate-400 hover:text-white border border-slate-800 text-xs font-bold transition-colors font-almodobar tap-active"
+          >
+            <Eye className="w-3.5 h-3.5" />
+            <span>Voir la Vitrine</span>
+          </button>
+
+          <button
+            id="admin-sidebar-logout-btn"
+            onClick={logoutAdmin}
+            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/30 text-xs font-bold transition-colors font-almodobar tap-active"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Déconnexion</span>
+          </button>
+        </div>
       </div>
 
     </aside>

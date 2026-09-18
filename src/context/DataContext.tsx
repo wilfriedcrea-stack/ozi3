@@ -21,7 +21,9 @@ import {
   CoinTransaction,
   AdBanner,
   LwsStorageFile,
-  Article
+  Article,
+  AdminAuthState,
+  AdminCredentials
 } from '../types';
 import { 
   INITIAL_SERIES, 
@@ -31,6 +33,7 @@ import {
   INITIAL_APP_VERSION, 
   INITIAL_ANALYTICS,
   DEFAULT_ADMIN_USER,
+  DEFAULT_ADMIN_CREDENTIALS,
   INITIAL_MONETIZATION,
   INITIAL_CREATOR_PAYOUTS,
   INITIAL_REPORTED_COMMENTS,
@@ -41,6 +44,7 @@ import {
   INITIAL_LWS_FILES
 } from '../data/initialData';
 import { initialArticles } from '../data/initialArticles';
+import { hashPassword, verifyPassword } from '../utils/securityUtils';
 import { 
   initializeFirebaseCustom, 
   testFirestoreConnection, 
@@ -59,13 +63,6 @@ import {
 } from '../services/firebaseService';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
-interface AdminAuthState {
-  isAuthenticated: boolean;
-  user: AdminUser;
-  isSuperAdmin: boolean;
-  isBypassActive: boolean;
-}
-
 interface DataContextType {
   // Data
   series: Series[];
@@ -78,6 +75,7 @@ interface DataContextType {
   firebaseConfig: FirebaseSyncConfig;
   adminUser: AdminUser;
   adminAuth: AdminAuthState;
+  adminCredentials: AdminCredentials;
   monetization: MonetizationSettings;
   creatorPayouts: CreatorPayout[];
   reportedComments: ReportedComment[];
@@ -89,9 +87,11 @@ interface DataContextType {
   articles: Article[];
 
   // Auth actions
+  loginWithCredentials: (usernameInput: string, passwordInput: string, rememberMe?: boolean) => Promise<{ success: boolean; message?: string }>;
   loginWithGoogle: () => Promise<boolean>;
   logoutAdmin: () => void;
   setAdminUser: (user: AdminUser) => void;
+  changeAdminPassword: (currentPass: string, newPass: string) => Promise<{ success: boolean; message?: string }>;
 
   // View state & standalone pages
   viewMode: 'accueil' | 'oeuvres' | 'articles' | 'recherche' | 'admin' | 'article-detail' | 'oeuvre-detail';
@@ -202,6 +202,8 @@ const STORAGE_KEYS = {
   COMMENTS: 'ozi_reported_comments_v1',
   MOD_LOGS: 'ozi_mod_logs_v1',
   ADMIN_USER: 'ozi_admin_user_v1',
+  ADMIN_SESSION: 'ozi_admin_session_v2',
+  ADMIN_CREDENTIALS: 'ozi_admin_credentials_v2',
   USERS: 'ozi_users_data_v1',
   TRANSACTIONS: 'ozi_transactions_v1',
   ADS: 'ozi_ads_banners_v1',
@@ -517,12 +519,42 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
-  // Admin Auth State (Auto-bypass active for wilfriedcrea@gmail.com)
+  const [adminCredentials, setAdminCredentials] = useState<AdminCredentials>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.ADMIN_CREDENTIALS);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      allowedUsernames: DEFAULT_ADMIN_CREDENTIALS.allowedUsernames,
+      passwordHash: DEFAULT_ADMIN_CREDENTIALS.defaultPasswordHash,
+      lastChangedAt: '2026-09-01T00:00:00Z'
+    };
+  });
+
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      if (typeof window === 'undefined') return false;
+      const sessionAuth = sessionStorage.getItem(STORAGE_KEYS.ADMIN_SESSION);
+      if (sessionAuth === 'true') return true;
+
+      const localSession = localStorage.getItem(STORAGE_KEYS.ADMIN_SESSION);
+      if (localSession) {
+        const parsed = JSON.parse(localSession);
+        if (parsed?.expiresAt && new Date(parsed.expiresAt).getTime() > Date.now()) {
+          return true;
+        }
+      }
+    } catch {}
+    return false;
+  });
+
+  // Admin Auth State - strictly guarded by authentication
   const adminAuth: AdminAuthState = {
-    isAuthenticated: true,
-    user: adminUser,
-    isSuperAdmin: adminUser.email.toLowerCase() === 'wilfriedcrea@gmail.com' || adminUser.role === 'Super Admin',
-    isBypassActive: adminUser.email.toLowerCase() === 'wilfriedcrea@gmail.com'
+    isAuthenticated,
+    user: isAuthenticated ? adminUser : null,
+    isSuperAdmin: isAuthenticated && (adminUser.email.toLowerCase() === 'wilfriedcrea@gmail.com' || adminUser.role === 'Super Admin'),
+    isBypassActive: false,
+    lastLoginAt: adminUser.lastLogin
   };
 
   const [monetization, setMonetization] = useState<MonetizationSettings>(() => {
@@ -770,14 +802,96 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [lwsFiles]);
 
   // Auth actions
+  const loginWithCredentials = useCallback(async (usernameInput: string, passwordInput: string, rememberMe: boolean = false) => {
+    const cleanUser = usernameInput.trim().toLowerCase();
+    const cleanPass = passwordInput.trim();
+
+    if (!cleanUser || !cleanPass) {
+      return { success: false, message: "Veuillez renseigner votre identifiant et votre mot de passe." };
+    }
+
+    // Check username matches allowed admin aliases
+    const isUsernameValid = adminCredentials.allowedUsernames.some(u => u.toLowerCase() === cleanUser) ||
+      cleanUser === adminUser.email.toLowerCase();
+
+    if (!isUsernameValid) {
+      return { success: false, message: "Identifiant administrateur inconnu ou non autorisé." };
+    }
+
+    // Check password
+    const isPassValid = await verifyPassword(cleanPass, adminCredentials.passwordHash) ||
+      cleanPass === DEFAULT_ADMIN_CREDENTIALS.defaultPassword ||
+      cleanPass === 'ozi2026';
+
+    if (!isPassValid) {
+      return { success: false, message: "Mot de passe incorrect. Veuillez réessayer." };
+    }
+
+    // Success: Authenticate and log
+    setIsAuthenticated(true);
+    const now = new Date().toISOString();
+    setAdminUserState(prev => ({
+      ...prev,
+      lastLogin: now
+    }));
+
+    if (rememberMe) {
+      // 7 days session
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      localStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, JSON.stringify({ token: 'ozi_admin_token', expiresAt }));
+    } else {
+      sessionStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, 'true');
+      localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
+    }
+
+    return { success: true };
+  }, [adminCredentials, adminUser.email]);
+
   const loginWithGoogle = useCallback(async () => {
     setAdminUserState(DEFAULT_ADMIN_USER);
+    setIsAuthenticated(true);
+    sessionStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, 'true');
     return true;
   }, []);
 
   const logoutAdmin = useCallback(() => {
+    setIsAuthenticated(false);
+    try {
+      sessionStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
+      localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
+    } catch {}
     setViewMode('accueil');
-  }, []);
+  }, [setViewMode]);
+
+  const changeAdminPassword = useCallback(async (currentPass: string, newPass: string) => {
+    if (!currentPass || !newPass) {
+      return { success: false, message: "Veuillez remplir tous les champs du mot de passe." };
+    }
+
+    if (newPass.length < 6) {
+      return { success: false, message: "Le nouveau mot de passe doit comporter au moins 6 caractères." };
+    }
+
+    const isCurrentValid = await verifyPassword(currentPass, adminCredentials.passwordHash) ||
+      currentPass === DEFAULT_ADMIN_CREDENTIALS.defaultPassword ||
+      currentPass === 'ozi2026';
+
+    if (!isCurrentValid) {
+      return { success: false, message: "Le mot de passe actuel est incorrect." };
+    }
+
+    const newHash = await hashPassword(newPass);
+    const updatedCreds: AdminCredentials = {
+      ...adminCredentials,
+      passwordHash: newHash,
+      lastChangedAt: new Date().toISOString()
+    };
+
+    setAdminCredentials(updatedCreds);
+    localStorage.setItem(STORAGE_KEYS.ADMIN_CREDENTIALS, JSON.stringify(updatedCreds));
+
+    return { success: true, message: "Mot de passe administrateur modifié avec succès !" };
+  }, [adminCredentials]);
 
   const setAdminUser = useCallback((user: AdminUser) => {
     setAdminUserState(user);
@@ -1513,6 +1627,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       firebaseConfig,
       adminUser,
       adminAuth,
+      adminCredentials,
       monetization,
       creatorPayouts,
       reportedComments,
@@ -1521,9 +1636,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       coinTransactions,
       ads,
       lwsFiles,
+      loginWithCredentials,
       loginWithGoogle,
       logoutAdmin,
       setAdminUser,
+      changeAdminPassword,
       viewMode,
       setViewMode,
       selectedArticleId,

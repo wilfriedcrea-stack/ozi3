@@ -8,7 +8,8 @@ import {
   AlertTriangle, 
   Database,
   Eye,
-  Plus
+  Plus,
+  LogOut
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
@@ -18,7 +19,7 @@ interface AdminHeaderProps {
 }
 
 export const AdminHeader: React.FC<AdminHeaderProps> = ({ activeTab, onNewSeriesClick }) => {
-  const { setViewMode, firebaseConfig, triggerManualSync, testFirebaseConnection, adminUser } = useData();
+  const { setViewMode, firebaseConfig, triggerManualSync, testFirebaseConnection, adminUser, logoutAdmin } = useData();
   const [syncing, setSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
 
@@ -129,11 +130,22 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ activeTab, onNewSeries
         <button
           id="admin-header-exit-btn"
           onClick={() => setViewMode('accueil')}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/30 text-xs font-bold transition-colors font-heading"
-          title="Retourner à la vitrine publique du site"
+          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#12121c] hover:bg-[#1c1c2b] text-zinc-300 border border-[#242436] text-xs font-bold transition-colors font-heading"
+          title="Consulter la vitrine publique du site sans fermer la session"
         >
-          <Eye className="w-4 h-4" />
-          <span>Voir Vitrine Web</span>
+          <Eye className="w-3.5 h-3.5" />
+          <span className="hidden md:inline">Voir Vitrine</span>
+        </button>
+
+        {/* Secure Logout */}
+        <button
+          id="admin-header-logout-btn"
+          onClick={logoutAdmin}
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold transition-colors font-heading"
+          title="Fermer la session administrateur et verrouiller le Studio"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          <span>Déconnexion</span>
         </button>
       </div>
 
