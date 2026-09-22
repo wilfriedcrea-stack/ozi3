@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Info } from 'lucide-react';
 import { Series } from '../../../types';
 import { AuthorInfoModal } from './AuthorInfoModal';
+import { ShareWorkButton } from './ShareWorkButton';
 
 interface WorkBannerIdentityProps {
   series: Series;
@@ -20,14 +21,10 @@ export const WorkBannerIdentity: React.FC<WorkBannerIdentityProps> = ({
     <>
       <div className={`work-banner__identity flex flex-col items-center text-center max-w-2xl mx-auto px-4 z-10 ${className}`}>
         
-        {/* Category / Genre (Dynamic) */}
-        {series.genre && (
-          <div className="work-banner__category mb-2 sm:mb-3">
-            <span className="inline-block px-3 py-1 rounded-full text-xs sm:text-sm font-black tracking-wider uppercase bg-[#ff5a50]/20 text-[#ff746c] border border-[#ff5a50]/40 backdrop-blur-md shadow-sm font-heading">
-              {series.genre}
-            </span>
-          </div>
-        )}
+        {/* Social Networks / Share Actions (placed directly above the title where genre was) */}
+        <div className="work-banner__social-networks mb-2.5 sm:mb-3 flex items-center justify-center">
+          <ShareWorkButton series={series} variant="icons-row" />
+        </div>
 
         {/* Dynamic Series Title (Single true H1) */}
         <h1 className="work-banner__title text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white font-almodobar tracking-tight leading-[1.08] sm:leading-[1.1] mb-2 sm:mb-3 drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)] max-w-full overflow-wrap-anywhere">

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Series } from '../../../types';
 import { WorkBannerIdentity } from './WorkBannerIdentity';
-import { WorkBannerActions } from './WorkBannerActions';
 import { WorkBannerFallback } from './WorkBannerFallback';
 
 interface WorkBannerProps {
@@ -45,20 +44,10 @@ export const WorkBanner: React.FC<WorkBannerProps> = ({
         className="work-banner__background absolute inset-0 w-full h-full object-cover object-center pointer-events-none transition-opacity duration-300"
       />
 
-      {/* 2. Dual Gradient Overlays for Guaranteed Text Legibility */}
-      <div 
-        aria-hidden="true"
-        className="absolute inset-0 pointer-events-none bg-gradient-to-r from-black/55 via-black/25 to-black/55" 
-      />
-      <div 
-        aria-hidden="true"
-        className="absolute inset-0 pointer-events-none bg-gradient-to-t from-[#07080c] via-black/40 to-black/60" 
-      />
-
-      {/* 3. Responsive Content Container */}
+      {/* 2. Responsive Content Container */}
       <div className="relative z-10 max-w-7xl mx-auto w-full min-h-[270px] sm:min-h-[320px] md:min-h-[360px] px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex flex-col justify-between">
         
-        {/* DESKTOP LAYOUT (>= 768px): Centered Content with Left & Right Balanced Anchor Zones */}
+        {/* DESKTOP LAYOUT (>= 768px): Centered Content with Left Decorative Anchor Zone */}
         <div className="hidden md:grid md:grid-cols-12 items-center w-full my-auto gap-4">
           
           {/* Left Decorative/Cover Zone (if not a wide native banner) */}
@@ -75,19 +64,17 @@ export const WorkBanner: React.FC<WorkBannerProps> = ({
             )}
           </div>
 
-          {/* Center Identity (Category, Title H1, Author ⓘ, Read Chapter 1 CTA) */}
+          {/* Center Identity (Social, Title H1, Author ⓘ, Read Chapter 1 CTA) */}
           <div className="md:col-span-6 flex flex-col items-center justify-center text-center">
             <WorkBannerIdentity series={work} onReadFirstChapter={onReadFirstChapter} />
           </div>
 
-          {/* Right Action Zone (Social Share) */}
-          <div className="md:col-span-3 flex items-center justify-end">
-            <WorkBannerActions series={work} />
-          </div>
+          {/* Right Spacer for optical centering */}
+          <div className="md:col-span-3" />
 
         </div>
 
-        {/* MOBILE LAYOUT (< 768px): Clean Stacked Hierarchy with Bottom Action Bar */}
+        {/* MOBILE LAYOUT (< 768px): Clean Stacked Hierarchy */}
         <div className="md:hidden flex flex-col items-center justify-between flex-1 gap-6 py-2">
           
           {/* Mobile Top Spacer to vertically balance */}
@@ -96,10 +83,8 @@ export const WorkBanner: React.FC<WorkBannerProps> = ({
           {/* Mobile Center Identity */}
           <WorkBannerIdentity series={work} className="w-full" onReadFirstChapter={onReadFirstChapter} />
 
-          {/* Mobile Bottom Actions */}
-          <div className="w-full flex items-center justify-center gap-3 pt-2">
-            <WorkBannerActions series={work} />
-          </div>
+          {/* Mobile Bottom Spacer */}
+          <div className="w-full" />
 
         </div>
 
