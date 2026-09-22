@@ -32,7 +32,7 @@ export const SeriesCatalog: React.FC = () => {
   const [selectedFormat, setSelectedFormat] = useState<FormatFilter>('all');
   const [selectedGenre, setSelectedGenre] = useState<'Tous' | SeriesGenre>('Tous');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'popular' | 'rating' | 'recent'>('popular');
+  const [sortBy, setSortBy] = useState<'popular' | 'rating' | 'recent'>('recent');
   const [refreshedNotice, setRefreshedNotice] = useState(false);
 
   const handleManualRefresh = async () => {
@@ -58,9 +58,13 @@ export const SeriesCatalog: React.FC = () => {
 
       return matchesFormat && matchesGenre && matchesQuery;
     }).sort((a, b) => {
-      if (sortBy === 'popular') return b.totalReads - a.totalReads;
-      if (sortBy === 'rating') return b.rating - a.rating;
-      if (sortBy === 'recent') return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      if (sortBy === 'recent') {
+        const timeB = new Date(b.updatedAt || (b as any).createdAt || 0).getTime() || (b.id?.startsWith('series-') ? Number(b.id.replace('series-', '')) : 0);
+        const timeA = new Date(a.updatedAt || (a as any).createdAt || 0).getTime() || (a.id?.startsWith('series-') ? Number(a.id.replace('series-', '')) : 0);
+        return timeB - timeA;
+      }
+      if (sortBy === 'popular') return (b.totalReads || 0) - (a.totalReads || 0);
+      if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0);
       return 0;
     });
   }, [series, selectedFormat, selectedGenre, searchQuery, sortBy]);
@@ -92,7 +96,10 @@ export const SeriesCatalog: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
               <div className="flex items-center gap-1.5 p-1 bg-[#10121a] border border-white/10 rounded-xl">
                 <button
-                  onClick={() => setSelectedFormat('all')}
+                  onClick={() => {
+                    setSelectedFormat('all');
+                    setSortBy('recent');
+                  }}
                   className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                     selectedFormat === 'all'
                       ? 'bg-purple-600 text-white shadow-md'
@@ -171,9 +178,9 @@ export const SeriesCatalog: React.FC = () => {
                   onChange={(e) => setSortBy(e.target.value as any)}
                   className="w-full py-2.5 px-3 rounded-xl bg-[#0f1118] border border-white/10 text-xs font-bold text-slate-200 focus:outline-none focus:border-purple-500"
                 >
+                  <option value="recent">⚡ Plus récentes (Nouveautés)</option>
                   <option value="popular">🔥 Plus populaires</option>
                   <option value="rating">⭐ Mieux notés</option>
-                  <option value="recent">⚡ Nouveautés</option>
                 </select>
               </div>
             </div>

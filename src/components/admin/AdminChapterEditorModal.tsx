@@ -15,7 +15,9 @@ import {
   Layers, 
   FileCheck, 
   Radio, 
-  CheckCircle2
+  CheckCircle2,
+  Image as ImageIcon,
+  Loader2
 } from 'lucide-react';
 import { Chapter, Series, AmbientAudioConfig, AmbientAudioPreset } from '../../types';
 import { useData } from '../../context/DataContext';
@@ -59,6 +61,12 @@ export const AdminChapterEditorModal: React.FC<AdminChapterEditorModalProps> = (
 
   // Pages State
   const [pages, setPages] = useState<string[]>(chapter?.pages || []);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string>(
+    chapter?.thumbnailUrl || (chapter as any)?.thumbnail || ''
+  );
+  const [isUploadingThumbnail, setIsUploadingThumbnail] = useState<boolean>(false);
+  const [thumbnailUploadError, setThumbnailUploadError] = useState<string | null>(null);
+
   const [isCompressing, setIsCompressing] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState<{ percent: number; text: string } | null>(null);
   const [optimizationStats, setOptimizationStats] = useState<{ originalTotal: number; compressedTotal: number }>({
@@ -229,6 +237,42 @@ export const AdminChapterEditorModal: React.FC<AdminChapterEditorModalProps> = (
     }
   };
 
+  // Thumbnail Handlers
+  const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingThumbnail(true);
+    setThumbnailUploadError(null);
+
+    try {
+      const compressed = await compressImageToWebP(file, 640, 0.88);
+      const fileName = `thumb_ch${chapterNumber}_${Date.now()}.webp`;
+      const res = await uploadToLWS(compressed.file, fileName, 'chapters', {
+        workId: series.id,
+        chapterNumber
+      });
+
+      if (res.success && res.url) {
+        setThumbnailUrl(res.url);
+        addLwsFile(res.fileInfo);
+      } else {
+        setThumbnailUploadError("Échec du téléversement de la miniature.");
+      }
+    } catch (err) {
+      console.error('Erreur téléversement miniature:', err);
+      setThumbnailUploadError("Erreur lors de la compression ou du téléversement.");
+    } finally {
+      setIsUploadingThumbnail(false);
+    }
+  };
+
+  const handleUseFirstPageAsThumbnail = () => {
+    if (pages.length > 0) {
+      setThumbnailUrl(pages[0]);
+    }
+  };
+
   // Submit
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -244,6 +288,8 @@ export const AdminChapterEditorModal: React.FC<AdminChapterEditorModalProps> = (
       customAudioUrl: customAudioUrl.trim() || undefined
     };
 
+    const cleanThumbnail = thumbnailUrl.trim() || (pages.length > 0 ? pages[0] : undefined);
+
     onSave({
       chapterNumber: Number(chapterNumber),
       title: title.trim() || `Chapitre ${chapterNumber}`,
@@ -252,6 +298,8 @@ export const AdminChapterEditorModal: React.FC<AdminChapterEditorModalProps> = (
       coinsRequired: isFree ? 0 : Number(coinsRequired),
       readTimeMinutes: Number(readTimeMinutes),
       pages,
+      thumbnailUrl: cleanThumbnail,
+      thumbnail: cleanThumbnail,
       audioConfig: finalAudio
     });
 
@@ -373,6 +421,87 @@ export const AdminChapterEditorModal: React.FC<AdminChapterEditorModalProps> = (
                     placeholder="Ex: L'Éveil de la Flamme Sacrée"
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white font-medium focus:border-amber-500 focus:outline-none"
                   />
+                </div>
+              </div>
+
+              {/* Chapter Thumbnail Section */}
+              <div className="p-4 rounded-2xl bg-slate-950/70 border border-amber-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-start sm:items-center gap-3.5">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-slate-900 border border-slate-700 overflow-hidden shrink-0 flex items-center justify-center relative group">
+                    {thumbnailUrl ? (
+                      <img
+                        src={thumbnailUrl}
+                        alt="Miniature chapitre"
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-slate-500 text-[10px] text-center p-1">
+                        <ImageIcon className="w-6 h-6 text-slate-600 mb-1" />
+                        <span>Aucune</span>
+                      </div>
+                    )}
+                    {isUploadingThumbnail && (
+                      <div className="absolute inset-0 bg-slate-950/80 flex items-center justify-center text-amber-400">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-white">Miniature du Chapitre</span>
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
+                        Recommandé
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5 max-w-md">
+                      Affichée dans la liste des chapitres de la page œuvre (format ~106x102px). Si non définie, la 1ère planche sera utilisée.
+                    </p>
+                    {thumbnailUploadError && (
+                      <p className="text-xs text-red-400 mt-1">{thumbnailUploadError}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/20 cursor-pointer transition-all active:scale-95">
+                    {isUploadingThumbnail ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Upload className="w-4 h-4" />
+                    )}
+                    <span>{isUploadingThumbnail ? 'Téléversement...' : 'Ajouter la miniature du chapitre'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={isUploadingThumbnail}
+                      onChange={handleThumbnailUpload}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {pages.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleUseFirstPageAsThumbnail}
+                      className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold border border-slate-700 transition-colors"
+                      title="Copier la page 1 comme miniature"
+                    >
+                      Utiliser 1ère planche
+                    </button>
+                  )}
+
+                  {thumbnailUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setThumbnailUrl('')}
+                      className="p-2 rounded-xl text-red-400 hover:text-red-300 hover:bg-red-950/40 border border-red-500/20 transition-colors"
+                      title="Retirer la miniature"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
 

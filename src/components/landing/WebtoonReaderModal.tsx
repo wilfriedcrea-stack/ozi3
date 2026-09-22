@@ -27,13 +27,21 @@ export const WebtoonReaderModal: React.FC = () => {
   const [fullscreen, setFullscreen] = useState<boolean>(false);
   const [liked, setLiked] = useState<boolean>(false);
   const [isAudioMuted, setIsAudioMuted] = useState<boolean>(false);
+  const [scrollProgress, setScrollProgress] = useState<number>(0);
   const audioStartedRef = useRef<boolean>(false);
+  const scrollContainerRef = useRef<HTMLElement>(null);
 
   // Auto-play immersive ambient soundtrack whenever chapter opens or switches
   useEffect(() => {
-    // Reset zoom and like state
+    // Reset zoom, like state, and scroll progress
     setZoomLevel(100);
     setLiked(false);
+    setScrollProgress(0);
+
+    // Scroll to top of container when chapter changes
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
 
     if (!activeReaderChapter || !activeReaderSeries) return;
 
@@ -70,6 +78,37 @@ export const WebtoonReaderModal: React.FC = () => {
       window.removeEventListener('scroll', handleFirstGesture, true);
     };
   }, [activeReaderChapter?.id, activeReaderSeries?.id]);
+
+  // Handle scroll progress tracking
+  const handleScroll = (e: React.UIEvent<HTMLElement>) => {
+    const target = e.currentTarget;
+    const maxScroll = target.scrollHeight - target.clientHeight;
+    if (maxScroll > 0) {
+      const percentage = Math.min(100, Math.max(0, (target.scrollTop / maxScroll) * 100));
+      setScrollProgress(percentage);
+    } else {
+      setScrollProgress(0);
+    }
+  };
+
+  // Instantaneous audio cut and cleanup when closing the reader
+  const handleClose = () => {
+    ambientAudio.stop();
+    closeReader();
+  };
+
+  // Keyboard shortcut: Escape to close and silence instantly
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   // Stop soundtrack when modal closes (unmounts)
   useEffect(() => {
@@ -125,13 +164,25 @@ export const WebtoonReaderModal: React.FC = () => {
       id="webtoon-reader-modal"
       className="fixed inset-0 z-50 flex flex-col bg-[#09090e] text-zinc-100 overflow-hidden select-none animate-in fade-in duration-200"
     >
+      {/* Slim Non-Intrusive Progress Bar at the very top edge */}
+      <div 
+        id="reader-scroll-progress-container"
+        className="fixed top-0 left-0 right-0 h-1 bg-transparent z-50 pointer-events-none"
+      >
+        <div 
+          id="reader-scroll-progress-bar"
+          className="h-full bg-gradient-to-r from-orange-600 via-orange-500 to-amber-400 transition-[width] duration-75 ease-out shadow-[0_0_8px_rgba(249,115,22,0.8)]"
+          style={{ width: `${scrollProgress}%` }}
+        />
+      </div>
+
       {/* Top Sticky Header */}
       <header className="h-16 shrink-0 bg-[#12121c]/95 border-b border-[#1f1f2e] px-4 sm:px-6 flex items-center justify-between z-20 backdrop-blur-md">
         {/* Left: Series & Chapter info */}
         <div className="flex items-center gap-3">
           <button
             id="reader-close-btn"
-            onClick={closeReader}
+            onClick={handleClose}
             className="p-2 rounded-xl bg-[#1c1c2b] hover:bg-[#26263a] text-zinc-300 hover:text-white border border-[#2e2e46] transition-colors cursor-pointer"
             title="Quitter le lecteur"
             aria-label="Quitter le lecteur"
@@ -249,7 +300,11 @@ export const WebtoonReaderModal: React.FC = () => {
       </header>
 
       {/* Main Webtoon Scrolling Canvas Container */}
-      <main className="flex-1 overflow-y-auto overflow-x-hidden bg-[#09090e] flex flex-col items-center py-6 px-2 sm:px-4">
+      <main 
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto overflow-x-hidden bg-[#09090e] flex flex-col items-center py-6 px-2 sm:px-4"
+      >
         
         {/* Webtoon Column Canvas */}
         <div 

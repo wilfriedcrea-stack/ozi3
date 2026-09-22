@@ -18,15 +18,17 @@ import { syncSeriesToFirestore, deleteSeriesFromFirestore } from './firebaseServ
 export const artworkService = {
   subscribePublishedSeries(callback: (seriesList: Series[]) => void) {
     try {
-      const q = query(
-        collection(db, 'series'),
-        orderBy('createdAt', 'desc')
-      );
-      return onSnapshot(q, (snapshot) => {
+      const colRef = collection(db, 'series');
+      return onSnapshot(colRef, (snapshot) => {
         const list = snapshot.docs.map((docSnap) => ({
           id: docSnap.id,
           ...docSnap.data()
         })) as unknown as Series[];
+        list.sort((a, b) => {
+          const timeB = new Date(b.updatedAt || (b as any).createdAt || 0).getTime() || (b.id?.startsWith('series-') ? Number(b.id.replace('series-', '')) : 0);
+          const timeA = new Date(a.updatedAt || (a as any).createdAt || 0).getTime() || (a.id?.startsWith('series-') ? Number(a.id.replace('series-', '')) : 0);
+          return timeB - timeA;
+        });
         callback(list);
       }, (error) => {
         console.warn('Firestore subscription fallback:', error);

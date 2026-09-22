@@ -44,6 +44,7 @@ import {
   INITIAL_LWS_FILES
 } from '../data/initialData';
 import { initialArticles } from '../data/initialArticles';
+import { ambientAudio } from '../lib/ambientAudioEngine';
 import { 
   hashPassword, 
   verifyPassword, 
@@ -1114,6 +1115,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [series]);
 
   const closeReader = useCallback(() => {
+    ambientAudio.stop();
     setActiveReaderSeries(null);
     setActiveReaderChapter(null);
   }, []);
@@ -1129,9 +1131,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // Series CRUD
-  const addSeries = useCallback((newSeriesData: Omit<Series, 'id' | 'slug' | 'totalReads' | 'totalLikes' | 'rating' | 'reviewsCount' | 'updatedAt'>) => {
+  const addSeries = useCallback(async (newSeriesData: Omit<Series, 'id' | 'slug' | 'totalReads' | 'totalLikes' | 'rating' | 'reviewsCount' | 'updatedAt'>) => {
     const id = `series-${Date.now()}`;
     const slug = newSeriesData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const nowIso = new Date().toISOString();
+    const nowDate = nowIso.split('T')[0];
     const newSeries: Series = {
       ...newSeriesData,
       id,
@@ -1140,52 +1144,66 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       totalLikes: 0,
       rating: 5.0,
       reviewsCount: 1,
-      updatedAt: new Date().toISOString().split('T')[0],
+      createdAt: nowIso,
+      updatedAt: nowDate,
       chapters: newSeriesData.chapters || []
-    };
+    } as any;
 
-    setSeries(prev => [newSeries, ...prev]);
+    setSeries(prev => [newSeries, ...prev.filter(s => s.id !== id)]);
     setAnalytics(prev => ({ ...prev, seriesCount: prev.seriesCount + 1 }));
 
-    // Firebase background sync
-    if (firebaseConfig.isConnected) {
-      const fb = initializeFirebaseCustom({ projectId: firebaseConfig.projectId, databaseId: firebaseConfig.databaseId });
-      if (fb.success && fb.db) {
-        syncSeriesToFirestore(fb.db, newSeries);
+    // Firebase background sync with robust fallback
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncSeriesToFirestore(fb.db, newSeries);
       }
+    } catch (syncErr) {
+      console.warn('Sync new series to Firestore warning:', syncErr);
     }
-  }, [firebaseConfig]);
+  }, []);
 
-  const updateSeries = useCallback((id: string, updates: Partial<Series>) => {
+  const updateSeries = useCallback(async (id: string, updates: Partial<Series>) => {
+    let targetUpdated: Series | null = null;
+    const nowIso = new Date().toISOString();
+    const nowDate = nowIso.split('T')[0];
+
     setSeries(prev => prev.map(s => {
       if (s.id === id) {
-        const updated = { ...s, ...updates, updatedAt: new Date().toISOString().split('T')[0] };
-        if (firebaseConfig.isConnected) {
-          const fb = initializeFirebaseCustom({ projectId: firebaseConfig.projectId, databaseId: firebaseConfig.databaseId });
-          if (fb.success && fb.db) {
-            syncSeriesToFirestore(fb.db, updated);
-          }
-        }
-        return updated;
+        targetUpdated = { ...s, ...updates, updatedAt: nowDate };
+        return targetUpdated;
       }
       return s;
     }));
-  }, [firebaseConfig]);
 
-  const deleteSeries = useCallback((id: string) => {
+    if (targetUpdated) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncSeriesToFirestore(fb.db, targetUpdated);
+        }
+      } catch (syncErr) {
+        console.warn('Sync updated series to Firestore warning:', syncErr);
+      }
+    }
+  }, []);
+
+  const deleteSeries = useCallback(async (id: string) => {
     setSeries(prev => prev.filter(s => s.id !== id));
     setAnalytics(prev => ({ ...prev, seriesCount: Math.max(0, prev.seriesCount - 1) }));
 
-    if (firebaseConfig.isConnected) {
-      const fb = initializeFirebaseCustom({ projectId: firebaseConfig.projectId, databaseId: firebaseConfig.databaseId });
-      if (fb.success && fb.db) {
-        deleteSeriesFromFirestore(fb.db, id);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await deleteSeriesFromFirestore(fb.db, id);
       }
+    } catch (delErr) {
+      console.warn('Delete series from Firestore warning:', delErr);
     }
-  }, [firebaseConfig]);
+  }, []);
 
   // Chapters CRUD
-  const addChapter = useCallback((seriesId: string, chapterData: Omit<Chapter, 'id' | 'seriesId' | 'releaseDate' | 'likesCount'>) => {
+  const addChapter = useCallback(async (seriesId: string, chapterData: Omit<Chapter, 'id' | 'seriesId' | 'releaseDate' | 'likesCount'>) => {
     const chapterId = `ch-${Date.now()}`;
     const newChapter: Chapter = {
       ...chapterData,
@@ -1195,62 +1213,80 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       likesCount: 0
     };
 
+    let updatedSeries: Series | null = null;
     setSeries(prev => prev.map(s => {
       if (s.id === seriesId) {
         const updatedChapters = [...(s.chapters || []), newChapter];
-        const updated = {
+        updatedSeries = {
           ...s,
           chapters: updatedChapters,
           chaptersCount: updatedChapters.length,
           updatedAt: new Date().toISOString().split('T')[0]
         };
-        if (firebaseConfig.isConnected) {
-          const fb = initializeFirebaseCustom({ projectId: firebaseConfig.projectId, databaseId: firebaseConfig.databaseId });
-          if (fb.success && fb.db) {
-            syncSeriesToFirestore(fb.db, updated);
-          }
-        }
-        return updated;
+        return updatedSeries;
       }
       return s;
     }));
 
-    setAnalytics(prev => ({ ...prev, chaptersPublished: prev.chaptersPublished + 1 }));
-  }, [firebaseConfig]);
+    if (updatedSeries) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncSeriesToFirestore(fb.db, updatedSeries);
+        }
+      } catch (err) {
+        console.warn('Sync new chapter to Firestore warning:', err);
+      }
+    }
 
-  const updateChapter = useCallback((seriesId: string, chapterId: string, updates: Partial<Chapter>) => {
+    setAnalytics(prev => ({ ...prev, chaptersPublished: prev.chaptersPublished + 1 }));
+  }, []);
+
+  const updateChapter = useCallback(async (seriesId: string, chapterId: string, updates: Partial<Chapter>) => {
+    let updatedSeries: Series | null = null;
     setSeries(prev => prev.map(s => {
       if (s.id === seriesId && s.chapters) {
         const updatedChapters = s.chapters.map(c => c.id === chapterId ? { ...c, ...updates } : c);
-        const updated = { ...s, chapters: updatedChapters, updatedAt: new Date().toISOString().split('T')[0] };
-        if (firebaseConfig.isConnected) {
-          const fb = initializeFirebaseCustom({ projectId: firebaseConfig.projectId, databaseId: firebaseConfig.databaseId });
-          if (fb.success && fb.db) {
-            syncSeriesToFirestore(fb.db, updated);
-          }
-        }
-        return updated;
+        updatedSeries = { ...s, chapters: updatedChapters, updatedAt: new Date().toISOString().split('T')[0] };
+        return updatedSeries;
       }
       return s;
     }));
-  }, [firebaseConfig]);
 
-  const deleteChapter = useCallback((seriesId: string, chapterId: string) => {
+    if (updatedSeries) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncSeriesToFirestore(fb.db, updatedSeries);
+        }
+      } catch (err) {
+        console.warn('Sync updated chapter to Firestore warning:', err);
+      }
+    }
+  }, []);
+
+  const deleteChapter = useCallback(async (seriesId: string, chapterId: string) => {
+    let updatedSeries: Series | null = null;
     setSeries(prev => prev.map(s => {
       if (s.id === seriesId && s.chapters) {
         const updatedChapters = s.chapters.filter(c => c.id !== chapterId);
-        const updated = { ...s, chapters: updatedChapters, chaptersCount: updatedChapters.length };
-        if (firebaseConfig.isConnected) {
-          const fb = initializeFirebaseCustom({ projectId: firebaseConfig.projectId, databaseId: firebaseConfig.databaseId });
-          if (fb.success && fb.db) {
-            syncSeriesToFirestore(fb.db, updated);
-          }
-        }
-        return updated;
+        updatedSeries = { ...s, chapters: updatedChapters, chaptersCount: updatedChapters.length };
+        return updatedSeries;
       }
       return s;
     }));
-  }, [firebaseConfig]);
+
+    if (updatedSeries) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncSeriesToFirestore(fb.db, updatedSeries);
+        }
+      } catch (err) {
+        console.warn('Sync delete chapter to Firestore warning:', err);
+      }
+    }
+  }, []);
 
   // Teasers CRUD
   const addTeaser = useCallback((teaserData: Omit<Teaser, 'id' | 'viewsCount' | 'releaseDate'>) => {

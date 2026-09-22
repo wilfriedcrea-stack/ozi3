@@ -82,17 +82,31 @@ export class AmbientAudioEngine {
   public stop() {
     this.isCurrentlyPlaying = false;
 
+    // Immediately stop synthesis interval
     if (this.synthIntervalId !== null) {
       window.clearInterval(this.synthIntervalId);
       this.synthIntervalId = null;
     }
 
+    // Immediately cut master volume to zero to kill any tail / reverberation instantly
+    if (this.gainNode && this.audioCtx) {
+      try {
+        this.gainNode.gain.cancelScheduledValues(this.audioCtx.currentTime);
+        this.gainNode.gain.setValueAtTime(0, this.audioCtx.currentTime);
+      } catch {
+        // ignore if context is suspended or closed
+      }
+    }
+
+    // Immediately cut custom audio element
     if (this.customAudioElement) {
       this.customAudioElement.pause();
       this.customAudioElement.currentTime = 0;
+      this.customAudioElement.src = '';
       this.customAudioElement = null;
     }
 
+    // Immediately stop & disconnect current source
     if (this.currentSource) {
       try {
         (this.currentSource as AudioBufferSourceNode).stop?.();
@@ -132,8 +146,12 @@ export class AmbientAudioEngine {
 
   public async playCustomUrl(url: string, volume: number = 0.7, loop: boolean = true) {
     this.stop();
-    this.initAudioContext();
+    const ctx = this.initAudioContext();
     this.currentVolume = volume;
+    if (this.gainNode) {
+      this.gainNode.gain.cancelScheduledValues(ctx.currentTime);
+      this.gainNode.gain.setValueAtTime(this.currentVolume, ctx.currentTime);
+    }
     this.isLooping = loop;
     this.activePreset = 'none';
 
@@ -212,6 +230,10 @@ export class AmbientAudioEngine {
     this.stop();
     const ctx = this.initAudioContext();
     this.currentVolume = volume;
+    if (this.gainNode) {
+      this.gainNode.gain.cancelScheduledValues(ctx.currentTime);
+      this.gainNode.gain.setValueAtTime(this.currentVolume, ctx.currentTime);
+    }
     this.isLooping = loop;
     this.activePreset = preset;
     this.isCurrentlyPlaying = true;

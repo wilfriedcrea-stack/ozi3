@@ -42,6 +42,8 @@ export interface Chapter {
   pricingType?: ChapterPricingType;
   coinsRequired: number;
   pages: string[];
+  thumbnailUrl?: string;
+  thumbnail?: string;
   likesCount: number;
   readTimeMinutes: number;
   summary?: string;

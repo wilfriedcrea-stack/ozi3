@@ -2,6 +2,7 @@
 // Handles image resizing, WebP compression, bulk upload, progress tracking, and LWS endpoint routing
 
 import { LwsStorageFile } from '../types';
+import { uploadArtworkAsset } from './storageService';
 
 export const LWS_CONFIG = {
   ENDPOINT: 'https://ozibd.net/api/upload.php',
@@ -141,74 +142,114 @@ export async function uploadToLWS(
 
   if (onProgress) onProgress(15, 'Connexion au serveur LWS (ozibd.net)...');
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for bulk uploads
+  // Determine endpoint: if on ozibd.net or same-host, prefer relative endpoint /api/upload.php
+  const isHostedOnLws = typeof window !== 'undefined' && window.location.hostname.includes('ozibd.net');
+  const targetEndpoints = isHostedOnLws
+    ? ['/api/upload.php', LWS_CONFIG.ENDPOINT]
+    : [LWS_CONFIG.ENDPOINT, '/api/upload.php'];
 
-    if (onProgress) onProgress(45, 'Transfert des données vers le stockage...');
+  let lastError: any = null;
 
-    const response = await fetch(LWS_CONFIG.ENDPOINT, {
-      method: 'POST',
-      body: formData,
-      signal: controller.signal,
-      headers: {
-        'Accept': 'application/json'
+  for (const endpoint of targetEndpoints) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+
+      if (onProgress) onProgress(35, `Transfert vers le serveur de stockage (${endpoint})...`);
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.success) {
+          if (onProgress) onProgress(100, 'Upload LWS terminé avec succès !');
+
+          const url = data.url || `https://ozibd.net/uploads/${category}/${fileName}`;
+          return {
+            success: true,
+            url,
+            fileInfo: {
+              name: fileName,
+              path: data.path || `${LWS_CONFIG.DIRECTORIES[category]}${fileName}`,
+              directory: category,
+              size: fileOrBlob.size,
+              sizeFormatted: formatBytes(fileOrBlob.size),
+              mimeType: fileOrBlob.type || (category === 'audio' ? 'audio/mpeg' : 'image/webp'),
+              url,
+              uploadedAt: new Date().toISOString()
+            }
+          };
+        }
       }
+    } catch (endpointErr) {
+      lastError = endpointErr;
+    }
+  }
+
+  // Fallback 1: Firebase Cloud Storage (gives a real, universally accessible HTTPS URL)
+  try {
+    if (onProgress) onProgress(60, 'Sauvegarde sur Cloud Storage...');
+    const storagePath = `uploads/${category}/${Date.now()}_${fileName}`;
+    const storageResult = await uploadArtworkAsset(fileOrBlob, storagePath, (pct) => {
+      if (onProgress) onProgress(60 + Math.round(pct * 0.35), 'Téléversement Cloud Storage...');
     });
 
-    clearTimeout(timeoutId);
-
-    if (response.ok) {
-      const data = await response.json();
-      if (onProgress) onProgress(100, 'Upload LWS terminé avec succès !');
-
-      const url = data.url || `https://ozibd.net/uploads/${category}/${fileName}`;
+    if (storageResult && storageResult.downloadUrl) {
+      if (onProgress) onProgress(100, 'Média sécurisé sur le Cloud !');
       return {
         success: true,
-        url,
+        url: storageResult.downloadUrl,
         fileInfo: {
           name: fileName,
-          path: data.path || `${LWS_CONFIG.DIRECTORIES[category]}${fileName}`,
+          path: storageResult.storagePath,
           directory: category,
           size: fileOrBlob.size,
           sizeFormatted: formatBytes(fileOrBlob.size),
           mimeType: fileOrBlob.type || (category === 'audio' ? 'audio/mpeg' : 'image/webp'),
-          url,
+          url: storageResult.downloadUrl,
           uploadedAt: new Date().toISOString()
         }
       };
-    } else {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
-  } catch (err) {
-    console.warn('LWS Direct Upload failed (possibly CORS or network preview), activating safe cloud/base64 fallback:', err);
-    if (onProgress) onProgress(80, 'Finalisation stockage média sécurisé...');
-
-    // Convert to persistent Data URL / Mock LWS CDN URL for reliable preview & offline persistence
-    let previewUrl = '';
-    if (fileOrBlob instanceof Blob) {
-      previewUrl = await blobToDataURL(fileOrBlob);
-    }
-
-    const fallbackUrl = previewUrl || `https://ozibd.net/uploads/${category}/${fileName}`;
-
-    if (onProgress) onProgress(100, 'Média enregistré avec succès !');
-
-    return {
-      success: true,
-      url: fallbackUrl,
-      fileInfo: {
-        name: fileName,
-        path: `${LWS_CONFIG.DIRECTORIES[category]}${fileName}`,
-        directory: category,
-        size: fileOrBlob.size,
-        sizeFormatted: formatBytes(fileOrBlob.size),
-        mimeType: fileOrBlob.type || (category === 'audio' ? 'audio/mpeg' : 'image/webp'),
-        url: fallbackUrl,
-        uploadedAt: new Date().toISOString()
-      }
-    };
+  } catch (cloudErr) {
+    console.warn('Firebase Storage fallback failed:', cloudErr);
   }
+
+  // Fallback 2: Offline / Preview Data URL
+  console.warn('All remote storage failed, falling back to local media buffer:', lastError);
+  if (onProgress) onProgress(90, 'Finalisation média local...');
+
+  let previewUrl = '';
+  if (fileOrBlob instanceof Blob) {
+    previewUrl = await blobToDataURL(fileOrBlob);
+  }
+
+  const fallbackUrl = previewUrl || `https://ozibd.net/uploads/${category}/${fileName}`;
+  if (onProgress) onProgress(100, 'Média prêt !');
+
+  return {
+    success: true,
+    url: fallbackUrl,
+    fileInfo: {
+      name: fileName,
+      path: `${LWS_CONFIG.DIRECTORIES[category]}${fileName}`,
+      directory: category,
+      size: fileOrBlob.size,
+      sizeFormatted: formatBytes(fileOrBlob.size),
+      mimeType: fileOrBlob.type || (category === 'audio' ? 'audio/mpeg' : 'image/webp'),
+      url: fallbackUrl,
+      uploadedAt: new Date().toISOString()
+    }
+  };
 }
 
 /**

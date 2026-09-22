@@ -8,9 +8,14 @@ import {
   BookOpen, 
   Tag, 
   ShieldCheck,
-  Star
+  Star,
+  Upload,
+  Loader2,
+  CheckCircle2
 } from 'lucide-react';
 import { Series, SeriesGenre, SeriesStatus } from '../../types';
+import { useData } from '../../context/DataContext';
+import { compressImageToWebP, uploadToLWS } from '../../services/lwsUploadService';
 
 interface AdminSeriesModalProps {
   series: Series | null;
@@ -43,6 +48,50 @@ export const AdminSeriesModal: React.FC<AdminSeriesModalProps> = ({ series, onCl
   const [coverUrl, setCoverUrl] = useState(series?.coverUrl || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80');
   const [bannerUrl, setBannerUrl] = useState(series?.bannerUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80');
   const [tagsInput, setTagsInput] = useState(series?.tags?.join(', ') || 'Afro-Futurisme, Webtoon, Épique');
+
+  const { addLwsFile } = useData();
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+
+  const handleUploadFile = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    type: 'cover' | 'banner'
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (type === 'cover') setIsUploadingCover(true);
+    else setIsUploadingBanner(true);
+
+    try {
+      setUploadStatus(`Optimisation WebP ${type === 'cover' ? 'couverture' : 'bannière'}...`);
+      const width = type === 'cover' ? 800 : 1600;
+      const compressed = await compressImageToWebP(file, width, 0.88);
+
+      setUploadStatus(`Transfert vers stockage LWS (ozibd.net)...`);
+      const res = await uploadToLWS(
+        compressed.file,
+        `${type}_${Date.now()}.webp`,
+        type === 'cover' ? 'covers' : 'banners',
+        { workId: series?.id }
+      );
+
+      if (res.success && res.url) {
+        if (type === 'cover') setCoverUrl(res.url);
+        else setBannerUrl(res.url);
+        addLwsFile(res.fileInfo);
+        setUploadStatus(`Image transférée avec succès sur LWS !`);
+        setTimeout(() => setUploadStatus(null), 3000);
+      }
+    } catch (err) {
+      console.error(`Upload ${type} error:`, err);
+      setUploadStatus(`Erreur lors du transfert du fichier.`);
+    } finally {
+      if (type === 'cover') setIsUploadingCover(false);
+      else setIsUploadingBanner(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -242,30 +291,97 @@ export const AdminSeriesModal: React.FC<AdminSeriesModalProps> = ({ series, onCl
             />
           </div>
 
-          {/* Media Links */}
+          {/* Media Links & LWS File Upload */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold text-zinc-400 block mb-1">URL Image de Couverture (Portrait) *</label>
+            <div className="p-3 rounded-2xl bg-zinc-950/70 border border-zinc-800 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-zinc-300">Couverture (Portrait) *</label>
+                <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-[11px] font-bold cursor-pointer transition-all">
+                  {isUploadingCover ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                  <span>{isUploadingCover ? 'Upload...' : 'Fichier vers LWS'}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={isUploadingCover}
+                    onChange={(e) => handleUploadFile(e, 'cover')}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
               <input
                 type="url"
                 required
                 value={coverUrl}
                 onChange={(e) => setCoverUrl(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+                placeholder="https://ozibd.net/uploads/covers/... ou URL externe"
+                className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
               />
+
+              {coverUrl && (
+                <div className="flex items-center gap-3 pt-1">
+                  <img
+                    src={coverUrl}
+                    alt="Preview couverture"
+                    className="w-12 h-16 object-cover rounded-lg border border-zinc-700 shrink-0"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="text-[11px] text-zinc-400 truncate">
+                    <span className="text-emerald-400 font-semibold block">Aperçu couverture</span>
+                    <span className="truncate block opacity-75">{coverUrl}</span>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div>
-              <label className="text-xs font-semibold text-zinc-400 block mb-1">URL Bannière Haute Résolution *</label>
+            <div className="p-3 rounded-2xl bg-zinc-950/70 border border-zinc-800 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-zinc-300">Bannière (Paysage) *</label>
+                <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-[11px] font-bold cursor-pointer transition-all">
+                  {isUploadingBanner ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                  <span>{isUploadingBanner ? 'Upload...' : 'Fichier vers LWS'}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={isUploadingBanner}
+                    onChange={(e) => handleUploadFile(e, 'banner')}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
               <input
                 type="url"
                 required
                 value={bannerUrl}
                 onChange={(e) => setBannerUrl(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+                placeholder="https://ozibd.net/uploads/banners/... ou URL externe"
+                className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
               />
+
+              {bannerUrl && (
+                <div className="flex items-center gap-3 pt-1">
+                  <img
+                    src={bannerUrl}
+                    alt="Preview bannière"
+                    className="w-24 h-12 object-cover rounded-lg border border-zinc-700 shrink-0"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="text-[11px] text-zinc-400 truncate">
+                    <span className="text-emerald-400 font-semibold block">Aperçu bannière</span>
+                    <span className="truncate block opacity-75">{bannerUrl}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
+
+          {uploadStatus && (
+            <div className="p-2.5 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
+              <Sparkles className="w-3.5 h-3.5 shrink-0" />
+              <span>{uploadStatus}</span>
+            </div>
+          )}
 
           {/* Tags */}
           <div>

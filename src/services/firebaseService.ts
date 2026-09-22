@@ -308,14 +308,36 @@ export function subscribeToFirestoreAppVersion(onUpdate: (version: AppVersionInf
   }
 }
 
+// Deep sanitization helper to strip any `undefined` values that cause Firestore setDoc() to fail
+export function cleanFirestoreObject(obj: any): any {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(item => cleanFirestoreObject(item));
+  }
+  const cleaned: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      cleaned[key] = cleanFirestoreObject(value);
+    }
+  }
+  return cleaned;
+}
+
 // Firestore CRUD operations with safe handling
 export async function syncSeriesToFirestore(databaseInstance: Firestore = db, series: Series) {
   try {
-    const payload = {
+    const nowIso = new Date().toISOString();
+    const nowDate = nowIso.split('T')[0];
+
+    const rawPayload = {
       ...series,
-      updatedAt: series.updatedAt || new Date().toISOString().split('T')[0],
-      firestoreSyncedAt: new Date().toISOString()
+      createdAt: (series as any).createdAt || nowIso,
+      updatedAt: series.updatedAt || nowDate,
+      firestoreSyncedAt: nowIso
     };
+
+    const payload = cleanFirestoreObject(rawPayload);
 
     // 1. Write to /series (primary collection for app & website)
     await setDoc(doc(databaseInstance, 'series', series.id), payload, { merge: true });
@@ -331,6 +353,24 @@ export async function syncSeriesToFirestore(databaseInstance: Firestore = db, se
       await setDoc(doc(databaseInstance, 'artworks', series.id), payload, { merge: true });
     } catch {
       // Non-blocking fallback
+    }
+
+    // 3. Write individual chapters to subcollection /series/{id}/chapters/{chapterId}
+    if (series.chapters && series.chapters.length > 0) {
+      for (const ch of series.chapters) {
+        if (ch && ch.id) {
+          try {
+            const chPayload = cleanFirestoreObject({
+              ...ch,
+              seriesId: series.id,
+              firestoreSyncedAt: nowIso
+            });
+            await setDoc(doc(databaseInstance, 'series', series.id, 'chapters', ch.id), chPayload, { merge: true });
+          } catch (chErr) {
+            console.warn(`Subcollection chapter sync warning for chapter ${ch.id}:`, chErr);
+          }
+        }
+      }
     }
 
     return { success: true };
