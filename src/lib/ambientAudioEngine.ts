@@ -165,6 +165,44 @@ export class AmbientAudioEngine {
     }
   }
 
+  public resumeAudioContext(): void {
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume().catch(() => {});
+    }
+  }
+
+  // Play audio for a chapter, respecting its audioConfig or defaulting based on series genre
+  public playChapterAudio(audioConfig?: { enabled: boolean; preset: AmbientAudioPreset; customAudioUrl?: string; volume: number; loop: boolean }, genre?: string) {
+    if (audioConfig && audioConfig.enabled === false) {
+      this.stop();
+      return;
+    }
+
+    if (audioConfig && audioConfig.customAudioUrl && audioConfig.customAudioUrl.trim()) {
+      this.playCustomUrl(audioConfig.customAudioUrl.trim(), audioConfig.volume ?? 0.7, audioConfig.loop ?? true);
+      return;
+    }
+
+    if (audioConfig && audioConfig.preset && audioConfig.preset !== 'none') {
+      this.playPreset(audioConfig.preset, audioConfig.volume ?? 0.7, audioConfig.loop ?? true);
+      return;
+    }
+
+    // Default atmospheric preset mapped to series genre
+    const defaultPreset = this.getPresetForGenre(genre);
+    this.playPreset(defaultPreset, 0.65, true);
+  }
+
+  public getPresetForGenre(genre?: string): AmbientAudioPreset {
+    if (!genre) return 'epic_action';
+    const lower = genre.toLowerCase();
+    if (lower.includes('sci-fi') || lower.includes('cyberpunk')) return 'cyberpunk_urban';
+    if (lower.includes('romance') || lower.includes('drame')) return 'romance_soft';
+    if (lower.includes('thriller') || lower.includes('mystère') || lower.includes('horreur')) return 'mystery_suspense';
+    if (lower.includes('fantasy') || lower.includes('mythologie') || lower.includes('afro-fantasy')) return 'traditional_fantasy';
+    return 'epic_action';
+  }
+
   public playPreset(preset: AmbientAudioPreset, volume: number = 0.7, loop: boolean = true) {
     if (preset === 'none') {
       this.stop();

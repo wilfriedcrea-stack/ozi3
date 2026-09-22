@@ -251,7 +251,7 @@ export const SeriesDetailModal: React.FC<SeriesDetailModalProps> = ({ series, on
               className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2 py-3.5 px-6 rounded-2xl bg-gradient-to-r from-orange-500 via-[#ff6600] to-amber-500 hover:from-orange-400 hover:to-amber-400 text-zinc-950 font-black text-sm shadow-xl shadow-orange-500/20 transition-all hover:scale-[1.02] font-heading"
             >
               <Eye className="w-4 h-4" />
-              <span>Lancer la lecture du Chapitre 1 (Aperçu)</span>
+              <span>Lancer la lecture du Chapitre 1</span>
             </button>
 
             <a

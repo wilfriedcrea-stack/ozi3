@@ -1,20 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   ChevronLeft, 
   ChevronRight, 
   Heart, 
-  Download, 
   Maximize2, 
   Minimize2, 
   ZoomIn, 
   ZoomOut, 
-  Smartphone, 
-  Sparkles, 
-  BookOpen,
-  Share2
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { ambientAudio } from '../../lib/ambientAudioEngine';
 
 export const WebtoonReaderModal: React.FC = () => {
   const { 
@@ -22,19 +20,63 @@ export const WebtoonReaderModal: React.FC = () => {
     activeReaderChapter, 
     closeReader, 
     openReader, 
-    likeChapter, 
-    appVersion 
+    likeChapter 
   } = useData();
 
   const [zoomLevel, setZoomLevel] = useState<number>(100);
   const [fullscreen, setFullscreen] = useState<boolean>(false);
   const [liked, setLiked] = useState<boolean>(false);
+  const [isAudioMuted, setIsAudioMuted] = useState<boolean>(false);
+  const audioStartedRef = useRef<boolean>(false);
 
+  // Auto-play immersive ambient soundtrack whenever chapter opens or switches
   useEffect(() => {
-    // Reset zoom when chapter changes
+    // Reset zoom and like state
     setZoomLevel(100);
     setLiked(false);
-  }, [activeReaderChapter?.id]);
+
+    if (!activeReaderChapter || !activeReaderSeries) return;
+
+    // Launch ambient soundtrack for this chapter
+    const launchAudio = () => {
+      ambientAudio.playChapterAudio(
+        activeReaderChapter.audioConfig,
+        activeReaderSeries.genre
+      );
+      ambientAudio.resumeAudioContext();
+    };
+
+    launchAudio();
+    audioStartedRef.current = true;
+
+    // Browser autoplay policy handler: ensure sound starts on first interaction if blocked
+    const handleFirstGesture = () => {
+      ambientAudio.resumeAudioContext();
+      if (!ambientAudio.isPlaying() && !isAudioMuted) {
+        launchAudio();
+      }
+      window.removeEventListener('pointerdown', handleFirstGesture);
+      window.removeEventListener('keydown', handleFirstGesture);
+      window.removeEventListener('scroll', handleFirstGesture, true);
+    };
+
+    window.addEventListener('pointerdown', handleFirstGesture, { once: true });
+    window.addEventListener('keydown', handleFirstGesture, { once: true });
+    window.addEventListener('scroll', handleFirstGesture, { capture: true, once: true });
+
+    return () => {
+      window.removeEventListener('pointerdown', handleFirstGesture);
+      window.removeEventListener('keydown', handleFirstGesture);
+      window.removeEventListener('scroll', handleFirstGesture, true);
+    };
+  }, [activeReaderChapter?.id, activeReaderSeries?.id]);
+
+  // Stop soundtrack when modal closes (unmounts)
+  useEffect(() => {
+    return () => {
+      ambientAudio.stop();
+    };
+  }, []);
 
   if (!activeReaderSeries || !activeReaderChapter) return null;
 
@@ -44,6 +86,20 @@ export const WebtoonReaderModal: React.FC = () => {
   const nextChapter = currentChapterIndex >= 0 && currentChapterIndex < chapters.length - 1 
     ? chapters[currentChapterIndex + 1] 
     : null;
+
+  const toggleAudio = () => {
+    if (isAudioMuted) {
+      ambientAudio.resumeAudioContext();
+      ambientAudio.playChapterAudio(
+        activeReaderChapter.audioConfig,
+        activeReaderSeries.genre
+      );
+      setIsAudioMuted(false);
+    } else {
+      ambientAudio.stop();
+      setIsAudioMuted(true);
+    }
+  };
 
   const handleLike = () => {
     if (!liked) {
@@ -76,7 +132,7 @@ export const WebtoonReaderModal: React.FC = () => {
           <button
             id="reader-close-btn"
             onClick={closeReader}
-            className="p-2 rounded-xl bg-[#1c1c2b] hover:bg-[#26263a] text-zinc-300 hover:text-white border border-[#2e2e46] transition-colors"
+            className="p-2 rounded-xl bg-[#1c1c2b] hover:bg-[#26263a] text-zinc-300 hover:text-white border border-[#2e2e46] transition-colors cursor-pointer"
             title="Quitter le lecteur"
             aria-label="Quitter le lecteur"
           >
@@ -84,14 +140,9 @@ export const WebtoonReaderModal: React.FC = () => {
           </button>
 
           <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <span className="font-black text-sm sm:text-base text-zinc-100 line-clamp-1 font-heading">
-                {activeReaderSeries.title}
-              </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30 font-heading">
-                Aperçu Gratuit
-              </span>
-            </div>
+            <span className="font-black text-sm sm:text-base text-zinc-100 line-clamp-1 font-heading">
+              {activeReaderSeries.title}
+            </span>
             <span className="text-xs text-orange-400 font-bold line-clamp-1 font-heading">
               Chapitre {activeReaderChapter.chapterNumber} : {activeReaderChapter.title}
             </span>
@@ -104,7 +155,7 @@ export const WebtoonReaderModal: React.FC = () => {
             id="reader-prev-chapter-btn"
             disabled={!prevChapter}
             onClick={() => prevChapter && openReader(activeReaderSeries.id, prevChapter.id)}
-            className="p-2 rounded-lg bg-[#1c1c2b] hover:bg-[#26263a] disabled:opacity-30 disabled:pointer-events-none text-zinc-300 transition-colors text-xs flex items-center gap-1 font-heading font-bold"
+            className="p-2 rounded-lg bg-[#1c1c2b] hover:bg-[#26263a] disabled:opacity-30 disabled:pointer-events-none text-zinc-300 transition-colors text-xs flex items-center gap-1 font-heading font-bold cursor-pointer"
           >
             <ChevronLeft className="w-4 h-4" />
             <span>Précédent</span>
@@ -114,7 +165,7 @@ export const WebtoonReaderModal: React.FC = () => {
             id="reader-chapter-select"
             value={activeReaderChapter.id}
             onChange={(e) => openReader(activeReaderSeries.id, e.target.value)}
-            className="px-3 py-1.5 rounded-lg bg-[#1c1c2b] border border-[#2e2e46] text-xs font-bold text-zinc-200 focus:outline-none focus:border-orange-500 font-heading"
+            className="px-3 py-1.5 rounded-lg bg-[#1c1c2b] border border-[#2e2e46] text-xs font-bold text-zinc-200 focus:outline-none focus:border-orange-500 font-heading cursor-pointer"
           >
             {chapters.map((c) => (
               <option key={c.id} value={c.id}>
@@ -127,20 +178,35 @@ export const WebtoonReaderModal: React.FC = () => {
             id="reader-next-chapter-btn"
             disabled={!nextChapter}
             onClick={() => nextChapter && openReader(activeReaderSeries.id, nextChapter.id)}
-            className="p-2 rounded-lg bg-[#1c1c2b] hover:bg-[#26263a] disabled:opacity-30 disabled:pointer-events-none text-zinc-300 transition-colors text-xs flex items-center gap-1 font-heading font-bold"
+            className="p-2 rounded-lg bg-[#1c1c2b] hover:bg-[#26263a] disabled:opacity-30 disabled:pointer-events-none text-zinc-300 transition-colors text-xs flex items-center gap-1 font-heading font-bold cursor-pointer"
           >
             <span>Suivant</span>
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Right Tools: Zoom, Fullscreen, Like */}
+        {/* Right Tools: Audio, Zoom, Fullscreen, Like */}
         <div className="flex items-center gap-2">
+          {/* Audio Soundtrack Toggle Button */}
+          <button
+            id="reader-audio-toggle-btn"
+            onClick={toggleAudio}
+            className={`p-2 rounded-xl border transition-all cursor-pointer ${
+              !isAudioMuted 
+                ? 'bg-orange-500/20 text-orange-400 border-orange-500/40 hover:bg-orange-500/30' 
+                : 'bg-[#1c1c2b] hover:bg-[#26263a] text-zinc-400 border-[#2e2e46]'
+            }`}
+            title={isAudioMuted ? 'Activer la musique' : 'Couper la musique'}
+            aria-label={isAudioMuted ? 'Activer la musique' : 'Couper la musique'}
+          >
+            {!isAudioMuted ? <Volume2 className="w-4 h-4 animate-pulse" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+
           {/* Zoom controls */}
           <div className="hidden sm:flex items-center gap-1 bg-[#1c1c2b] border border-[#2e2e46] rounded-lg p-1">
             <button
               onClick={() => setZoomLevel(prev => Math.max(60, prev - 15))}
-              className="p-1 hover:text-orange-400 text-zinc-400 transition-colors"
+              className="p-1 hover:text-orange-400 text-zinc-400 transition-colors cursor-pointer"
               title="Dézoomer"
             >
               <ZoomOut className="w-4 h-4" />
@@ -150,7 +216,7 @@ export const WebtoonReaderModal: React.FC = () => {
             </span>
             <button
               onClick={() => setZoomLevel(prev => Math.min(150, prev + 15))}
-              className="p-1 hover:text-orange-400 text-zinc-400 transition-colors"
+              className="p-1 hover:text-orange-400 text-zinc-400 transition-colors cursor-pointer"
               title="Zoomer"
             >
               <ZoomIn className="w-4 h-4" />
@@ -160,7 +226,7 @@ export const WebtoonReaderModal: React.FC = () => {
           {/* Fullscreen Toggle */}
           <button
             onClick={toggleFullscreen}
-            className="hidden sm:flex p-2 rounded-xl bg-[#1c1c2b] hover:bg-[#26263a] text-zinc-300 hover:text-white border border-[#2e2e46] transition-colors"
+            className="hidden sm:flex p-2 rounded-xl bg-[#1c1c2b] hover:bg-[#26263a] text-zinc-300 hover:text-white border border-[#2e2e46] transition-colors cursor-pointer"
             title="Plein écran"
           >
             {fullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -170,7 +236,7 @@ export const WebtoonReaderModal: React.FC = () => {
           <button
             id="reader-like-btn"
             onClick={handleLike}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all text-xs font-bold ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all text-xs font-bold cursor-pointer ${
               liked 
                 ? 'bg-rose-500 text-white border-rose-400 shadow-md shadow-rose-500/20' 
                 : 'bg-[#1c1c2b] hover:bg-[#26263a] text-rose-400 border-[#2e2e46]'
@@ -206,7 +272,7 @@ export const WebtoonReaderModal: React.FC = () => {
             )}
           </div>
 
-          {/* Webtoon Panels / Vertical strip */}
+          {/* Webtoon Panels / Vertical strip with zero page indicator overlay */}
           <div className="w-full flex flex-col gap-0 shadow-2xl rounded-2xl overflow-hidden border border-[#242436] bg-[#12121c]">
             {activeReaderChapter.pages.map((pageUrl, idx) => (
               <div key={idx} className="relative w-full overflow-hidden bg-[#12121c]">
@@ -224,47 +290,8 @@ export const WebtoonReaderModal: React.FC = () => {
                     }
                   }}
                 />
-                <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-[#09090e]/80 backdrop-blur-md text-[10px] font-mono text-zinc-400 border border-[#242436]">
-                  Page {idx + 1} / {activeReaderChapter.pages.length}
-                </div>
               </div>
             ))}
-          </div>
-
-          {/* End of Chapter / Call to Action Box */}
-          <div className="w-full mt-8 p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-[#12121c] via-[#12121c] to-[#09090e] border border-orange-500/30 text-center shadow-2xl">
-            <div className="w-12 h-12 rounded-2xl bg-orange-500/20 text-orange-400 flex items-center justify-center mx-auto mb-4 border border-orange-500/30">
-              <Sparkles className="w-6 h-6" />
-            </div>
-
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight mb-2 font-heading">
-              Fin de l'Aperçu du Chapitre {activeReaderChapter.chapterNumber}
-            </h2>
-
-            <p className="text-sm text-zinc-300 max-w-md mx-auto mb-6 leading-relaxed font-body">
-              Pour débloquer la suite de <strong className="text-white">{activeReaderSeries.title}</strong>, activer le mode hors-ligne et soutenir directement les auteurs, téléchargez l'application officielle OZI.
-            </p>
-
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-              <a
-                href="#section-download"
-                onClick={closeReader}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 py-3.5 px-6 rounded-2xl bg-gradient-to-r from-orange-500 via-[#ff6600] to-amber-500 hover:from-orange-400 hover:to-amber-400 text-zinc-950 font-black text-sm shadow-xl shadow-orange-500/25 transition-all hover:scale-105 font-heading"
-              >
-                <Download className="w-4 h-4" />
-                <span>Télécharger l'APK OZI ({appVersion.version})</span>
-              </a>
-
-              {nextChapter && (
-                <button
-                  onClick={() => openReader(activeReaderSeries.id, nextChapter.id)}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 py-3.5 px-6 rounded-2xl bg-[#1c1c2b] hover:bg-[#26263a] text-zinc-100 font-bold text-xs border border-[#2e2e46] transition-colors font-heading"
-                >
-                  <span>Lire l'épisode {nextChapter.chapterNumber}</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              )}
-            </div>
           </div>
 
         </div>
@@ -275,7 +302,7 @@ export const WebtoonReaderModal: React.FC = () => {
         <button
           disabled={!prevChapter}
           onClick={() => prevChapter && openReader(activeReaderSeries.id, prevChapter.id)}
-          className="p-2 rounded-lg bg-[#1c1c2b] disabled:opacity-30 text-xs font-bold flex items-center gap-1 text-zinc-300 font-heading"
+          className="p-2 rounded-lg bg-[#1c1c2b] disabled:opacity-30 text-xs font-bold flex items-center gap-1 text-zinc-300 font-heading cursor-pointer"
         >
           <ChevronLeft className="w-4 h-4" />
           <span>Précédent</span>
@@ -288,7 +315,7 @@ export const WebtoonReaderModal: React.FC = () => {
         <button
           disabled={!nextChapter}
           onClick={() => nextChapter && openReader(activeReaderSeries.id, nextChapter.id)}
-          className="p-2 rounded-lg bg-[#1c1c2b] disabled:opacity-30 text-xs font-bold flex items-center gap-1 text-zinc-300 font-heading"
+          className="p-2 rounded-lg bg-[#1c1c2b] disabled:opacity-30 text-xs font-bold flex items-center gap-1 text-zinc-300 font-heading cursor-pointer"
         >
           <span>Suivant</span>
           <ChevronRight className="w-4 h-4" />
