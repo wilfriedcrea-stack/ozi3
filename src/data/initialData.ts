@@ -853,9 +853,8 @@ export const DEFAULT_ADMIN_USER: AdminUser = {
 
 export const DEFAULT_ADMIN_CREDENTIALS = {
   allowedUsernames: ['admin', 'wilfriedcrea@gmail.com', 'wilfried', 'ozi', 'ozibd'],
-  defaultPassword: 'OziAdmin2026!',
-  // SHA-256 of 'OziAdmin2026!'
-  defaultPasswordHash: '0c32b509bf0d4b79b940989f89e49c7bcfae6b21908a8a4746f1e29a39a03db1'
+  // Salted SHA-256 of initial administrative key 'OziAdmin2026!'
+  defaultPasswordHash: 'b7a12a3eff6c697a84d40b3eaded800533543e621c32cbc2f3dc65c7da11c1f7'
 };
 
 export const INITIAL_USERS: import('../types').UserAccount[] = [

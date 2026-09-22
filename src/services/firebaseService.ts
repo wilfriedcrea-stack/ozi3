@@ -423,4 +423,44 @@ export async function deleteArticleFromFirestore(databaseInstance: Firestore = d
   }
 }
 
+export async function syncAdminSecurityToFirestore(
+  databaseInstance: Firestore = db,
+  securityData: { passwordHash: string; allowedUsernames: string[]; lastChangedAt: string }
+) {
+  try {
+    await setDoc(doc(databaseInstance, 'config', 'admin_security'), {
+      ...securityData,
+      syncedAt: new Date().toISOString()
+    }, { merge: true });
+    return { success: true };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, 'config/admin_security');
+    return { success: false, error: err };
+  }
+}
+
+export async function fetchAdminSecurityFromFirestore(databaseInstance: Firestore = db): Promise<{
+  passwordHash: string;
+  allowedUsernames: string[];
+  lastChangedAt: string;
+} | null> {
+  try {
+    const snap = await getDocFromServer(doc(databaseInstance, 'config', 'admin_security'));
+    if (snap.exists()) {
+      const data = snap.data();
+      if (data && data.passwordHash) {
+        return {
+          passwordHash: data.passwordHash,
+          allowedUsernames: data.allowedUsernames || ['admin', 'wilfriedcrea@gmail.com', 'wilfried', 'ozi', 'ozibd'],
+          lastChangedAt: data.lastChangedAt || new Date().toISOString()
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Unable to fetch admin security from Firestore (offline or initial):', err);
+  }
+  return null;
+}
+
+
 

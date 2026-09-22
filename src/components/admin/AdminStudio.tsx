@@ -15,12 +15,18 @@ import { AdminUsersManager } from './AdminUsersManager';
 import { AdminAdsManager } from './AdminAdsManager';
 import { AdminStorageManager } from './AdminStorageManager';
 import { AdminArticlesManager } from './AdminArticlesManager';
+import { AdminPasswordModal } from './AdminPasswordModal';
 import { useData } from '../../context/DataContext';
 
 export const AdminStudio: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [newSeriesModalOpen, setNewSeriesModalOpen] = useState<boolean>(false);
-  const { addSeries } = useData();
+  const { addSeries, adminAuth } = useData();
+
+  // Defense-in-depth: Never render studio content if not authenticated
+  if (!adminAuth.isAuthenticated) {
+    return null;
+  }
 
   const handleSaveNewSeries = async (data: any) => {
     await addSeries(data);
@@ -76,7 +82,7 @@ export const AdminStudio: React.FC = () => {
         </main>
       </div>
 
-      {/* Global New Series Modal */}
+      {/* Global Modals */}
       {newSeriesModalOpen && (
         <AdminSeriesModal
           series={null}
@@ -84,6 +90,8 @@ export const AdminStudio: React.FC = () => {
           onSave={handleSaveNewSeries}
         />
       )}
+
+      <AdminPasswordModal />
     </div>
   );
 };

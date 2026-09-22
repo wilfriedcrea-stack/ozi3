@@ -44,7 +44,15 @@ import {
   INITIAL_LWS_FILES
 } from '../data/initialData';
 import { initialArticles } from '../data/initialArticles';
-import { hashPassword, verifyPassword } from '../utils/securityUtils';
+import { 
+  hashPassword, 
+  verifyPassword, 
+  generateAdminSessionToken, 
+  verifyAdminSessionToken, 
+  checkLoginRateLimit, 
+  recordFailedLoginAttempt, 
+  resetFailedLoginAttempts 
+} from '../utils/securityUtils';
 import { 
   initializeFirebaseCustom, 
   testFirestoreConnection, 
@@ -59,7 +67,9 @@ import {
   subscribeToFirestoreSeries,
   fetchFirestoreSeriesNow,
   subscribeToFirestoreAppVersion,
-  getAppFirestoreDb
+  getAppFirestoreDb,
+  syncAdminSecurityToFirestore,
+  fetchAdminSecurityFromFirestore
 } from '../services/firebaseService';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
@@ -87,11 +97,14 @@ interface DataContextType {
   articles: Article[];
 
   // Auth actions
-  loginWithCredentials: (usernameInput: string, passwordInput: string, rememberMe?: boolean) => Promise<{ success: boolean; message?: string }>;
+  loginWithCredentials: (usernameInput: string, passwordInput: string, rememberMe?: boolean) => Promise<{ success: boolean; message?: string; isLocked?: boolean; remainingSeconds?: number }>;
   loginWithGoogle: () => Promise<boolean>;
   logoutAdmin: () => void;
   setAdminUser: (user: AdminUser) => void;
-  changeAdminPassword: (currentPass: string, newPass: string) => Promise<{ success: boolean; message?: string }>;
+  changeAdminPassword: (currentPass: string, newPass: string, isSuperAdminDirect?: boolean) => Promise<{ success: boolean; message?: string }>;
+  isPasswordModalOpen: boolean;
+  setIsPasswordModalOpen: (open: boolean) => void;
+  openPasswordModal: () => void;
 
   // View state & standalone pages
   viewMode: 'accueil' | 'oeuvres' | 'articles' | 'recherche' | 'admin' | 'article-detail' | 'oeuvre-detail';
@@ -531,22 +544,82 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   });
 
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState<boolean>(false);
+  const openPasswordModal = useCallback(() => setIsPasswordModalOpen(true), []);
+
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     try {
       if (typeof window === 'undefined') return false;
-      const sessionAuth = sessionStorage.getItem(STORAGE_KEYS.ADMIN_SESSION);
-      if (sessionAuth === 'true') return true;
-
-      const localSession = localStorage.getItem(STORAGE_KEYS.ADMIN_SESSION);
-      if (localSession) {
-        const parsed = JSON.parse(localSession);
-        if (parsed?.expiresAt && new Date(parsed.expiresAt).getTime() > Date.now()) {
+      const raw = sessionStorage.getItem(STORAGE_KEYS.ADMIN_SESSION) || localStorage.getItem(STORAGE_KEYS.ADMIN_SESSION);
+      if (!raw || !raw.startsWith('ozi_sec_v3.')) {
+        return false;
+      }
+      // Tentative check of expiration timestamp
+      const parts = raw.split('.');
+      if (parts.length === 3) {
+        const json = typeof atob === 'function' ? atob(parts[1]) : Buffer.from(parts[1], 'base64').toString('utf8');
+        const parsed = JSON.parse(json);
+        if (parsed?.e && Date.now() < parsed.e) {
           return true;
         }
       }
     } catch {}
     return false;
   });
+
+  // Continuous Cryptographic Session Audit
+  useEffect(() => {
+    let isMounted = true;
+    async function auditSession() {
+      if (typeof window === 'undefined') return;
+      const rawToken = sessionStorage.getItem(STORAGE_KEYS.ADMIN_SESSION) || localStorage.getItem(STORAGE_KEYS.ADMIN_SESSION);
+      if (!rawToken) {
+        if (isMounted && isAuthenticated) {
+          setIsAuthenticated(false);
+        }
+        return;
+      }
+
+      const res = await verifyAdminSessionToken(rawToken, adminCredentials.passwordHash, adminCredentials.allowedUsernames);
+      if (!res.valid) {
+        console.warn('OZI Security Guard - Session signature rejected:', res.reason);
+        if (isMounted) {
+          setIsAuthenticated(false);
+          sessionStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
+          localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
+        }
+      }
+    }
+
+    auditSession();
+    return () => { isMounted = false; };
+  }, [adminCredentials.passwordHash, adminCredentials.allowedUsernames, isAuthenticated]);
+
+  // Admin Inactivity Auto-Lockout (30 minutes of no user interaction)
+  useEffect(() => {
+    if (!isAuthenticated || viewMode !== 'admin') return;
+
+    let timeoutId: NodeJS.Timeout;
+    const INACTIVITY_LIMIT = 30 * 60 * 1000;
+
+    const resetInactivity = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        setIsAuthenticated(false);
+        sessionStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
+        localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
+      }, INACTIVITY_LIMIT);
+    };
+
+    resetInactivity();
+    const userEvents = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll'];
+    userEvents.forEach(evt => window.addEventListener(evt, resetInactivity, { passive: true }));
+
+    return () => {
+      clearTimeout(timeoutId);
+      userEvents.forEach(evt => window.removeEventListener(evt, resetInactivity));
+    };
+  }, [isAuthenticated, viewMode]);
 
   // Admin Auth State - strictly guarded by authentication
   const adminAuth: AdminAuthState = {
@@ -665,6 +738,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const fb = initializeFirebaseCustom();
         if (fb.db) {
+          // Cloud sync admin credentials from Firestore
+          try {
+            const remoteSec = await fetchAdminSecurityFromFirestore(fb.db);
+            if (remoteSec && remoteSec.passwordHash) {
+              setAdminCredentials((prev) => {
+                const updated = {
+                  ...prev,
+                  passwordHash: remoteSec.passwordHash,
+                  allowedUsernames: remoteSec.allowedUsernames || prev.allowedUsernames,
+                  lastChangedAt: remoteSec.lastChangedAt || prev.lastChangedAt
+                };
+                try {
+                  localStorage.setItem(STORAGE_KEYS.ADMIN_CREDENTIALS, JSON.stringify(updated));
+                } catch {}
+                return updated;
+              });
+            }
+          } catch (secErr) {
+            console.warn('Initial admin security fetch note:', secErr);
+          }
+
           const initialData = await fetchFirestoreSeriesNow(fb.db);
           if (initialData && initialData.length > 0) {
             setSeries((prevLocal) => {
@@ -803,6 +897,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Auth actions
   const loginWithCredentials = useCallback(async (usernameInput: string, passwordInput: string, rememberMe: boolean = false) => {
+    // 1. Anti-Brute-Force & Rate Limiting Check
+    const rateCheck = checkLoginRateLimit();
+    if (rateCheck.isLocked) {
+      return { 
+        success: false, 
+        isLocked: true, 
+        remainingSeconds: rateCheck.remainingLockoutSeconds,
+        message: `Console administrative temporairement verrouillée par mesure de sécurité suite à plusieurs tentatives infructueuses. Veuillez patienter ${rateCheck.remainingLockoutSeconds}s.` 
+      };
+    }
+
     const cleanUser = usernameInput.trim().toLowerCase();
     const cleanPass = passwordInput.trim();
 
@@ -810,24 +915,45 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: "Veuillez renseigner votre identifiant et votre mot de passe." };
     }
 
-    // Check username matches allowed admin aliases
+    // 2. Validate authorized administrator alias
     const isUsernameValid = adminCredentials.allowedUsernames.some(u => u.toLowerCase() === cleanUser) ||
       cleanUser === adminUser.email.toLowerCase();
 
     if (!isUsernameValid) {
-      return { success: false, message: "Identifiant administrateur inconnu ou non autorisé." };
+      const failed = recordFailedLoginAttempt();
+      return { 
+        success: false, 
+        isLocked: failed.isLocked,
+        remainingSeconds: failed.remainingLockoutSeconds,
+        message: failed.isLocked 
+          ? `Console verrouillée pour ${failed.remainingLockoutSeconds}s suite à trop d'échecs.` 
+          : "Identifiant administrateur inconnu ou non autorisé." 
+      };
     }
 
-    // Check password
-    const isPassValid = await verifyPassword(cleanPass, adminCredentials.passwordHash) ||
-      cleanPass === DEFAULT_ADMIN_CREDENTIALS.defaultPassword ||
-      cleanPass === 'ozi2026';
+    // 3. Strict Cryptographic Salted SHA-256 Verification with Constant-Time Jitter
+    // NO backdoor strings and NO unhashed bypasses!
+    const isPassValid = await verifyPassword(cleanPass, adminCredentials.passwordHash);
 
     if (!isPassValid) {
-      return { success: false, message: "Mot de passe incorrect. Veuillez réessayer." };
+      const failed = recordFailedLoginAttempt();
+      const remainingTries = Math.max(0, 5 - failed.failedAttempts);
+      return { 
+        success: false, 
+        isLocked: failed.isLocked,
+        remainingSeconds: failed.remainingLockoutSeconds,
+        message: failed.isLocked 
+          ? `Console verrouillée pour ${failed.remainingLockoutSeconds}s suite à des tentatives erronées.` 
+          : `Mot de passe administrateur incorrect. (${remainingTries} tentative${remainingTries > 1 ? 's' : ''} restante${remainingTries > 1 ? 's' : ''} avant verrouillage)` 
+      };
     }
 
-    // Success: Authenticate and log
+    // 4. Success: Reset rate limiter and generate cryptographically signed session
+    resetFailedLoginAttempts();
+
+    const durationMs = rememberMe ? 24 * 60 * 60 * 1000 : 2 * 60 * 60 * 1000;
+    const sessionPayload = await generateAdminSessionToken(cleanUser, adminCredentials.passwordHash, durationMs);
+
     setIsAuthenticated(true);
     const now = new Date().toISOString();
     setAdminUserState(prev => ({
@@ -836,22 +962,34 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
 
     if (rememberMe) {
-      // 7 days session
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-      localStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, JSON.stringify({ token: 'ozi_admin_token', expiresAt }));
+      localStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, sessionPayload.token);
+      sessionStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
     } else {
-      sessionStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, 'true');
+      sessionStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, sessionPayload.token);
       localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
     }
 
+    // Audit log
+    setModerationLogs(prev => [
+      {
+        id: `mod-auth-${Date.now()}`,
+        moderatorEmail: adminUser.email,
+        action: 'Connexion Administrateur Sécurisée',
+        targetType: 'user',
+        targetId: cleanUser,
+        timestamp: now,
+        details: `Session sécurisée active (Jeton cryptographique v3 pour ${cleanUser})`
+      },
+      ...prev
+    ]);
+
     return { success: true };
-  }, [adminCredentials, adminUser.email]);
+  }, [adminCredentials, adminUser]);
 
   const loginWithGoogle = useCallback(async () => {
-    setAdminUserState(DEFAULT_ADMIN_USER);
-    setIsAuthenticated(true);
-    sessionStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, 'true');
-    return true;
+    // Deprecated for security: Google popup alone cannot bypass the administrator password
+    console.warn('Google bypass is disabled for admin access. Administrator password is required.');
+    return false;
   }, []);
 
   const logoutAdmin = useCallback(() => {
@@ -863,21 +1001,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setViewMode('accueil');
   }, [setViewMode]);
 
-  const changeAdminPassword = useCallback(async (currentPass: string, newPass: string) => {
-    if (!currentPass || !newPass) {
-      return { success: false, message: "Veuillez remplir tous les champs du mot de passe." };
+  const changeAdminPassword = useCallback(async (currentPass: string, newPass: string, isSuperAdminDirect?: boolean) => {
+    if (!newPass) {
+      return { success: false, message: "Veuillez saisir le nouveau mot de passe." };
     }
 
-    if (newPass.length < 6) {
-      return { success: false, message: "Le nouveau mot de passe doit comporter au moins 6 caractères." };
+    if (newPass.length < 8) {
+      return { success: false, message: "Pour une sécurité maximale, le nouveau mot de passe doit comporter au moins 8 caractères." };
     }
 
-    const isCurrentValid = await verifyPassword(currentPass, adminCredentials.passwordHash) ||
-      currentPass === DEFAULT_ADMIN_CREDENTIALS.defaultPassword ||
-      currentPass === 'ozi2026';
+    const isDirectAllowed = Boolean(isSuperAdminDirect && (isAuthenticated || adminUser.role === 'Super Admin'));
 
-    if (!isCurrentValid) {
-      return { success: false, message: "Le mot de passe actuel est incorrect." };
+    if (!isDirectAllowed) {
+      if (!currentPass) {
+        return { success: false, message: "Veuillez renseigner votre mot de passe actuel." };
+      }
+      // Constant-time check of current password
+      const isCurrentValid = await verifyPassword(currentPass, adminCredentials.passwordHash);
+
+      if (!isCurrentValid) {
+        return { success: false, message: "Le mot de passe actuel est incorrect. Modification refusée." };
+      }
     }
 
     const newHash = await hashPassword(newPass);
@@ -888,10 +1032,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     setAdminCredentials(updatedCreds);
-    localStorage.setItem(STORAGE_KEYS.ADMIN_CREDENTIALS, JSON.stringify(updatedCreds));
+    try {
+      localStorage.setItem(STORAGE_KEYS.ADMIN_CREDENTIALS, JSON.stringify(updatedCreds));
+    } catch {}
 
-    return { success: true, message: "Mot de passe administrateur modifié avec succès !" };
-  }, [adminCredentials]);
+    // Cloud sync to Firestore config/admin_security
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncAdminSecurityToFirestore(fb.db, {
+          passwordHash: newHash,
+          allowedUsernames: updatedCreds.allowedUsernames,
+          lastChangedAt: updatedCreds.lastChangedAt
+        });
+      }
+    } catch (syncErr) {
+      console.warn("Could not sync updated credentials to Firestore:", syncErr);
+    }
+
+    // Automatically re-sign current active session with the new hash so the admin stays connected,
+    // while all other sessions on other devices/tabs become immediately invalid!
+    const updatedSession = await generateAdminSessionToken(adminUser.email, newHash);
+    if (localStorage.getItem(STORAGE_KEYS.ADMIN_SESSION)) {
+      localStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, updatedSession.token);
+    } else {
+      sessionStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, updatedSession.token);
+    }
+
+    return { success: true, message: "Mot de passe administrateur renouvelé avec succès ! Synchronisé avec le Cloud Firestore." };
+  }, [adminCredentials, adminUser.email, isAuthenticated, adminUser.role]);
 
   const setAdminUser = useCallback((user: AdminUser) => {
     setAdminUserState(user);
@@ -1641,6 +1810,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logoutAdmin,
       setAdminUser,
       changeAdminPassword,
+      isPasswordModalOpen,
+      setIsPasswordModalOpen,
+      openPasswordModal,
       viewMode,
       setViewMode,
       selectedArticleId,

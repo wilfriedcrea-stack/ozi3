@@ -33,7 +33,8 @@ export const AdminUsersManager: React.FC = () => {
     toggleUserVip,
     adminUser,
     changeAdminPassword,
-    adminCredentials
+    adminCredentials,
+    openPasswordModal
   } = useData();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -43,50 +44,6 @@ export const AdminUsersManager: React.FC = () => {
   const [adjustingUser, setAdjustingUser] = useState<UserAccount | null>(null);
   const [coinAmount, setCoinAmount] = useState<number>(100);
   const [coinReason, setCoinReason] = useState<string>('Bonus de bienvenue');
-
-  // Password Change Modal
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [pwdFeedback, setPwdFeedback] = useState<{ success?: boolean; text: string } | null>(null);
-  const [isSubmittingPwd, setIsSubmittingPwd] = useState(false);
-
-  const handlePasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPwdFeedback(null);
-
-    if (newPassword !== confirmPassword) {
-      setPwdFeedback({ success: false, text: "Les deux nouveaux mots de passe ne correspondent pas." });
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      setPwdFeedback({ success: false, text: "Le nouveau mot de passe doit comporter au moins 6 caractères." });
-      return;
-    }
-
-    setIsSubmittingPwd(true);
-    try {
-      const res = await changeAdminPassword(currentPassword, newPassword);
-      if (res.success) {
-        setPwdFeedback({ success: true, text: res.message || "Mot de passe modifié avec succès !" });
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
-        setTimeout(() => {
-          setShowPasswordModal(false);
-          setPwdFeedback(null);
-        }, 2200);
-      } else {
-        setPwdFeedback({ success: false, text: res.message || "Erreur lors du changement de mot de passe." });
-      }
-    } catch {
-      setPwdFeedback({ success: false, text: "Erreur technique lors de la mise à jour." });
-    } finally {
-      setIsSubmittingPwd(false);
-    }
-  };
 
   const filteredUsers = users.filter(u => {
     const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -142,7 +99,7 @@ export const AdminUsersManager: React.FC = () => {
 
           <button
             id="admin-users-change-pwd-btn"
-            onClick={() => setShowPasswordModal(true)}
+            onClick={openPasswordModal}
             className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition-all shadow-md hover:scale-105 font-almodobar"
             title="Modifier le mot de passe du compte administrateur"
           >
@@ -353,130 +310,6 @@ export const AdminUsersManager: React.FC = () => {
                   className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-bold rounded-xl text-xs shadow-lg shadow-amber-500/20"
                 >
                   Confirmer l'Ajustement
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Admin Password Change Modal */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-[#0b0d14] border border-amber-500/30 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-5">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                  <KeyRound className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white font-almodobar">
-                    Sécurité Administrateur
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Compte : <span className="text-white font-mono">{adminUser.email}</span>
-                  </p>
-                </div>
-              </div>
-              <button 
-                id="admin-close-pwd-modal-btn"
-                onClick={() => { setShowPasswordModal(false); setPwdFeedback(null); }} 
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {pwdFeedback && (
-              <div 
-                className={`mb-4 p-3.5 rounded-xl border text-xs flex items-center gap-2.5 animate-in fade-in ${
-                  pwdFeedback.success 
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' 
-                    : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
-                }`}
-              >
-                {pwdFeedback.success ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
-                <span className="font-medium">{pwdFeedback.text}</span>
-              </div>
-            )}
-
-            <form onSubmit={handlePasswordChange} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5 font-almodobar">
-                  Mot de passe actuel
-                </label>
-                <input
-                  id="admin-current-pwd-input"
-                  type="password"
-                  required
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Saisissez le mot de passe actuel"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none"
-                />
-                <div className="text-[10px] text-slate-500 mt-1">
-                  Mot de passe par défaut d'origine : <code className="text-amber-300/80">OziAdmin2026!</code>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5 font-almodobar">
-                  Nouveau mot de passe
-                </label>
-                <input
-                  id="admin-new-pwd-input"
-                  type="password"
-                  required
-                  minLength={6}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Minimum 6 caractères"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5 font-almodobar">
-                  Confirmer le nouveau mot de passe
-                </label>
-                <input
-                  id="admin-confirm-pwd-input"
-                  type="password"
-                  required
-                  minLength={6}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Retapez le nouveau mot de passe"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none"
-                />
-              </div>
-
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-[11px] text-slate-400">
-                <div className="font-bold text-slate-300 mb-0.5">Identifiants reconnus pour la connexion :</div>
-                <div className="flex flex-wrap gap-1 mt-1 font-mono text-[10px]">
-                  {adminCredentials.allowedUsernames.map(u => (
-                    <span key={u} className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">
-                      {u}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => { setShowPasswordModal(false); setPwdFeedback(null); }}
-                  className="px-4 py-2.5 text-xs font-bold text-slate-400 hover:text-white"
-                >
-                  Annuler
-                </button>
-                <button
-                  id="admin-submit-pwd-change-btn"
-                  type="submit"
-                  disabled={isSubmittingPwd}
-                  className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-black rounded-xl text-xs shadow-lg shadow-amber-500/20 disabled:opacity-50 font-almodobar"
-                >
-                  {isSubmittingPwd ? 'Mise à jour...' : 'Enregistrer le Mot de Passe'}
                 </button>
               </div>
             </form>

@@ -14,7 +14,8 @@ import {
   HardDrive,
   UserCheck,
   FileText,
-  Eye
+  Eye,
+  KeyRound
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { OziLogo } from '../common/OziLogo';
@@ -25,7 +26,20 @@ interface AdminSidebarProps {
 }
 
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({ activeTab, setActiveTab }) => {
-  const { setViewMode, series, submissions, firebaseConfig, creatorPayouts, reportedComments, users, ads, lwsFiles, articles, logoutAdmin } = useData();
+  const { 
+    setViewMode, 
+    series, 
+    submissions, 
+    firebaseConfig, 
+    creatorPayouts, 
+    reportedComments, 
+    users, 
+    ads, 
+    lwsFiles, 
+    articles, 
+    logoutAdmin,
+    openPasswordModal 
+  } = useData();
 
   const pendingSubmissionsCount = submissions.filter(s => s.status === 'pending').length;
   const pendingPayoutsCount = creatorPayouts.filter(p => p.status === 'pending').length;
@@ -102,6 +116,16 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ activeTab, setActive
         </div>
 
         <div className="flex flex-col gap-2">
+          <button
+            id="admin-sidebar-password-btn"
+            onClick={openPasswordModal}
+            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-amber-200 border border-amber-500/30 text-xs font-bold transition-colors font-almodobar tap-active"
+            title="Modifier le mot de passe administrateur"
+          >
+            <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+            <span>Modifier Mot de Passe</span>
+          </button>
+
           <button
             id="admin-sidebar-preview-btn"
             onClick={() => setViewMode('accueil')}

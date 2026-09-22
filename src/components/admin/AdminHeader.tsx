@@ -9,7 +9,8 @@ import {
   Database,
   Eye,
   Plus,
-  LogOut
+  LogOut,
+  KeyRound
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
@@ -19,7 +20,15 @@ interface AdminHeaderProps {
 }
 
 export const AdminHeader: React.FC<AdminHeaderProps> = ({ activeTab, onNewSeriesClick }) => {
-  const { setViewMode, firebaseConfig, triggerManualSync, testFirebaseConnection, adminUser, logoutAdmin } = useData();
+  const { 
+    setViewMode, 
+    firebaseConfig, 
+    triggerManualSync, 
+    testFirebaseConnection, 
+    adminUser, 
+    logoutAdmin,
+    openPasswordModal 
+  } = useData();
   const [syncing, setSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
 
@@ -113,6 +122,17 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ activeTab, onNewSeries
             {adminUser.role}
           </span>
         </div>
+
+        {/* Change Password Button */}
+        <button
+          id="admin-header-change-pwd-btn"
+          onClick={openPasswordModal}
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold transition-colors font-heading"
+          title="Modifier le mot de passe administrateur"
+        >
+          <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+          <span className="hidden sm:inline">Mot de passe</span>
+        </button>
 
         {/* Download LWS package */}
         <a
