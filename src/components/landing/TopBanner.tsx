@@ -1,9 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
 
 export const TopBanner: React.FC = () => {
-  const { series, openReader } = useData();
-  const [imgSrc, setImgSrc] = useState('https://ozibd.net/REF.png');
+  const { series, openReader, siteBannerUrl } = useData();
+  const [currentSrc, setCurrentSrc] = useState(siteBannerUrl || 'https://ozibd.net/REF.png');
+  const [fallbackIndex, setFallbackIndex] = useState(0);
+
+  // Synchronize when siteBannerUrl changes across devices via Firestore
+  useEffect(() => {
+    if (siteBannerUrl && siteBannerUrl.trim()) {
+      setCurrentSrc(siteBannerUrl);
+      setFallbackIndex(0);
+    }
+  }, [siteBannerUrl]);
 
   const handleBannerClick = () => {
     const featured = series[0];
@@ -16,14 +25,22 @@ export const TopBanner: React.FC = () => {
   };
 
   const handleImageError = () => {
-    if (imgSrc === 'https://ozibd.net/REF.png') {
-      setImgSrc('http://ozibd.net/REF.png');
-    } else if (imgSrc === 'http://ozibd.net/REF.png') {
-      setImgSrc('/REF.png');
-    } else if (imgSrc === '/REF.png') {
-      setImgSrc('https://ozibd.net/testo.png');
+    const fallbacks = [
+      'https://ozibd.net/REF.png',
+      'http://ozibd.net/REF.png',
+      '/REF.png',
+      'https://ozibd.net/testo.png',
+      '/images/ozi_mosaic_banner.jpg'
+    ];
+
+    if (fallbackIndex < fallbacks.length) {
+      const nextSrc = fallbacks[fallbackIndex];
+      setFallbackIndex(prev => prev + 1);
+      if (nextSrc !== currentSrc) {
+        setCurrentSrc(nextSrc);
+      }
     } else {
-      setImgSrc('/images/ozi_mosaic_banner.jpg');
+      setCurrentSrc('/images/ozi_mosaic_banner.jpg');
     }
   };
 
@@ -38,7 +55,7 @@ export const TopBanner: React.FC = () => {
       {/* Full width panoramic container */}
       <div className="relative w-full h-[160px] sm:h-[220px] md:h-[280px] lg:h-[340px] xl:h-[380px] overflow-hidden bg-zinc-950 flex items-center justify-center">
         <img
-          src={imgSrc}
+          src={currentSrc}
           alt="Bannière OZI BD"
           onError={handleImageError}
           className="w-full h-full object-cover object-center transition-transform duration-700 ease-out group-hover:scale-[1.02]"

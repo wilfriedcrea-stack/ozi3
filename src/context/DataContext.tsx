@@ -70,7 +70,11 @@ import {
   subscribeToFirestoreAppVersion,
   getAppFirestoreDb,
   syncAdminSecurityToFirestore,
-  fetchAdminSecurityFromFirestore
+  fetchAdminSecurityFromFirestore,
+  syncSiteSettingsToFirestore,
+  fetchSiteSettingsFromFirestore,
+  subscribeToFirestoreSiteSettings,
+  deduplicateSeries
 } from '../services/firebaseService';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
@@ -130,6 +134,7 @@ interface DataContextType {
   addSeries: (series: Omit<Series, 'id' | 'slug' | 'totalReads' | 'totalLikes' | 'rating' | 'reviewsCount' | 'updatedAt'>) => void;
   updateSeries: (id: string, updates: Partial<Series>) => void;
   deleteSeries: (id: string) => void;
+  cleanupDuplicates: () => Promise<{ cleaned: number; message: string }>;
   addChapter: (seriesId: string, chapter: Omit<Chapter, 'id' | 'seriesId' | 'releaseDate' | 'likesCount'>) => void;
   updateChapter: (seriesId: string, chapterId: string, updates: Partial<Chapter>) => void;
   deleteChapter: (seriesId: string, chapterId: string) => void;
@@ -196,6 +201,10 @@ interface DataContextType {
   refreshCatalogueFromFirestore: () => Promise<boolean>;
   isRefreshingCatalogue: boolean;
 
+  // Site Header Banner
+  siteBannerUrl: string;
+  updateSiteBannerUrl: (url: string) => Promise<boolean>;
+
   // Interactions
   likeSeries: (seriesId: string) => void;
   likeChapter: (seriesId: string, chapterId: string) => void;
@@ -222,7 +231,9 @@ const STORAGE_KEYS = {
   TRANSACTIONS: 'ozi_transactions_v1',
   ADS: 'ozi_ads_banners_v1',
   LWS_FILES: 'ozi_lws_files_v1',
-  ARTICLES: 'ozi_articles_data_v1'
+  ARTICLES: 'ozi_articles_data_v1',
+  SITE_BANNER: 'ozi_site_banner_url_v1',
+  DELETED_SERIES: 'ozi_deleted_series_ids_v1'
 };
 
 type ViewModeType = 'accueil' | 'oeuvres' | 'articles' | 'recherche' | 'admin' | 'article-detail' | 'oeuvre-detail';
@@ -397,26 +408,34 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   };
 
+  // Helper to deduplicate series list by ID, slug and normalized title
+  const deduplicateSeriesList = useCallback((seriesList: Series[]): { list: Series[]; discardedIds: string[] } => {
+    const { deduplicated, duplicateIds } = deduplicateSeries(seriesList);
+    return { list: deduplicated, discardedIds: duplicateIds };
+  }, []);
+
   // Core Data
   const [series, setSeries] = useState<Series[]>(() => {
     try {
+      const deletedRaw = localStorage.getItem(STORAGE_KEYS.DELETED_SERIES);
+      const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
+
       const saved = localStorage.getItem(STORAGE_KEYS.SERIES);
       if (saved) {
         const parsed: Series[] = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Merge INITIAL_SERIES with saved items so newly added initial series are never omitted
-          const map = new Map<string, Series>();
-          INITIAL_SERIES.forEach((s) => map.set(s.id, s));
-          parsed.forEach((s) => {
-            if (s && s.id) {
-              const existing = map.get(s.id);
-              map.set(s.id, cleanSeries(s, existing));
-            }
-          });
-          return Array.from(map.values());
+          const cleanedSaved = parsed
+            .filter((s) => s && s.id && !deletedSet.has(s.id))
+            .map((s) => cleanSeries(s));
+          const { deduplicated } = deduplicateSeries(cleanedSaved);
+          return deduplicated;
         }
       }
-      return INITIAL_SERIES.map((s) => cleanSeries(s));
+      const initial = INITIAL_SERIES
+        .filter((s) => !deletedSet.has(s.id))
+        .map((s) => cleanSeries(s));
+      const { deduplicated } = deduplicateSeries(initial);
+      return deduplicated;
     } catch {
       return INITIAL_SERIES;
     }
@@ -732,6 +751,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [isRefreshingCatalogue, setIsRefreshingCatalogue] = useState(false);
 
+  // Site Header Banner State (synchronized across devices via Firestore config/site_settings)
+  const [siteBannerUrl, setSiteBannerUrl] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.SITE_BANNER);
+      return saved && saved.trim() ? saved : 'https://ozibd.net/REF.png';
+    } catch {
+      return 'https://ozibd.net/REF.png';
+    }
+  });
+
   // Real-time Firestore sync listener (keeps Web and APK synchronized immediately)
   useEffect(() => {
     // 1. Fetch immediately on launch to ensure latest catalog is active
@@ -760,25 +789,34 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.warn('Initial admin security fetch note:', secErr);
           }
 
+          // Cloud sync Site Header Banner from Firestore
+          try {
+            const remoteSettings = await fetchSiteSettingsFromFirestore(fb.db);
+            if (remoteSettings && remoteSettings.headerBannerUrl) {
+              setSiteBannerUrl(remoteSettings.headerBannerUrl);
+              try {
+                localStorage.setItem(STORAGE_KEYS.SITE_BANNER, remoteSettings.headerBannerUrl);
+              } catch {}
+            }
+          } catch (bannerErr) {
+            console.warn('Initial site settings banner fetch note:', bannerErr);
+          }
+
           const initialData = await fetchFirestoreSeriesNow(fb.db);
           if (initialData && initialData.length > 0) {
             setSeries((prevLocal) => {
-              const map = new Map<string, Series>();
-              prevLocal.forEach((s) => map.set(s.id, s));
-              initialData.forEach((remote) => {
-                if (remote && remote.id) {
-                  const local = map.get(remote.id);
-                  const chapters = (remote.chapters && remote.chapters.length > 0)
-                    ? remote.chapters
-                    : (local?.chapters && local.chapters.length > 0 ? local.chapters : remote.chapters);
-                  map.set(remote.id, cleanSeries({
-                    ...local,
-                    ...remote,
-                    chapters: chapters || []
-                  }, local));
-                }
-              });
-              return Array.from(map.values());
+              const deletedRaw = localStorage.getItem(STORAGE_KEYS.DELETED_SERIES);
+              const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
+              const filteredPrev = prevLocal.filter(s => !deletedSet.has(s.id));
+              const combined = [...initialData, ...filteredPrev];
+              const { deduplicated, duplicateIds } = deduplicateSeries(combined);
+              if (duplicateIds.length > 0 && fb.db) {
+                duplicateIds.forEach(id => deleteSeriesFromFirestore(fb.db!, id).catch(() => {}));
+              }
+              try {
+                localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(deduplicated));
+              } catch {}
+              return deduplicated;
             });
           }
         }
@@ -792,25 +830,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribeSeries = subscribeToFirestoreSeries((firestoreSeries) => {
       if (firestoreSeries && firestoreSeries.length > 0) {
         setSeries((prevLocal) => {
-          // Merge remote firestore items with local items
-          const map = new Map<string, Series>();
-          // Put initial/local first
-          prevLocal.forEach((s) => map.set(s.id, s));
-          // Overwrite/Add remote items from Firestore, preserving local chapters if remote is empty
-          firestoreSeries.forEach((remote) => {
-            if (remote && remote.id) {
-              const local = map.get(remote.id);
-              const chapters = (remote.chapters && remote.chapters.length > 0)
-                ? remote.chapters
-                : (local?.chapters && local.chapters.length > 0 ? local.chapters : remote.chapters);
-              map.set(remote.id, cleanSeries({
-                ...local,
-                ...remote,
-                chapters: chapters || []
-              }, local));
-            }
-          });
-          return Array.from(map.values());
+          const deletedRaw = localStorage.getItem(STORAGE_KEYS.DELETED_SERIES);
+          const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
+          const filteredPrev = prevLocal.filter(s => !deletedSet.has(s.id));
+          const combined = [...firestoreSeries, ...filteredPrev];
+          const { deduplicated, duplicateIds } = deduplicateSeries(combined);
+          if (duplicateIds.length > 0) {
+            try {
+              const fb = initializeFirebaseCustom();
+              if (fb.db) {
+                duplicateIds.forEach(id => deleteSeriesFromFirestore(fb.db!, id).catch(() => {}));
+              }
+            } catch {}
+          }
+          try {
+            localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(deduplicated));
+          } catch {}
+          return deduplicated;
         });
       }
     });
@@ -821,9 +857,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
+    const unsubscribeBanner = subscribeToFirestoreSiteSettings((settings) => {
+      if (settings && settings.headerBannerUrl) {
+        setSiteBannerUrl(settings.headerBannerUrl);
+        try {
+          localStorage.setItem(STORAGE_KEYS.SITE_BANNER, settings.headerBannerUrl);
+        } catch {}
+      }
+    });
+
     return () => {
       unsubscribeSeries();
       unsubscribeVersion();
+      unsubscribeBanner();
     };
   }, []);
 
@@ -1149,7 +1195,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       chapters: newSeriesData.chapters || []
     } as any;
 
-    setSeries(prev => [newSeries, ...prev.filter(s => s.id !== id)]);
+    setSeries(prev => {
+      // Remove any existing series with identical slug or title so mock duplicates are superseded
+      const filtered = prev.filter(s => {
+        const sameSlug = (s.slug || '').trim().toLowerCase() === slug;
+        const sameTitle = (s.title || '').trim().toLowerCase() === newSeriesData.title.trim().toLowerCase();
+        if (sameSlug || sameTitle) {
+          if (s.id !== id) {
+            try {
+              const fb = initializeFirebaseCustom();
+              if (fb.db) deleteSeriesFromFirestore(fb.db, s.id);
+            } catch {}
+          }
+          return false;
+        }
+        return s.id !== id;
+      });
+      return [newSeries, ...filtered];
+    });
     setAnalytics(prev => ({ ...prev, seriesCount: prev.seriesCount + 1 }));
 
     // Firebase background sync with robust fallback
@@ -1189,6 +1252,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const deleteSeries = useCallback(async (id: string) => {
+    // Record in deleted set to permanently prevent rebirth from INITIAL_SERIES
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.DELETED_SERIES);
+      const set = new Set<string>(raw ? JSON.parse(raw) : []);
+      set.add(id);
+      localStorage.setItem(STORAGE_KEYS.DELETED_SERIES, JSON.stringify(Array.from(set)));
+    } catch {}
+
     setSeries(prev => prev.filter(s => s.id !== id));
     setAnalytics(prev => ({ ...prev, seriesCount: Math.max(0, prev.seriesCount - 1) }));
 
@@ -1757,6 +1828,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: testRes.connected, message: testRes.message };
   }, []);
 
+  const updateSiteBannerUrl = useCallback(async (newUrl: string): Promise<boolean> => {
+    const trimmed = newUrl.trim();
+    if (!trimmed) return false;
+    setSiteBannerUrl(trimmed);
+    try {
+      localStorage.setItem(STORAGE_KEYS.SITE_BANNER, trimmed);
+    } catch {}
+
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncSiteSettingsToFirestore(fb.db, { headerBannerUrl: trimmed });
+      }
+      return true;
+    } catch (err) {
+      console.warn('Error syncing site banner to Firestore:', err);
+      return false;
+    }
+  }, []);
+
   const triggerManualSync = useCallback(async () => {
     setFirebaseConfig(prev => ({ ...prev, syncState: 'syncing' }));
     try {
@@ -1765,12 +1856,32 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         databaseId: firebaseConfig.databaseId
       });
       if (fb.success && fb.db) {
-        // Sync all series in parallel
-        await Promise.all(series.map(s => syncSeriesToFirestore(fb.db!, s)));
-        await Promise.all(articles.map(a => syncArticleToFirestore(fb.db!, a)));
+        // Deduplicate series first so no ghost/mock copies are pushed
+        const { deduplicated: cleanSeriesList, duplicateIds } = deduplicateSeries(series);
+        if (duplicateIds.length > 0) {
+          for (const dId of duplicateIds) {
+            try {
+              await deleteSeriesFromFirestore(fb.db, dId);
+            } catch {}
+          }
+          setSeries(cleanSeriesList);
+        }
+
+        // Sync all deduplicated series securely with individual error trapping
+        const seriesResults = await Promise.allSettled(cleanSeriesList.map(s => syncSeriesToFirestore(fb.db!, s)));
+        seriesResults.forEach((res, idx) => {
+          if (res.status === 'rejected') {
+            console.warn(`Sync failed for series ${cleanSeriesList[idx]?.id}:`, res.reason);
+          }
+        });
+
+        // Sync header banner & site settings
+        await syncSiteSettingsToFirestore(fb.db, { headerBannerUrl: siteBannerUrl });
+
+        await Promise.allSettled(articles.map(a => syncArticleToFirestore(fb.db!, a)));
         await syncAppVersionToFirestore(fb.db, appVersion);
-        await Promise.all(pressReleases.map(p => syncPressToFirestore(fb.db!, p)));
-        await Promise.all(teasers.map(t => syncTeaserToFirestore(fb.db!, t)));
+        await Promise.allSettled(pressReleases.map(p => syncPressToFirestore(fb.db!, p)));
+        await Promise.allSettled(teasers.map(t => syncTeaserToFirestore(fb.db!, t)));
         
         setFirebaseConfig(prev => ({
           ...prev,
@@ -1782,7 +1893,54 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       setFirebaseConfig(prev => ({ ...prev, syncState: 'error', errorMessage: 'Échec de synchronisation globale' }));
     }
-  }, [firebaseConfig, series, articles, appVersion, pressReleases, teasers]);
+  }, [firebaseConfig, series, articles, appVersion, pressReleases, teasers, siteBannerUrl]);
+
+  const cleanupDuplicates = useCallback(async (): Promise<{ cleaned: number; message: string }> => {
+    let cleanedCount = 0;
+    try {
+      const fb = initializeFirebaseCustom();
+      // 1. Deduplicate local series
+      const { deduplicated: cleanLocal, duplicateIds: localDupIds } = deduplicateSeries(series);
+      setSeries(cleanLocal);
+      try {
+        localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(cleanLocal));
+      } catch {}
+
+      // 2. Scan and purge duplicates from Firestore
+      if (fb.db) {
+        for (const dId of localDupIds) {
+          try {
+            await deleteSeriesFromFirestore(fb.db, dId);
+            cleanedCount++;
+          } catch {}
+        }
+
+        const remoteSeries = await fetchFirestoreSeriesNow(fb.db);
+        const { deduplicated: cleanRemote, duplicateIds: remoteDupIds } = deduplicateSeries(remoteSeries);
+        for (const rId of remoteDupIds) {
+          try {
+            await deleteSeriesFromFirestore(fb.db, rId);
+            cleanedCount++;
+          } catch {}
+        }
+        setSeries(cleanRemote);
+        try {
+          localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(cleanRemote));
+        } catch {}
+      } else {
+        cleanedCount = localDupIds.length;
+      }
+
+      return {
+        cleaned: cleanedCount,
+        message: cleanedCount > 0
+          ? `${cleanedCount} doublon(s) d'œuvres nettoyé(s) avec succès !`
+          : 'Aucun doublon détecté, le catalogue est parfaitement propre.'
+      };
+    } catch (err: any) {
+      return { cleaned: 0, message: err?.message || 'Erreur lors du nettoyage des doublons.' };
+    }
+  }, [series]);
 
   const refreshCatalogueFromFirestore = useCallback(async () => {
     setIsRefreshingCatalogue(true);
@@ -1792,22 +1950,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const latestSeries = await fetchFirestoreSeriesNow(fb.db);
         if (latestSeries && latestSeries.length > 0) {
           setSeries((prevLocal) => {
-            const map = new Map<string, Series>();
-            prevLocal.forEach(s => map.set(s.id, s));
-            latestSeries.forEach((remote) => {
-              const local = map.get(remote.id);
-              const chapters = (remote.chapters && remote.chapters.length > 0)
-                ? remote.chapters
-                : (local?.chapters && local.chapters.length > 0 ? local.chapters : remote.chapters);
-              map.set(remote.id, {
-                ...local,
-                ...remote,
-                chapters: chapters || []
-              });
-            });
-            const merged = Array.from(map.values());
-            localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(merged));
-            return merged;
+            const deletedRaw = localStorage.getItem(STORAGE_KEYS.DELETED_SERIES);
+            const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
+            const filteredPrev = prevLocal.filter(s => !deletedSet.has(s.id));
+            const combined = [...latestSeries, ...filteredPrev];
+            const { deduplicated } = deduplicateSeries(combined);
+            try {
+              localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(deduplicated));
+            } catch {}
+            return deduplicated;
           });
         }
       }
@@ -1906,8 +2057,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateFirebaseConfig,
       testFirebaseConnection,
       triggerManualSync,
+      cleanupDuplicates,
       refreshCatalogueFromFirestore,
       isRefreshingCatalogue,
+      siteBannerUrl,
+      updateSiteBannerUrl,
       likeSeries,
       likeChapter
     }}>

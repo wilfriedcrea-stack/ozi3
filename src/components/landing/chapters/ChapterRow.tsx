@@ -67,7 +67,7 @@ export const ChapterRow: React.FC<ChapterRowProps> = ({
   const chapterNumber = chapter.chapterNumber ?? 1;
   const displayTitle = formatChapterTitle(chapterNumber, chapter.title);
   const formattedDate = formatChapterDate(chapter.publishedAt || chapter.releaseDate);
-  const thumbnailSrc = (chapter as any).thumbnail || (chapter.pages && chapter.pages.length > 0 ? chapter.pages[0] : undefined);
+  const thumbnailSrc = chapter.thumbnailUrl || (chapter as any).thumbnail || (chapter.pages && chapter.pages.length > 0 ? chapter.pages[0] : undefined);
 
   const handleClick = () => {
     onSelectChapter(chapter.id);

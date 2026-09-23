@@ -24,6 +24,7 @@ import { Series, Chapter } from '../../types';
 import { useData } from '../../context/DataContext';
 import { ChapterSection } from './chapters/ChapterSection';
 import { WorkBanner } from './banner/WorkBanner';
+import { AuthorAndShopSection } from './author-shop/AuthorAndShopSection';
 
 export const OeuvreDetailPage: React.FC = () => {
   const { 
@@ -252,6 +253,9 @@ export const OeuvreDetailPage: React.FC = () => {
 
         {/* Editorial Dynamic Chapter Section */}
         <ChapterSection series={currentSeries} />
+
+        {/* Author & Shop Sections (L'Auteur et Boutique) - Placé en bas des chapitres */}
+        <AuthorAndShopSection series={currentSeries} />
 
         {/* Related Series Recommendations */}
         {relatedSeries.length > 0 && (

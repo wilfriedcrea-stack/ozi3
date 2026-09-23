@@ -12,9 +12,13 @@ import {
   Sparkles,
   Server,
   Zap,
-  Globe
+  Globe,
+  Image as ImageIcon,
+  ExternalLink,
+  Loader2
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { compressImageToWebP, uploadToLWS } from '../../services/lwsUploadService';
 
 export const AdminFirebaseSync: React.FC = () => {
   const { 
@@ -26,14 +30,17 @@ export const AdminFirebaseSync: React.FC = () => {
     teasers, 
     pressReleases, 
     appVersion, 
-    submissions 
+    submissions,
+    siteBannerUrl,
+    updateSiteBannerUrl,
+    addLwsFile
   } = useData();
 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'status' | 'config' | 'mobile' | 'rules' | 'backup'>('status');
+  const [activeTab, setActiveTab] = useState<'status' | 'banner' | 'config' | 'mobile' | 'rules' | 'backup'>('status');
 
   // Edit config state
   const [editProjectId, setEditProjectId] = useState(firebaseConfig.projectId);
@@ -41,6 +48,54 @@ export const AdminFirebaseSync: React.FC = () => {
   const [editAuthDomain, setEditAuthDomain] = useState(firebaseConfig.authDomain || '');
   const [editStorageBucket, setEditStorageBucket] = useState(firebaseConfig.storageBucket || '');
   const [configSaved, setConfigSaved] = useState(false);
+
+  // Banner State
+  const [customBannerUrl, setCustomBannerUrl] = useState(siteBannerUrl || '');
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+  const [bannerSaveStatus, setBannerSaveStatus] = useState<string | null>(null);
+
+  const handleUploadBannerFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingBanner(true);
+    setBannerSaveStatus('Compression WebP et transfert vers LWS (ozibd.net)...');
+    try {
+      const compressed = await compressImageToWebP(file, 1920, 0.88);
+      const res = await uploadToLWS(
+        compressed.file,
+        `banner_mosaic_${Date.now()}.webp`,
+        'banners'
+      );
+
+      if (res.success && res.url) {
+        setCustomBannerUrl(res.url);
+        addLwsFile(res.fileInfo);
+        await updateSiteBannerUrl(res.url);
+        setBannerSaveStatus('Bannière transférée sur LWS et synchronisée en direct sur tous les appareils !');
+        setTimeout(() => setBannerSaveStatus(null), 4000);
+      } else {
+        setBannerSaveStatus('Échec du transfert vers LWS.');
+      }
+    } catch (err) {
+      console.error('Banner upload error:', err);
+      setBannerSaveStatus('Erreur lors du transfert de la bannière.');
+    } finally {
+      setIsUploadingBanner(false);
+    }
+  };
+
+  const handleSaveBanner = async () => {
+    if (!customBannerUrl.trim()) return;
+    setBannerSaveStatus('Synchronisation en cours avec Firestore...');
+    const ok = await updateSiteBannerUrl(customBannerUrl.trim());
+    if (ok) {
+      setBannerSaveStatus('Bannière enregistrée et diffusée sur tous les appareils !');
+      setTimeout(() => setBannerSaveStatus(null), 4000);
+    } else {
+      setBannerSaveStatus('Erreur de synchronisation Firestore.');
+    }
+  };
 
   const handleSaveConfig = (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,7 +207,7 @@ service cloud.firestore {
           <button
             onClick={handleTestConnection}
             disabled={testing}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-bold transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-bold transition-colors cursor-pointer"
           >
             <Server className={`w-3.5 h-3.5 text-sky-400 ${testing ? 'animate-pulse' : ''}`} />
             <span>{testing ? 'Test en cours...' : 'Tester Connexion'}</span>
@@ -161,7 +216,7 @@ service cloud.firestore {
           <button
             onClick={handleSyncAll}
             disabled={syncing}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 font-black text-xs shadow-lg shadow-amber-500/20 transition-all"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 font-black text-xs shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
             <span>{syncing ? 'Synchronisation...' : 'Synchroniser Tout Maintenant'}</span>
@@ -203,6 +258,15 @@ service cloud.firestore {
           État des Collections
         </button>
         <button
+          onClick={() => setActiveTab('banner')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'banner' ? 'bg-amber-500 text-zinc-950' : 'text-zinc-400 hover:text-white'
+          }`}
+        >
+          <ImageIcon className="w-3.5 h-3.5" />
+          <span>Bannière Header Web & App</span>
+        </button>
+        <button
           onClick={() => setActiveTab('config')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors whitespace-nowrap cursor-pointer ${
             activeTab === 'config' ? 'bg-amber-500 text-zinc-950' : 'text-zinc-400 hover:text-white'
@@ -238,120 +302,299 @@ service cloud.firestore {
 
       {/* Tab: Collections Status */}
       {activeTab === 'status' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
-          {/* Firestore Target Configuration (5 cols) */}
-          <div className="lg:col-span-5 rounded-3xl bg-zinc-900 border border-zinc-800 p-6 flex flex-col justify-between gap-4 shadow-xl">
-            <div>
-              <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-2">
-                <ShieldCheck className="w-4 h-4" />
-                <span>Base Firestore Active</span>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            {/* Firestore Target Configuration (5 cols) */}
+            <div className="lg:col-span-5 rounded-3xl bg-zinc-900 border border-zinc-800 p-6 flex flex-col justify-between gap-4 shadow-xl">
+              <div>
+                <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-2">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Base Firestore Active</span>
+                </div>
+                <h3 className="text-xl font-black text-white mb-4">
+                  Paramètres du Projet Cloud
+                </h3>
+
+                <div className="space-y-3 text-xs">
+                  <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between">
+                    <span className="text-zinc-500">Project ID</span>
+                    <span className="font-mono text-amber-400 font-bold">{firebaseConfig.projectId}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between">
+                    <span className="text-zinc-500">Database ID</span>
+                    <span className="font-mono text-xs text-amber-300 truncate max-w-[200px]" title={firebaseConfig.databaseId}>{firebaseConfig.databaseId || '(default)'}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between">
+                    <span className="text-zinc-500">Auth Domain</span>
+                    <span className="font-mono text-zinc-300">{firebaseConfig.authDomain}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between">
+                    <span className="text-zinc-500">Storage Bucket</span>
+                    <span className="font-mono text-zinc-300">{firebaseConfig.storageBucket}</span>
+                  </div>
+                </div>
               </div>
-              <h3 className="text-xl font-black text-white mb-4">
-                Paramètres du Projet Cloud
+
+              <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800 text-xs text-zinc-400 leading-relaxed">
+                💡 <strong className="text-zinc-200">Fonctionnement Panafricain :</strong> Toutes les données modifiées ici sont instantanément synchronisées avec la PWA et les builds Android grâce au SDK Firebase Firestore.
+              </div>
+            </div>
+
+            {/* Collections Table (7 cols) */}
+            <div className="lg:col-span-7 rounded-3xl bg-zinc-900 border border-zinc-800 p-6 flex flex-col gap-4 shadow-xl">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Database className="w-4 h-4 text-amber-400" />
+                <span>Collections Firestore Synchronisées</span>
               </h3>
 
-              <div className="space-y-3 text-xs">
-                <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between">
-                  <span className="text-zinc-500">Project ID</span>
-                  <span className="font-mono text-amber-400 font-bold">{firebaseConfig.projectId}</span>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs font-bold text-amber-400">/series</span>
+                    <span className="text-xs text-zinc-400">Séries & Épisodes (Mobile & Web)</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-white">{series.length} documents</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  </div>
                 </div>
-                <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between">
-                  <span className="text-zinc-500">Database ID</span>
-                  <span className="font-mono text-xs text-amber-300 truncate max-w-[200px]" title={firebaseConfig.databaseId}>{firebaseConfig.databaseId || '(default)'}</span>
+
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs font-bold text-amber-400">/works</span>
+                    <span className="text-xs text-zinc-400">Catalogue Œuvres (Miroir & Web)</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-white">{series.length} documents</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  </div>
                 </div>
-                <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between">
-                  <span className="text-zinc-500">Auth Domain</span>
-                  <span className="font-mono text-zinc-300">{firebaseConfig.authDomain}</span>
+
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs font-bold text-amber-400">/config/site_settings</span>
+                    <span className="text-xs text-zinc-400">Bannière Mosaïque & Paramètres globaux</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-white">Actif</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  </div>
                 </div>
-                <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between">
-                  <span className="text-zinc-500">Storage Bucket</span>
-                  <span className="font-mono text-zinc-300">{firebaseConfig.storageBucket}</span>
+
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs font-bold text-orange-400">/teasers</span>
+                    <span className="text-xs text-zinc-400">Bandes-annonces & vidéos</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-white">{teasers.length} documents</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs font-bold text-sky-400">/press_releases</span>
+                    <span className="text-xs text-zinc-400">Communiqués & dossiers</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-white">{pressReleases.length} documents</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs font-bold text-emerald-400">/app_version</span>
+                    <span className="text-xs text-zinc-400">Distribution APK ({appVersion.version})</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-white">1 document</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs font-bold text-purple-400">/creator_submissions</span>
+                    <span className="text-xs text-zinc-400">Candidatures reçues</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-white">{submissions.length} documents</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800 text-xs text-zinc-400 leading-relaxed">
-              💡 <strong className="text-zinc-200">Fonctionnement Panafricain :</strong> Toutes les données modifiées ici sont instantanément synchronisées avec la PWA et les builds Android grâce au SDK Firebase Firestore.
-            </div>
           </div>
 
-          {/* Collections Table (7 cols) */}
-          <div className="lg:col-span-7 rounded-3xl bg-zinc-900 border border-zinc-800 p-6 flex flex-col gap-4 shadow-xl">
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Database className="w-4 h-4 text-amber-400" />
-              <span>Collections Firestore Synchronisées</span>
+          {/* Audit visuel des couvertures synchronisées */}
+          <div className="rounded-3xl bg-zinc-900 border border-zinc-800 p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-amber-400" />
+                  <span>Vérification des Photos de Couverture Synchronisées sur Firestore</span>
+                </h3>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Les images ci-dessous sont diffusées en direct sur le site web et l'application mobile de tous les appareils.
+                </p>
+              </div>
+              <button
+                onClick={handleSyncAll}
+                disabled={syncing}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-bold border border-amber-500/30 transition-all cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                <span>Re-synchroniser Tout</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {series.map((s) => (
+                <div key={s.id} className="p-2.5 rounded-2xl bg-zinc-950 border border-zinc-800/80 flex flex-col gap-2 group hover:border-amber-500/50 transition-all">
+                  <div className="relative aspect-[3/4] w-full rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800">
+                    <img 
+                      src={s.coverUrl} 
+                      alt={s.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      onError={(e) => {
+                        (e.target as HTMLElement).classList.add('opacity-30');
+                      }}
+                    />
+                    <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-zinc-950" title="Synchronisé" />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-xs font-bold text-white truncate" title={s.title}>{s.title}</span>
+                    <span className="text-[10px] text-zinc-500 truncate" title={s.coverUrl}>
+                      {s.coverUrl.startsWith('http') ? new URL(s.coverUrl).hostname : 'Image locale'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Banner Management */}
+      {activeTab === 'banner' && (
+        <div className="rounded-3xl bg-zinc-900 border border-zinc-800 p-6 sm:p-8 flex flex-col gap-6 shadow-xl max-w-4xl">
+          <div>
+            <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider mb-2">
+              <Sparkles className="w-4 h-4" />
+              <span>Gestion Temps-Réel Cross-Device</span>
+            </div>
+            <h3 className="text-xl font-black text-white">
+              Bannière Mosaïque du Header du Site Web & Application
             </h3>
+            <p className="text-xs text-zinc-400 mt-1">
+              Cette bannière panoramique est affichée en haut de la page d'accueil. Toute modification effectuée ici est immédiatement enregistrée dans Firestore et répercutée en direct sur tous les ordinateurs, smartphones et tablettes de vos visiteurs.
+            </p>
+          </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
-                <div className="flex items-center gap-3">
-                  <span className="font-mono text-xs font-bold text-amber-400">/series</span>
-                  <span className="text-xs text-zinc-400">Séries & Épisodes (Mobile & Web)</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-white">{series.length} documents</span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                </div>
-              </div>
+          {bannerSaveStatus && (
+            <div className="p-4 rounded-2xl bg-amber-950/80 border border-amber-500/50 text-amber-300 text-xs sm:text-sm flex items-center gap-3 animate-in fade-in">
+              <Sparkles className="w-5 h-5 text-amber-400 shrink-0" />
+              <span>{bannerSaveStatus}</span>
+            </div>
+          )}
 
-              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
-                <div className="flex items-center gap-3">
-                  <span className="font-mono text-xs font-bold text-amber-400">/works</span>
-                  <span className="text-xs text-zinc-400">Catalogue Œuvres (Miroir & Web)</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-white">{series.length} documents</span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
-                <div className="flex items-center gap-3">
-                  <span className="font-mono text-xs font-bold text-orange-400">/teasers</span>
-                  <span className="text-xs text-zinc-400">Bandes-annonces & vidéos</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-white">{teasers.length} documents</span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
-                <div className="flex items-center gap-3">
-                  <span className="font-mono text-xs font-bold text-sky-400">/press_releases</span>
-                  <span className="text-xs text-zinc-400">Communiqués & dossiers</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-white">{pressReleases.length} documents</span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
-                <div className="flex items-center gap-3">
-                  <span className="font-mono text-xs font-bold text-emerald-400">/app_version</span>
-                  <span className="text-xs text-zinc-400">Distribution APK ({appVersion.version})</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-white">1 document</span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
-                <div className="flex items-center gap-3">
-                  <span className="font-mono text-xs font-bold text-purple-400">/creator_submissions</span>
-                  <span className="text-xs text-zinc-400">Candidatures reçues</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-white">{submissions.length} documents</span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                </div>
+          {/* Aperçu en direct */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-zinc-300 flex items-center justify-between">
+              <span>Aperçu en direct (tel que visible par vos utilisateurs) :</span>
+              <span className="text-[11px] text-zinc-500 font-mono">Format panoramique conseillé : 1920x350</span>
+            </label>
+            <div className="relative w-full h-[180px] sm:h-[220px] rounded-2xl overflow-hidden bg-zinc-950 border border-zinc-800 flex items-center justify-center shadow-inner">
+              <img 
+                src={customBannerUrl || siteBannerUrl || 'https://ozibd.net/REF.png'} 
+                alt="Aperçu Bannière Header"
+                className="w-full h-full object-cover object-center"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/images/ozi_mosaic_banner.jpg';
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/10 pointer-events-none" />
+              <div className="absolute bottom-3 left-4 px-3 py-1 rounded-full bg-black/70 backdrop-blur-md text-[11px] font-bold text-white border border-white/10 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Bannière Active</span>
               </div>
             </div>
           </div>
 
+          {/* Actions d'upload et d'URL */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            {/* Téléversement direct LWS */}
+            <div className="p-5 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col justify-between gap-4">
+              <div>
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Upload className="w-4 h-4 text-amber-400" />
+                  <span>Téléverser une nouvelle image</span>
+                </h4>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Sélectionnez un fichier PNG ou JPG. Il sera automatiquement converti en WebP ultra-rapide et stocké sur le serveur LWS (ozibd.net).
+                </p>
+              </div>
+
+              <div>
+                <label className="flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-bold border border-amber-500/30 cursor-pointer transition-all">
+                  {isUploadingBanner ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Optimisation et envoi...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" />
+                      <span>Choisir une image panoramique</span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={isUploadingBanner}
+                    onChange={handleUploadBannerFile}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Saisie ou modification manuelle de l'URL */}
+            <div className="p-5 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col justify-between gap-4">
+              <div>
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-sky-400" />
+                  <span>Ou coller directement une URL</span>
+                </h4>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Exemple : https://ozibd.net/REF.png ou https://ozibd.net/banners/ma-banniere.webp
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <input
+                  type="url"
+                  value={customBannerUrl}
+                  onChange={(e) => setCustomBannerUrl(e.target.value)}
+                  placeholder="https://ozibd.net/REF.png"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveBanner}
+                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 font-black text-xs shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+                >
+                  Enregistrer & Diffuser sur tous les appareils
+                </button>
+              </div>
+            </div>
+
+          </div>
         </div>
       )}
 
