@@ -1,7 +1,17 @@
 import { db } from '../lib/firebase';
-import { Firestore, collection, doc, setDoc, deleteDoc, onSnapshot, getDocFromServer, getDocs, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { Firestore, collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, getDocFromServer, getDocs, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { Series, Teaser, PressRelease, AppVersionInfo, CreatorSubmission, Article } from '../types';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
+
+export const KNOWN_PERMANENTLY_DELETED_SERIES = [
+  'chainsaw-demon',
+  'gantz',
+  'les-gonmons',
+  'chainsaw-man',
+  'chainsaw',
+  'series-1788259644008',
+  'series-1788357881029'
+];
 
 export enum OperationType {
   CREATE = 'create',
@@ -134,18 +144,68 @@ export function subscribeToFirestoreSeries(onUpdate: (seriesList: Series[]) => v
     let currentSeriesDocs = new Map<string, Series>();
     let currentWorksDocs = new Map<string, Series>();
     let currentArtworksDocs = new Map<string, Series>();
+    const currentDeletedSet = new Set<string>(KNOWN_PERMANENTLY_DELETED_SERIES);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const raw = localStorage.getItem('ozi_deleted_series_ids_v1');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(id => {
+              if (id && typeof id === 'string') currentDeletedSet.add(id.trim());
+            });
+          }
+        }
+      }
+    } catch {}
+
+    const isDeletedItem = (s: Series): boolean => {
+      if (!s || !s.id) return true;
+      const idLower = (s.id || '').trim().toLowerCase();
+      const slugLower = (s.slug || '').trim().toLowerCase();
+      const titleLower = (s.title || '').trim().toLowerCase();
+      const titleSlug = titleLower.replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+      // Permanent hardcoded names that must never reappear
+      if (
+        titleLower.includes('chainsaw') || slugLower.includes('chainsaw') || idLower.includes('chainsaw') ||
+        titleLower.includes('gantz') || slugLower.includes('gantz') || idLower.includes('gantz') ||
+        titleLower.includes('gonmon') || slugLower.includes('gonmon') || idLower.includes('gonmon') ||
+        idLower.includes('1788259644008') || idLower.includes('1788357881029')
+      ) {
+        return true;
+      }
+
+      for (const d of currentDeletedSet) {
+        if (!d) continue;
+        const dl = d.trim().toLowerCase();
+        if (
+          idLower === dl ||
+          slugLower === dl ||
+          titleSlug === dl ||
+          titleLower === dl ||
+          (idLower && idLower.includes(dl)) ||
+          (slugLower && slugLower.includes(dl))
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
 
     const handleUpdate = () => {
       const merged = new Map<string, Series>();
       // Canonical /series takes absolute priority
-      currentSeriesDocs.forEach((s, id) => merged.set(id, s));
-      // /works only for items not in /series
-      currentWorksDocs.forEach((s, id) => {
-        if (!merged.has(id)) merged.set(id, s);
+      currentSeriesDocs.forEach((s, id) => {
+        if (!isDeletedItem(s)) merged.set(id, s);
       });
-      // /artworks only for items not in /series or /works
+      // /works only for items not in /series and not deleted
+      currentWorksDocs.forEach((s, id) => {
+        if (!merged.has(id) && !isDeletedItem(s)) merged.set(id, s);
+      });
+      // /artworks only for items not in /series or /works and not deleted
       currentArtworksDocs.forEach((s, id) => {
-        if (!merged.has(id)) merged.set(id, s);
+        if (!merged.has(id) && !isDeletedItem(s)) merged.set(id, s);
       });
 
       const rawList = Array.from(merged.values());
@@ -157,10 +217,22 @@ export function subscribeToFirestoreSeries(onUpdate: (seriesList: Series[]) => v
         });
       }
 
-      if (deduplicated.length > 0) {
-        onUpdate(deduplicated);
-      }
+      const cleanList = deduplicated.filter(s => !isDeletedItem(s));
+      onUpdate(cleanList);
     };
+
+    // Real-time synchronization of deleted series ids from config/site_settings
+    const unsubSettings = onSnapshot(doc(db, 'config', 'site_settings'), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (Array.isArray(data?.deletedSeriesIds)) {
+          data.deletedSeriesIds.forEach((dId: string) => {
+            if (dId && typeof dId === 'string') currentDeletedSet.add(dId.trim());
+          });
+          handleUpdate();
+        }
+      }
+    }, () => {});
 
     // Listen to /series
     const seriesCol = collection(db, 'series');
@@ -265,6 +337,7 @@ export function subscribeToFirestoreSeries(onUpdate: (seriesList: Series[]) => v
     });
 
     return () => {
+      unsubSettings();
       unsubSeries();
       unsubWorks();
       unsubArtworks();
@@ -278,6 +351,67 @@ export function subscribeToFirestoreSeries(onUpdate: (seriesList: Series[]) => v
 // Direct fetch of all Series from Firestore (bypasses local cache for instant refresh)
 export async function fetchFirestoreSeriesNow(databaseInstance: Firestore = db): Promise<Series[]> {
   const loadedMap = new Map<string, Series>();
+  const deletedSet = new Set<string>(KNOWN_PERMANENTLY_DELETED_SERIES);
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = localStorage.getItem('ozi_deleted_series_ids_v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          parsed.forEach(id => {
+            if (id && typeof id === 'string') deletedSet.add(id.trim());
+          });
+        }
+      }
+    }
+  } catch {}
+
+  // Fetch deleted series settings first
+  try {
+    const settingsDoc = await getDoc(doc(databaseInstance, 'config', 'site_settings'));
+    if (settingsDoc.exists()) {
+      const data = settingsDoc.data();
+      if (Array.isArray(data?.deletedSeriesIds)) {
+        data.deletedSeriesIds.forEach((dId: string) => {
+          if (dId && typeof dId === 'string') deletedSet.add(dId.trim());
+        });
+      }
+    }
+  } catch {}
+
+  const isItemDeleted = (s: Series): boolean => {
+    if (!s || !s.id) return true;
+    const idLower = (s.id || '').trim().toLowerCase();
+    const slugLower = (s.slug || '').trim().toLowerCase();
+    const titleLower = (s.title || '').trim().toLowerCase();
+    const titleSlug = titleLower.replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+    if (
+      titleLower.includes('chainsaw') || slugLower.includes('chainsaw') || idLower.includes('chainsaw') ||
+      titleLower.includes('gantz') || slugLower.includes('gantz') || idLower.includes('gantz') ||
+      titleLower.includes('gonmon') || slugLower.includes('gonmon') || idLower.includes('gonmon') ||
+      idLower.includes('1788259644008') || idLower.includes('1788357881029')
+    ) {
+      return true;
+    }
+
+    for (const d of deletedSet) {
+      if (!d) continue;
+      const dl = d.trim().toLowerCase();
+      if (
+        idLower === dl ||
+        slugLower === dl ||
+        titleSlug === dl ||
+        titleLower === dl ||
+        (idLower && idLower.includes(dl)) ||
+        (slugLower && slugLower.includes(dl))
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   try {
     // 1. Check /series collection
     const seriesCol = collection(databaseInstance, 'series');
@@ -285,11 +419,14 @@ export async function fetchFirestoreSeriesNow(databaseInstance: Firestore = db):
     snapshotSeries.forEach((docSnap) => {
       const data = docSnap.data() as Series;
       const id = docSnap.id;
-      loadedMap.set(id, {
+      const item: Series = {
         ...data,
         id,
         slug: data.slug || id
-      });
+      };
+      if (!isItemDeleted(item)) {
+        loadedMap.set(id, item);
+      }
     });
   } catch (err) {
     console.warn('Fetch series notice:', err);
@@ -331,7 +468,9 @@ export async function fetchFirestoreSeriesNow(databaseInstance: Firestore = db):
           updatedAt: data.updatedAt || new Date().toISOString().split('T')[0],
           chapters: data.chapters || []
         };
-        loadedMap.set(id, normalized);
+        if (!isItemDeleted(normalized)) {
+          loadedMap.set(id, normalized);
+        }
       }
     });
   } catch (err) {
@@ -374,7 +513,9 @@ export async function fetchFirestoreSeriesNow(databaseInstance: Firestore = db):
           updatedAt: data.updatedAt || new Date().toISOString().split('T')[0],
           chapters: data.chapters || []
         };
-        loadedMap.set(id, normalized);
+        if (!isItemDeleted(normalized)) {
+          loadedMap.set(id, normalized);
+        }
       }
     });
   } catch (err) {
@@ -389,7 +530,7 @@ export async function fetchFirestoreSeriesNow(databaseInstance: Firestore = db):
     });
   }
 
-  return deduplicated;
+  return deduplicated.filter(s => !isItemDeleted(s));
 }
 
 // Subscribe to real-time APK Version
@@ -495,6 +636,7 @@ export async function syncSeriesToFirestore(databaseInstance: Firestore = db, se
 // Site Settings & Header Banner Sync
 export interface SiteSettings {
   headerBannerUrl?: string;
+  deletedSeriesIds?: string[];
   lastUpdated?: string;
 }
 
@@ -527,19 +669,53 @@ export async function syncSiteSettingsToFirestore(
   }
 }
 
+export async function recordDeletedSeriesToFirestore(
+  databaseInstance: Firestore = db,
+  ...seriesIdentifiers: string[]
+): Promise<{ success: boolean; error?: unknown }> {
+  try {
+    const current = await fetchSiteSettingsFromFirestore(databaseInstance);
+    const existing = new Set<string>(current?.deletedSeriesIds || []);
+    KNOWN_PERMANENTLY_DELETED_SERIES.forEach(kId => existing.add(kId));
+    
+    for (const rawId of seriesIdentifiers) {
+      if (rawId && typeof rawId === 'string') {
+        const trimmed = rawId.trim();
+        if (trimmed) {
+          existing.add(trimmed);
+          existing.add(trimmed.toLowerCase());
+        }
+      }
+    }
+
+    return await syncSiteSettingsToFirestore(databaseInstance, {
+      ...current,
+      deletedSeriesIds: Array.from(existing)
+    });
+  } catch (err) {
+    return { success: false, error: err };
+  }
+}
+
 export async function fetchSiteSettingsFromFirestore(databaseInstance: Firestore = db): Promise<SiteSettings | null> {
   try {
     const snap = await getDocs(collection(databaseInstance, 'config'));
     let headerBannerUrl: string | undefined;
+    const deletedSeriesIdsSet = new Set<string>(KNOWN_PERMANENTLY_DELETED_SERIES);
     snap.forEach((docSnap) => {
       const data = docSnap.data();
-      if (docSnap.id === 'site_settings' && data?.headerBannerUrl) {
-        headerBannerUrl = data.headerBannerUrl;
+      if (docSnap.id === 'site_settings') {
+        if (data?.headerBannerUrl) headerBannerUrl = data.headerBannerUrl;
+        if (Array.isArray(data?.deletedSeriesIds)) {
+          data.deletedSeriesIds.forEach((id: string) => {
+            if (id && typeof id === 'string') deletedSeriesIdsSet.add(id.trim());
+          });
+        }
       } else if (docSnap.id === 'top_banner' && !headerBannerUrl) {
         headerBannerUrl = data?.url || data?.bannerUrl;
       }
     });
-    return headerBannerUrl ? { headerBannerUrl } : null;
+    return { headerBannerUrl, deletedSeriesIds: Array.from(deletedSeriesIdsSet) };
   } catch (err) {
     console.warn('Fetch site settings error:', err);
     return null;
@@ -552,8 +728,15 @@ export function subscribeToFirestoreSiteSettings(onUpdate: (settings: SiteSettin
     const unsubMain = onSnapshot(docRef, (snap) => {
       if (snap.exists()) {
         const data = snap.data() as SiteSettings;
-        if (data && data.headerBannerUrl) {
-          onUpdate(data);
+        if (data) {
+          const combined = new Set<string>(KNOWN_PERMANENTLY_DELETED_SERIES);
+          if (Array.isArray(data.deletedSeriesIds)) {
+            data.deletedSeriesIds.forEach(id => combined.add(id));
+          }
+          onUpdate({
+            ...data,
+            deletedSeriesIds: Array.from(combined)
+          });
         }
       }
     }, (err) => {
@@ -581,19 +764,69 @@ export function subscribeToFirestoreSiteSettings(onUpdate: (settings: SiteSettin
   }
 }
 
-export async function deleteSeriesFromFirestore(databaseInstance: Firestore = db, seriesId: string) {
+export async function deleteSeriesFromFirestore(
+  databaseInstance: Firestore = db,
+  seriesId: string,
+  slug?: string,
+  title?: string
+) {
+  const idsToDelete = new Set<string>();
+  if (seriesId) {
+    idsToDelete.add(seriesId);
+    idsToDelete.add(seriesId.trim().toLowerCase());
+  }
+  if (slug) {
+    idsToDelete.add(slug);
+    idsToDelete.add(slug.trim().toLowerCase());
+  }
+  if (title) {
+    const tSlug = title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    if (tSlug) idsToDelete.add(tSlug);
+  }
+
   try {
-    await deleteDoc(doc(databaseInstance, 'series', seriesId));
-    try {
-      await deleteDoc(doc(databaseInstance, 'works', seriesId));
-    } catch {
-      // ignore
+    // 1. Direct document deletions
+    for (const id of idsToDelete) {
+      if (!id) continue;
+      try {
+        await deleteDoc(doc(databaseInstance, 'series', id));
+      } catch {}
+      try {
+        await deleteDoc(doc(databaseInstance, 'works', id));
+      } catch {}
+      try {
+        await deleteDoc(doc(databaseInstance, 'artworks', id));
+      } catch {}
+
+      // Purge any subcollections under /series/{id}/chapters
+      try {
+        const chSnap = await getDocs(collection(databaseInstance, 'series', id, 'chapters'));
+        for (const chDoc of chSnap.docs) {
+          await deleteDoc(chDoc.ref).catch(() => {});
+        }
+      } catch {}
     }
-    try {
-      await deleteDoc(doc(databaseInstance, 'artworks', seriesId));
-    } catch {
-      // ignore
+
+    // 2. Scan and purge any lingering documents across collections
+    const collectionsToPurge = ['series', 'works', 'artworks'];
+    for (const colName of collectionsToPurge) {
+      try {
+        const colSnap = await getDocs(collection(databaseInstance, colName));
+        for (const docSnap of colSnap.docs) {
+          const docId = docSnap.id;
+          const data = docSnap.data();
+          const docSlug = (data?.slug || '').trim().toLowerCase();
+          const docTitle = (data?.title || '').trim().toLowerCase();
+          const matchId = idsToDelete.has(docId) || idsToDelete.has(docId.toLowerCase());
+          const matchSlug = docSlug && (idsToDelete.has(docSlug) || idsToDelete.has(data?.slug));
+          const matchTitle = docTitle && title && docTitle === title.trim().toLowerCase();
+          if (matchId || matchSlug || matchTitle) {
+            await deleteDoc(docSnap.ref).catch(() => {});
+          }
+        }
+      } catch {}
     }
+
     return { success: true };
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, `series/${seriesId}`);

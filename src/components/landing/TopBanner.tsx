@@ -3,14 +3,15 @@ import { useData } from '../../context/DataContext';
 
 export const TopBanner: React.FC = () => {
   const { series, openReader, siteBannerUrl } = useData();
-  const [currentSrc, setCurrentSrc] = useState(siteBannerUrl || 'https://ozibd.net/REF.png');
-  const [fallbackIndex, setFallbackIndex] = useState(0);
+  const bannerUrl = siteBannerUrl?.trim() || 'https://ozibd.net/REF.png';
+  const [currentSrc, setCurrentSrc] = useState(bannerUrl);
+  const [hasError, setHasError] = useState(false);
 
   // Synchronize when siteBannerUrl changes across devices via Firestore
   useEffect(() => {
     if (siteBannerUrl && siteBannerUrl.trim()) {
-      setCurrentSrc(siteBannerUrl);
-      setFallbackIndex(0);
+      setCurrentSrc(siteBannerUrl.trim());
+      setHasError(false);
     }
   }, [siteBannerUrl]);
 
@@ -25,19 +26,12 @@ export const TopBanner: React.FC = () => {
   };
 
   const handleImageError = () => {
-    const fallbacks = [
-      'https://ozibd.net/REF.png',
-      'http://ozibd.net/REF.png',
-      '/REF.png',
-      'https://ozibd.net/testo.png',
-      '/images/ozi_mosaic_banner.jpg'
-    ];
-
-    if (fallbackIndex < fallbacks.length) {
-      const nextSrc = fallbacks[fallbackIndex];
-      setFallbackIndex(prev => prev + 1);
-      if (nextSrc !== currentSrc) {
-        setCurrentSrc(nextSrc);
+    if (!hasError) {
+      setHasError(true);
+      if (currentSrc.startsWith('https://ozibd.net/')) {
+        setCurrentSrc(currentSrc.replace('https://', 'http://'));
+      } else {
+        setCurrentSrc('/images/ozi_mosaic_banner.jpg');
       }
     } else {
       setCurrentSrc('/images/ozi_mosaic_banner.jpg');
@@ -52,19 +46,19 @@ export const TopBanner: React.FC = () => {
       onClick={handleBannerClick}
       title="OZI - Cliquez pour explorer le catalogue"
     >
-      {/* Full width panoramic container */}
-      <div className="relative w-full h-[160px] sm:h-[220px] md:h-[280px] lg:h-[340px] xl:h-[380px] overflow-hidden bg-zinc-950 flex items-center justify-center">
+      {/* Full width panoramic container with 3:1 aspect ratio matching 1920x640 */}
+      <div className="relative w-full aspect-[3/1] min-h-[140px] max-h-[460px] overflow-hidden bg-zinc-950 flex items-center justify-center">
         <img
           src={currentSrc}
           alt="Bannière OZI BD"
           onError={handleImageError}
-          className="w-full h-full object-cover object-center transition-transform duration-700 ease-out group-hover:scale-[1.02]"
+          className="w-full h-full object-cover object-center transition-transform duration-700 ease-out group-hover:scale-[1.01]"
           loading="eager"
-          referrerPolicy="no-referrer"
+          decoding="async"
         />
 
-        {/* Subtle top & bottom shadow gradient for smooth blend with reduced opacity */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#141418]/20 via-transparent to-black/10 pointer-events-none" />
+        {/* Subtle top & bottom shadow gradient for smooth blend */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#141418]/25 via-transparent to-black/10 pointer-events-none" />
       </div>
     </aside>
   );

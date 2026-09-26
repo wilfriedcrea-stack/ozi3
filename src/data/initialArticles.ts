@@ -119,11 +119,11 @@ De la genèse de ses personnages à la gestion des trames numériques et du ryth
     featured: false,
     published: true,
     category: 'Portrait Auteur',
-    alt: 'Chainsaw Man et le génie cinématique imprévisible de Tatsuki Fujimoto',
+    alt: 'Tatsuki Fujimoto et le génie cinématique imprévisible de ses récits',
     author: 'Équipe OZI',
     readTime: '9 min',
     excerpt: 'Pourquoi Tatsuki Fujimoto bouscule toutes les conventions du Jump et impose une grammaire cinématographique unique au 9ème art.',
-    content: `De Fire Punch à Chainsaw Man et Look Back, retour sur le parcours d'un auteur qui filme ses mangas plus qu'il ne les dessine.
+    content: `De Fire Punch à Goodbye Eri et Look Back, retour sur le parcours d'un auteur qui filme ses mangas plus qu'il ne les dessine.
 
 Son utilisation du découpage en plan fixe, ses ellipses brutales et sa sensibilité punk font de lui l'une des voix les plus singulières de notre époque.`
   },

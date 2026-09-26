@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Eye, 
   Users, 
@@ -12,7 +12,11 @@ import {
   Plus, 
   ShieldCheck, 
   Sparkles,
-  Smartphone
+  Smartphone,
+  Search,
+  Filter,
+  CheckCircle2,
+  ExternalLink
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
@@ -22,11 +26,36 @@ interface AdminDashboardProps {
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNewSeriesClick }) => {
-  const { series, appVersion, analytics, submissions, firebaseConfig } = useData();
+  const { series, appVersion, analytics, submissions, firebaseConfig, openOeuvrePage, openReader } = useData();
+
+  const [searchCatalog, setSearchCatalog] = useState('');
+  const [filterGenre, setFilterGenre] = useState('Tous');
+  const [showAllLeaderboard, setShowAllLeaderboard] = useState(false);
 
   const totalReads = series.reduce((acc, s) => acc + s.totalReads, 0);
   const totalLikes = series.reduce((acc, s) => acc + s.totalLikes, 0);
-  const topSeries = [...series].sort((a, b) => b.totalReads - a.totalReads).slice(0, 4);
+  
+  const sortedSeries = useMemo(() => {
+    return [...series].sort((a, b) => b.totalReads - a.totalReads);
+  }, [series]);
+
+  const topSeries = useMemo(() => {
+    return showAllLeaderboard ? sortedSeries : sortedSeries.slice(0, 4);
+  }, [sortedSeries, showAllLeaderboard]);
+
+  const filteredCatalog = useMemo(() => {
+    const q = searchCatalog.trim().toLowerCase();
+    return series.filter(s => {
+      const matchesGenre = filterGenre === 'Tous' || s.genre === filterGenre || (s.secondaryGenres && s.secondaryGenres.includes(filterGenre as any));
+      const matchesSearch = !q ||
+        (s.title || '').toLowerCase().includes(q) ||
+        (s.author || '').toLowerCase().includes(q) ||
+        (s.artist || '').toLowerCase().includes(q) ||
+        (s.genre || '').toLowerCase().includes(q) ||
+        (s.tags || []).some(t => t.toLowerCase().includes(q));
+      return matchesGenre && matchesSearch;
+    });
+  }, [series, searchCatalog, filterGenre]);
 
   return (
     <div className="p-6 sm:p-8 flex flex-col gap-8 max-w-7xl mx-auto w-full">
@@ -155,13 +184,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
               <Flame className="w-5 h-5 text-orange-400" />
               <h3 className="text-base font-bold text-white">Classement des Séries les Plus Lues</h3>
             </div>
-            <button 
-              onClick={() => onNavigate('series')}
-              className="text-xs font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-1"
-            >
-              <span>Gérer tout</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowAllLeaderboard(!showAllLeaderboard)}
+                className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+              >
+                {showAllLeaderboard ? 'Top 4' : `Voir tout (${series.length})`}
+              </button>
+              <button 
+                onClick={() => onNavigate('series')}
+                className="text-xs font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-1"
+              >
+                <span>Studio</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -174,15 +211,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
                   <span className={`w-6 text-center font-black text-sm ${index === 0 ? 'text-amber-400' : index === 1 ? 'text-zinc-300' : 'text-zinc-500'}`}>
                     #{index + 1}
                   </span>
-                  <img src={s.coverUrl} alt={s.title} className="w-10 h-10 rounded-xl object-cover border border-zinc-700" />
+                  <img src={s.coverUrl} alt={s.title} className="w-10 h-10 rounded-xl object-cover border border-zinc-700 shrink-0" />
                   <div className="flex flex-col">
                     <span className="text-xs font-bold text-white line-clamp-1">{s.title}</span>
                     <span className="text-[11px] text-zinc-400">{s.author} • {s.genre}</span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 text-right">
-                  <div className="flex flex-col">
+                <div className="flex items-center gap-3 text-right">
+                  <div className="flex flex-col hidden sm:flex">
                     <span className="text-xs font-bold text-white">{s.totalReads.toLocaleString()}</span>
                     <span className="text-[10px] text-zinc-500">lectures</span>
                   </div>
@@ -190,6 +227,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
                     <Star className="w-3 h-3 fill-amber-400" />
                     <span>{s.rating}</span>
                   </div>
+                  <button
+                    onClick={() => openOeuvrePage(s.id)}
+                    className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-purple-400 transition-colors"
+                    title="Voir sur le site public"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             ))}
@@ -260,6 +304,136 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
           </div>
         </div>
 
+      </div>
+
+      {/* Full Catalog Overview Section on Admin Dashboard */}
+      <div className="rounded-3xl bg-zinc-900 border border-zinc-800 p-6 flex flex-col gap-6 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-amber-400" />
+              <h3 className="text-lg font-bold text-white tracking-tight">
+                Catalogue Global & Statut des Œuvres
+              </h3>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                {filteredCatalog.length} / {series.length} œuvres
+              </span>
+            </div>
+            <p className="text-xs text-zinc-400 mt-1">
+              Inventaire exhaustif des œuvres publiées sur le site et l'application mobile.
+            </p>
+          </div>
+
+          <button
+            onClick={() => onNavigate('series')}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition-colors self-start sm:self-auto"
+          >
+            <span>Ouvrir l'Éditeur Studio</span>
+            <ArrowUpRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Search & Genre filter inside Dashboard */}
+        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+          <div className="sm:col-span-8 relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+            <input
+              type="text"
+              value={searchCatalog}
+              onChange={(e) => setSearchCatalog(e.target.value)}
+              placeholder="Rechercher une œuvre par titre, auteur, genre..."
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+
+          <div className="sm:col-span-4">
+            <select
+              value={filterGenre}
+              onChange={(e) => setFilterGenre(e.target.value)}
+              className="w-full py-2.5 px-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs font-semibold text-zinc-200 focus:outline-none focus:border-amber-500"
+            >
+              <option value="Tous">Tous les genres ({series.length})</option>
+              <option value="Afro-Fantasy">Afro-Fantasy</option>
+              <option value="Sci-Fi & Cyberpunk">Sci-Fi & Cyberpunk</option>
+              <option value="Action & Shonen">Action & Shonen</option>
+              <option value="Romance & Drame">Romance & Drame</option>
+              <option value="Mythologie & Histoire">Mythologie & Histoire</option>
+              <option value="Thriller & Mystère">Thriller & Mystère</option>
+              <option value="Arts Martiaux">Arts Martiaux</option>
+              <option value="Comédie">Comédie</option>
+              <option value="Jeunesse & Aventure">Jeunesse & Aventure</option>
+              <option value="Horreur">Horreur</option>
+              <option value="Seinen">Seinen</option>
+              <option value="Tranche de vie">Tranche de vie</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Works List / Table */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {filteredCatalog.map((s) => (
+            <div 
+              key={s.id}
+              className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800/80 hover:border-zinc-700 transition-all flex flex-col justify-between gap-3 group"
+            >
+              <div className="flex items-start gap-3">
+                <img 
+                  src={s.coverUrl} 
+                  alt={s.title} 
+                  className="w-14 h-18 rounded-xl object-cover border border-zinc-800 shrink-0 shadow-sm"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 truncate">
+                      {s.genre}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      En ligne
+                    </span>
+                  </div>
+                  <h4 className="text-xs font-bold text-white truncate group-hover:text-amber-400 transition-colors">
+                    {s.title}
+                  </h4>
+                  <p className="text-[11px] text-zinc-400 truncate">
+                    {s.author} • {s.country}
+                  </p>
+                  <div className="flex items-center gap-3 text-[10px] text-zinc-500 mt-1">
+                    <span>{s.chaptersCount || (s.chapters?.length || 1)} ch.</span>
+                    <span>•</span>
+                    <span>{s.totalReads.toLocaleString()} lectures</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick actions for each oeuvre */}
+              <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between gap-2">
+                <button
+                  onClick={() => openOeuvrePage(s.id)}
+                  className="flex-1 py-1.5 px-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-purple-300 border border-purple-500/20 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                  title="Voir cette œuvre sur le site public"
+                >
+                  <Eye className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Sur le site</span>
+                </button>
+
+                <button
+                  onClick={() => onNavigate('series')}
+                  className="flex-1 py-1.5 px-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                  title="Gérer les épisodes dans le Studio"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Gérer</span>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {filteredCatalog.length === 0 && (
+          <div className="text-center py-10 text-zinc-500 text-xs">
+            Aucune œuvre ne correspond à vos filtres.
+          </div>
+        )}
       </div>
 
     </div>

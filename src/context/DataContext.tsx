@@ -74,6 +74,7 @@ import {
   syncSiteSettingsToFirestore,
   fetchSiteSettingsFromFirestore,
   subscribeToFirestoreSiteSettings,
+  recordDeletedSeriesToFirestore,
   deduplicateSeries
 } from '../services/firebaseService';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
@@ -213,7 +214,7 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | null>(null);
 
 const STORAGE_KEYS = {
-  SERIES: 'ozi_series_data_v1',
+  SERIES: 'ozi_series_data_v3',
   TEASERS: 'ozi_teasers_data_v1',
   PRESS: 'ozi_press_data_v1',
   VERSION: 'ozi_app_version_v1',
@@ -234,6 +235,57 @@ const STORAGE_KEYS = {
   ARTICLES: 'ozi_articles_data_v1',
   SITE_BANNER: 'ozi_site_banner_url_v1',
   DELETED_SERIES: 'ozi_deleted_series_ids_v1'
+};
+
+export const KNOWN_DELETED_SERIES_IDS = [
+  'chainsaw-demon',
+  'gantz',
+  'les-gonmons',
+  'chainsaw-man',
+  'chainsaw',
+  'series-1788259644008',
+  'series-1788357881029'
+];
+
+export const isSeriesPermanentlyDeleted = (s: Series, deletedSet: Set<string>): boolean => {
+  if (!s || !s.id) return true;
+  const idLower = (s.id || '').trim().toLowerCase();
+  const slugLower = (s.slug || '').trim().toLowerCase();
+  const titleLower = (s.title || '').trim().toLowerCase();
+  const titleSlug = titleLower.replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+  // Hardcoded permanent filters
+  if (
+    titleLower.includes('chainsaw') || slugLower.includes('chainsaw') || idLower.includes('chainsaw') ||
+    titleLower.includes('gantz') || slugLower.includes('gantz') || idLower.includes('gantz') ||
+    titleLower.includes('gonmon') || slugLower.includes('gonmon') || idLower.includes('gonmon') ||
+    idLower.includes('1788259644008') || idLower.includes('1788357881029')
+  ) {
+    return true;
+  }
+
+  // Exact set matching
+  if (deletedSet.has(s.id) || deletedSet.has(idLower)) return true;
+  if (s.slug && (deletedSet.has(s.slug) || deletedSet.has(slugLower))) return true;
+  if (deletedSet.has(titleSlug) || deletedSet.has(titleLower)) return true;
+
+  // Partial / normalized matching
+  for (const rawItem of deletedSet) {
+    if (!rawItem) continue;
+    const item = rawItem.trim().toLowerCase();
+    if (!item) continue;
+    if (
+      item === idLower ||
+      item === slugLower ||
+      item === titleLower ||
+      item === titleSlug ||
+      (idLower && idLower.includes(item)) ||
+      (slugLower && slugLower.includes(item))
+    ) {
+      return true;
+    }
+  }
+  return false;
 };
 
 type ViewModeType = 'accueil' | 'oeuvres' | 'articles' | 'recherche' | 'admin' | 'article-detail' | 'oeuvre-detail';
@@ -392,6 +444,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       coverUrl: String(s?.coverUrl || s?.cover || s?.thumbnailUrl || fallback?.coverUrl || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80'),
       bannerUrl: String(s?.bannerUrl || s?.banner || s?.coverUrl || fallback?.bannerUrl || 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=1600&q=80'),
       status: s?.status || fallback?.status || 'ongoing',
+      format: (s?.format || fallback?.format || (chapters.length > 1 ? 'série' : 'film')) as any,
+      published: s?.published !== undefined ? !!s.published : (fallback?.published !== undefined ? !!fallback.published : true),
+      publishedAt: s?.publishedAt || fallback?.publishedAt || null,
+      badges: Array.isArray(s?.badges) ? s.badges : (fallback?.badges || []),
+      teaserVideoUrl: s?.teaserVideoUrl || fallback?.teaserVideoUrl,
       rating: typeof s?.rating === 'number' && !isNaN(s.rating) ? s.rating : (fallback?.rating ?? 4.9),
       reviewsCount: typeof s?.reviewsCount === 'number' && !isNaN(s.reviewsCount) ? s.reviewsCount : (fallback?.reviewsCount ?? 120),
       totalReads: typeof s?.totalReads === 'number' && !isNaN(s.totalReads) ? s.totalReads : (fallback?.totalReads ?? 1000),
@@ -417,27 +474,34 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Core Data
   const [series, setSeries] = useState<Series[]>(() => {
     try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem('ozi_series_data_v1');
+        window.localStorage.removeItem('ozi_series_data');
+        window.localStorage.removeItem('ozi_series_data_v2');
+      }
       const deletedRaw = localStorage.getItem(STORAGE_KEYS.DELETED_SERIES);
       const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
+      KNOWN_DELETED_SERIES_IDS.forEach(kid => deletedSet.add(kid));
 
       const saved = localStorage.getItem(STORAGE_KEYS.SERIES);
       if (saved) {
         const parsed: Series[] = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const cleanedSaved = parsed
-            .filter((s) => s && s.id && !deletedSet.has(s.id))
+            .filter((s) => !isSeriesPermanentlyDeleted(s, deletedSet))
             .map((s) => cleanSeries(s));
           const { deduplicated } = deduplicateSeries(cleanedSaved);
-          return deduplicated;
+          return deduplicated.filter(s => !isSeriesPermanentlyDeleted(s, deletedSet));
         }
       }
       const initial = INITIAL_SERIES
-        .filter((s) => !deletedSet.has(s.id))
+        .filter((s) => !isSeriesPermanentlyDeleted(s, deletedSet))
         .map((s) => cleanSeries(s));
       const { deduplicated } = deduplicateSeries(initial);
-      return deduplicated;
+      return deduplicated.filter(s => !isSeriesPermanentlyDeleted(s, deletedSet));
     } catch {
-      return INITIAL_SERIES;
+      const fallbackSet = new Set<string>(KNOWN_DELETED_SERIES_IDS);
+      return INITIAL_SERIES.filter(s => !isSeriesPermanentlyDeleted(s, fallbackSet));
     }
   });
 
@@ -789,14 +853,33 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.warn('Initial admin security fetch note:', secErr);
           }
 
-          // Cloud sync Site Header Banner from Firestore
+          // Cloud sync Site Header Banner & Deleted Series from Firestore
           try {
             const remoteSettings = await fetchSiteSettingsFromFirestore(fb.db);
-            if (remoteSettings && remoteSettings.headerBannerUrl) {
-              setSiteBannerUrl(remoteSettings.headerBannerUrl);
+            if (remoteSettings) {
+              if (remoteSettings.headerBannerUrl) {
+                setSiteBannerUrl(remoteSettings.headerBannerUrl);
+                try {
+                  localStorage.setItem(STORAGE_KEYS.SITE_BANNER, remoteSettings.headerBannerUrl);
+                } catch {}
+              }
+              const deletedRaw = localStorage.getItem(STORAGE_KEYS.DELETED_SERIES);
+              const currentDeleted = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
+              KNOWN_DELETED_SERIES_IDS.forEach(id => currentDeleted.add(id));
+              if (Array.isArray(remoteSettings.deletedSeriesIds) && remoteSettings.deletedSeriesIds.length > 0) {
+                remoteSettings.deletedSeriesIds.forEach(id => currentDeleted.add(id));
+              }
               try {
-                localStorage.setItem(STORAGE_KEYS.SITE_BANNER, remoteSettings.headerBannerUrl);
+                localStorage.setItem(STORAGE_KEYS.DELETED_SERIES, JSON.stringify(Array.from(currentDeleted)));
               } catch {}
+              // Filter current series state immediately with the latest deleted IDs
+              setSeries(prev => {
+                const updated = prev.filter(s => !isSeriesPermanentlyDeleted(s, currentDeleted));
+                try {
+                  localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(updated));
+                } catch {}
+                return updated;
+              });
             }
           } catch (bannerErr) {
             console.warn('Initial site settings banner fetch note:', bannerErr);
@@ -804,12 +887,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           const initialData = await fetchFirestoreSeriesNow(fb.db);
           if (initialData && initialData.length > 0) {
-            setSeries((prevLocal) => {
+            setSeries(() => {
               const deletedRaw = localStorage.getItem(STORAGE_KEYS.DELETED_SERIES);
               const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
-              const filteredPrev = prevLocal.filter(s => !deletedSet.has(s.id));
-              const combined = [...initialData, ...filteredPrev];
-              const { deduplicated, duplicateIds } = deduplicateSeries(combined);
+              KNOWN_DELETED_SERIES_IDS.forEach(id => deletedSet.add(id));
+
+              const cleaned = initialData.filter(s => !isSeriesPermanentlyDeleted(s, deletedSet));
+              const { deduplicated, duplicateIds } = deduplicateSeries(cleaned);
               if (duplicateIds.length > 0 && fb.db) {
                 duplicateIds.forEach(id => deleteSeriesFromFirestore(fb.db!, id).catch(() => {}));
               }
@@ -829,12 +913,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 2. Real-time persistent onSnapshot listener
     const unsubscribeSeries = subscribeToFirestoreSeries((firestoreSeries) => {
       if (firestoreSeries && firestoreSeries.length > 0) {
-        setSeries((prevLocal) => {
+        setSeries(() => {
           const deletedRaw = localStorage.getItem(STORAGE_KEYS.DELETED_SERIES);
           const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
-          const filteredPrev = prevLocal.filter(s => !deletedSet.has(s.id));
-          const combined = [...firestoreSeries, ...filteredPrev];
-          const { deduplicated, duplicateIds } = deduplicateSeries(combined);
+          KNOWN_DELETED_SERIES_IDS.forEach(id => deletedSet.add(id));
+
+          const cleaned = firestoreSeries.filter(s => !isSeriesPermanentlyDeleted(s, deletedSet));
+          const { deduplicated, duplicateIds } = deduplicateSeries(cleaned);
           if (duplicateIds.length > 0) {
             try {
               const fb = initializeFirebaseCustom();
@@ -858,12 +943,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     const unsubscribeBanner = subscribeToFirestoreSiteSettings((settings) => {
-      if (settings && settings.headerBannerUrl) {
+      if (settings?.headerBannerUrl) {
         setSiteBannerUrl(settings.headerBannerUrl);
         try {
           localStorage.setItem(STORAGE_KEYS.SITE_BANNER, settings.headerBannerUrl);
         } catch {}
       }
+      const deletedRaw = localStorage.getItem(STORAGE_KEYS.DELETED_SERIES);
+      const currentDeleted = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
+      KNOWN_DELETED_SERIES_IDS.forEach(id => currentDeleted.add(id));
+      if (Array.isArray(settings?.deletedSeriesIds) && settings.deletedSeriesIds.length > 0) {
+        settings.deletedSeriesIds.forEach(id => currentDeleted.add(id));
+      }
+      try {
+        localStorage.setItem(STORAGE_KEYS.DELETED_SERIES, JSON.stringify(Array.from(currentDeleted)));
+      } catch {}
+      // ALWAYS filter state to guarantee deleted series cannot remain visible
+      setSeries(prev => {
+        const updated = prev.filter(s => !isSeriesPermanentlyDeleted(s, currentDeleted));
+        try {
+          localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
     });
 
     return () => {
@@ -1252,26 +1354,53 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const deleteSeries = useCallback(async (id: string) => {
-    // Record in deleted set to permanently prevent rebirth from INITIAL_SERIES
+    // Find target before deletion to record id, slug, and title
+    const target = series.find(s => s.id === id || s.slug === id);
+    const slug = target?.slug;
+    const title = target?.title;
+    const titleSlug = title ? title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : '';
+
+    // Record in deleted set to permanently prevent rebirth from any source
     try {
       const raw = localStorage.getItem(STORAGE_KEYS.DELETED_SERIES);
       const set = new Set<string>(raw ? JSON.parse(raw) : []);
       set.add(id);
+      if (slug) set.add(slug);
+      if (titleSlug) set.add(titleSlug);
+      KNOWN_DELETED_SERIES_IDS.forEach(kid => set.add(kid));
       localStorage.setItem(STORAGE_KEYS.DELETED_SERIES, JSON.stringify(Array.from(set)));
     } catch {}
 
-    setSeries(prev => prev.filter(s => s.id !== id));
+    setSeries(prev => {
+      const updated = prev.filter(s => {
+        if (s.id === id || s.slug === id) return false;
+        if (slug && (s.slug === slug || s.id === slug)) return false;
+        if (title && s.title?.trim().toLowerCase() === title.trim().toLowerCase()) return false;
+        return true;
+      });
+      try {
+        localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
     setAnalytics(prev => ({ ...prev, seriesCount: Math.max(0, prev.seriesCount - 1) }));
 
     try {
       const fb = initializeFirebaseCustom();
       if (fb.db) {
-        await deleteSeriesFromFirestore(fb.db, id);
+        // Record in Firestore settings FIRST so any concurrent listeners immediately block it
+        const toRecord = [id];
+        if (slug && slug !== id) toRecord.push(slug);
+        if (titleSlug && titleSlug !== id && titleSlug !== slug) toRecord.push(titleSlug);
+        await recordDeletedSeriesToFirestore(fb.db, ...toRecord);
+
+        // Purge documents from Firestore across all collections and subcollections
+        await deleteSeriesFromFirestore(fb.db, id, slug, title);
       }
     } catch (delErr) {
       console.warn('Delete series from Firestore warning:', delErr);
     }
-  }, []);
+  }, [series]);
 
   // Chapters CRUD
   const addChapter = useCallback(async (seriesId: string, chapterData: Omit<Chapter, 'id' | 'seriesId' | 'releaseDate' | 'likesCount'>) => {
@@ -1876,7 +2005,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
 
         // Sync header banner & site settings
-        await syncSiteSettingsToFirestore(fb.db, { headerBannerUrl: siteBannerUrl });
+        const deletedRaw = localStorage.getItem(STORAGE_KEYS.DELETED_SERIES);
+        const currentDeleted = deletedRaw ? JSON.parse(deletedRaw) : [];
+        await syncSiteSettingsToFirestore(fb.db, { 
+          headerBannerUrl: siteBannerUrl,
+          deletedSeriesIds: currentDeleted
+        });
 
         await Promise.allSettled(articles.map(a => syncArticleToFirestore(fb.db!, a)));
         await syncAppVersionToFirestore(fb.db, appVersion);
@@ -1949,12 +2083,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (fb.db) {
         const latestSeries = await fetchFirestoreSeriesNow(fb.db);
         if (latestSeries && latestSeries.length > 0) {
-          setSeries((prevLocal) => {
+          setSeries(() => {
             const deletedRaw = localStorage.getItem(STORAGE_KEYS.DELETED_SERIES);
             const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
-            const filteredPrev = prevLocal.filter(s => !deletedSet.has(s.id));
-            const combined = [...latestSeries, ...filteredPrev];
-            const { deduplicated } = deduplicateSeries(combined);
+            KNOWN_DELETED_SERIES_IDS.forEach(id => deletedSet.add(id));
+
+            const cleaned = latestSeries.filter(s => !isSeriesPermanentlyDeleted(s, deletedSet));
+            const { deduplicated, duplicateIds } = deduplicateSeries(cleaned);
+            if (duplicateIds.length > 0 && fb.db) {
+              duplicateIds.forEach(id => deleteSeriesFromFirestore(fb.db!, id).catch(() => {}));
+            }
             try {
               localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(deduplicated));
             } catch {}

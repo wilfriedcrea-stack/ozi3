@@ -14,7 +14,9 @@ import {
   Clock, 
   Sparkles,
   Layers,
-  Image as ImageIcon
+  Image as ImageIcon,
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Series, Chapter } from '../../types';
@@ -30,12 +32,17 @@ export const AdminSeriesManager: React.FC = () => {
     addChapter, 
     updateChapter, 
     deleteChapter,
-    openReader 
+    openReader,
+    openOeuvrePage,
+    refreshCatalogueFromFirestore,
+    isRefreshingCatalogue
   } = useData();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('Tous');
+  const [selectedFormat, setSelectedFormat] = useState('Tous');
   const [expandedSeriesId, setExpandedSeriesId] = useState<string | null>(series[0]?.id || null);
+  const [refreshedNotice, setRefreshedNotice] = useState(false);
 
   // Modals state
   const [seriesModalOpen, setSeriesModalOpen] = useState(false);
@@ -45,11 +52,34 @@ export const AdminSeriesManager: React.FC = () => {
   const [targetSeriesForChapter, setTargetSeriesForChapter] = useState<Series | null>(null);
   const [editingChapter, setEditingChapter] = useState<Chapter | null>(null);
 
+  // Reliable In-App Confirmation Modal (no blocked window.confirm)
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<
+    | { type: 'series'; id: string; title: string }
+    | { type: 'chapter'; seriesId: string; chapterId: string; title: string }
+    | null
+  >(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleManualRefresh = async () => {
+    await refreshCatalogueFromFirestore();
+    setRefreshedNotice(true);
+    setTimeout(() => setRefreshedNotice(false), 2500);
+  };
+
   const filteredSeries = series.filter(s => {
-    const matchesGenre = selectedGenre === 'Tous' || s.genre === selectedGenre;
-    const matchesSearch = s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.author.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesGenre && matchesSearch;
+    const matchesGenre = selectedGenre === 'Tous' || s.genre === selectedGenre || (s.secondaryGenres && s.secondaryGenres.includes(selectedGenre as any));
+    const itemFormat = (s.format || (s.chaptersCount > 1 ? 'série' : 'film')).toLowerCase();
+    const matchesFormat = selectedFormat === 'Tous' || itemFormat === selectedFormat.toLowerCase();
+    const cleanSearch = searchQuery.trim().toLowerCase();
+    const matchesSearch = !cleanSearch ||
+      (s.title || '').toLowerCase().includes(cleanSearch) ||
+      (s.author || '').toLowerCase().includes(cleanSearch) ||
+      (s.artist || '').toLowerCase().includes(cleanSearch) ||
+      (s.slug || '').toLowerCase().includes(cleanSearch) ||
+      (s.country || '').toLowerCase().includes(cleanSearch) ||
+      (s.synopsis || '').toLowerCase().includes(cleanSearch) ||
+      (s.tags || []).some(t => t.toLowerCase().includes(cleanSearch));
+    return matchesGenre && matchesFormat && matchesSearch;
   });
 
   const handleOpenNewSeries = () => {
@@ -72,10 +102,8 @@ export const AdminSeriesManager: React.FC = () => {
     setEditingSeries(null);
   };
 
-  const handleDeleteSeries = async (id: string, title: string) => {
-    if (window.confirm(`Êtes-vous sûr de vouloir supprimer la série "${title}" et tous ses épisodes ? Cette action est irréversible.`)) {
-      await deleteSeries(id);
-    }
+  const handleDeleteSeries = (id: string, title: string) => {
+    setDeleteConfirmTarget({ type: 'series', id, title });
   };
 
   const handleOpenNewChapter = (s: Series) => {
@@ -103,9 +131,22 @@ export const AdminSeriesManager: React.FC = () => {
     setEditingChapter(null);
   };
 
-  const handleDeleteChapter = async (seriesId: string, chapterId: string, title: string) => {
-    if (window.confirm(`Supprimer l'épisode "${title}" ?`)) {
-      await deleteChapter(seriesId, chapterId);
+  const handleDeleteChapter = (seriesId: string, chapterId: string, title: string) => {
+    setDeleteConfirmTarget({ type: 'chapter', seriesId, chapterId, title });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmTarget) return;
+    setIsDeleting(true);
+    try {
+      if (deleteConfirmTarget.type === 'series') {
+        await deleteSeries(deleteConfirmTarget.id);
+      } else {
+        await deleteChapter(deleteConfirmTarget.seriesId, deleteConfirmTarget.chapterId);
+      }
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirmTarget(null);
     }
   };
 
@@ -115,49 +156,84 @@ export const AdminSeriesManager: React.FC = () => {
       {/* Top Toolbar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-white tracking-tight">
-            Catalogue & Studio des Épisodes
-          </h2>
-          <p className="text-xs sm:text-sm text-zinc-400">
-            Gérez vos séries, ajoutez des planches webtoon et programmez les parutions.
+          <div className="flex items-center gap-2">
+            <h2 className="text-2xl font-black text-white tracking-tight">
+              Catalogue & Studio des Épisodes
+            </h2>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 border border-amber-500/40 text-amber-400">
+              {filteredSeries.length} / {series.length} œuvres
+            </span>
+          </div>
+          <p className="text-xs sm:text-sm text-zinc-400 mt-1">
+            Gérez vos séries et films, vérifiez leur statut en ligne et programmez les parutions.
           </p>
         </div>
 
-        <button
-          onClick={handleOpenNewSeries}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 font-black text-xs shadow-lg shadow-amber-500/20 transition-all hover:scale-105"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Créer une Nouvelle Série</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleManualRefresh}
+            disabled={isRefreshingCatalogue}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700/80 text-xs font-semibold transition-all"
+            title="Recharger le catalogue depuis Firestore"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${isRefreshingCatalogue ? 'animate-spin' : ''}`} />
+            <span>{refreshedNotice ? 'Synchronisé !' : 'Actualiser'}</span>
+          </button>
+
+          <button
+            onClick={handleOpenNewSeries}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 font-black text-xs shadow-lg shadow-amber-500/20 transition-all hover:scale-105"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Créer une Nouvelle Série</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter & Search */}
-      <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
-        <div className="sm:col-span-8 relative">
+      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+        <div className="sm:col-span-6 relative">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Rechercher par titre ou auteur..."
+            placeholder="Rechercher par titre, auteur, artiste, tag..."
             className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
           />
         </div>
 
-        <div className="sm:col-span-4">
+        <div className="sm:col-span-3">
           <select
             value={selectedGenre}
             onChange={(e) => setSelectedGenre(e.target.value)}
             className="w-full py-2.5 px-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-semibold text-zinc-200 focus:outline-none focus:border-amber-500"
           >
-            <option value="Tous">Tous les genres</option>
+            <option value="Tous">Tous les genres ({series.length})</option>
             <option value="Afro-Fantasy">Afro-Fantasy</option>
             <option value="Sci-Fi & Cyberpunk">Sci-Fi & Cyberpunk</option>
             <option value="Action & Shonen">Action & Shonen</option>
             <option value="Romance & Drame">Romance & Drame</option>
             <option value="Mythologie & Histoire">Mythologie & Histoire</option>
+            <option value="Thriller & Mystère">Thriller & Mystère</option>
             <option value="Arts Martiaux">Arts Martiaux</option>
+            <option value="Comédie">Comédie</option>
+            <option value="Jeunesse & Aventure">Jeunesse & Aventure</option>
+            <option value="Horreur">Horreur</option>
+            <option value="Seinen">Seinen</option>
+            <option value="Tranche de vie">Tranche de vie</option>
+          </select>
+        </div>
+
+        <div className="sm:col-span-3">
+          <select
+            value={selectedFormat}
+            onChange={(e) => setSelectedFormat(e.target.value)}
+            className="w-full py-2.5 px-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-semibold text-zinc-200 focus:outline-none focus:border-amber-500"
+          >
+            <option value="Tous">Tous les formats</option>
+            <option value="série">Séries</option>
+            <option value="film">Films</option>
           </select>
         </div>
       </div>
@@ -191,6 +267,14 @@ export const AdminSeriesManager: React.FC = () => {
                       <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-zinc-950">
                         {s.genre}
                       </span>
+                      {s.format && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-zinc-800 text-zinc-300 border border-zinc-700 capitalize">
+                          {s.format}
+                        </span>
+                      )}
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                        En ligne
+                      </span>
                       {s.isExclusive && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-600/90 text-white">
                           Exclu OZI
@@ -221,12 +305,21 @@ export const AdminSeriesManager: React.FC = () => {
                 {/* Series Action Buttons */}
                 <div className="flex items-center gap-2 self-end lg:self-center">
                   <button
+                    onClick={() => openOeuvrePage(s.id)}
+                    className="p-2.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                    title="Voir la page de l'œuvre sur le site public"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-purple-400" />
+                    <span className="hidden sm:inline">Sur le site</span>
+                  </button>
+
+                  <button
                     onClick={() => openReader(s.id)}
                     className="p-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-semibold flex items-center gap-1.5 transition-colors"
                     title="Aperçu du lecteur"
                   >
-                    <Eye className="w-3.5 h-3.5 text-amber-400" />
-                    <span className="hidden sm:inline">Aperçu</span>
+                    <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="hidden sm:inline">Lecteur</span>
                   </button>
 
                   <button
@@ -374,6 +467,60 @@ export const AdminSeriesManager: React.FC = () => {
           onClose={() => { setChapterModalOpen(false); setTargetSeriesForChapter(null); setEditingChapter(null); }}
           onSave={handleSaveChapter}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#12131a] border border-rose-500/30 rounded-2xl max-w-md w-full p-6 shadow-2xl text-white">
+            <div className="flex items-center gap-3 text-rose-400 mb-4">
+              <div className="p-3 rounded-full bg-rose-500/10 border border-rose-500/20">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">
+                  {deleteConfirmTarget.type === 'series' ? 'Supprimer cette œuvre ?' : 'Supprimer cet épisode ?'}
+                </h3>
+                <p className="text-xs text-zinc-400">Cette action est définitive et synchronisée avec le cloud</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-zinc-300 mb-6 bg-zinc-900/60 p-3.5 rounded-xl border border-zinc-800">
+              Êtes-vous sûr de vouloir supprimer{' '}
+              <strong className="text-white">« {deleteConfirmTarget.title} »</strong> ?{' '}
+              {deleteConfirmTarget.type === 'series' && "Tous les épisodes associés seront également retirés définitivement du site et de l'application."}
+            </p>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setDeleteConfirmTarget(null)}
+                className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-colors disabled:opacity-50"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors flex items-center gap-2 shadow-lg shadow-rose-900/40 disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Suppression...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Supprimer définitivement</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
