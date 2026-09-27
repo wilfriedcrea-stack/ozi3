@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { BookOpen, Sparkles, ChevronRight, Play } from 'lucide-react';
+import { BookOpen } from 'lucide-react';
 import { Series, Chapter } from '../../../types';
 import { useData } from '../../../context/DataContext';
 import { ChapterList } from './ChapterList';
@@ -95,53 +95,14 @@ export const ChapterSection: React.FC<ChapterSectionProps> = ({
     openReader(series.id, chapterId);
   };
 
-  const handleReadFromBeginning = () => {
-    // Oldest chapter (Chapter 1) is at the bottom of newest-first sort
-    const oldestChapter = sortedChapters[sortedChapters.length - 1];
-    if (oldestChapter) {
-      openReader(series.id, oldestChapter.id);
-    }
-  };
-
   return (
     <section
       id="chapters-section"
       aria-label={`Chapitres de ${series.title}`}
-      className="relative w-full overflow-hidden my-10"
+      className="relative w-full overflow-hidden my-6"
     >
       {/* Container with exact +10px width on each side in black */}
-      <div className="w-[calc(100%+20px)] -mx-[10px] bg-[#000000] text-[#ffffff] border-y border-[#252525] shadow-2xl">
-        
-        {/* Section Header */}
-        <div className="px-4 sm:px-6 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#252525] bg-[#000000]">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl sm:text-2xl font-black text-[#ffffff] font-almodobar tracking-tight">
-                Chapitres disponibles
-              </h2>
-              <span className="px-2 py-0.5 rounded-md bg-[#181818] border border-[#2e2e2e] text-[#9ca3af] text-xs font-semibold">
-                {sortedChapters.length} {sortedChapters.length > 1 ? 'chapitres' : 'chapitre'}
-              </span>
-            </div>
-            <p className="text-xs text-[#9ca3af] mt-1">
-              Sélectionnez un chapitre pour lancer la lecture immédiate.
-            </p>
-          </div>
-
-          {sortedChapters.length > 1 && (
-            <button
-              type="button"
-              id="read-from-start-btn"
-              onClick={handleReadFromBeginning}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-[#ff5a50] hover:text-[#ff746c] transition-colors cursor-pointer self-start sm:self-center py-1 focus:outline-none focus-visible:underline"
-            >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Lire depuis le début (Ch. 1)</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-
+      <div className="w-[calc(100%+20px)] -mx-[10px] bg-[#000000] text-[#ffffff] shadow-2xl">
         {/* Dynamic Chapter States */}
         {isLoading ? (
           <ChapterSkeleton count={5} />

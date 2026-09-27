@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { ShoppingBag, Check, X, MessageCircle, CreditCard, Sparkles, Star, ExternalLink } from 'lucide-react';
-import { Series, SeriesShopItem } from '../../../types';
+import { ShoppingBag, Check, X, MessageCircle, CreditCard, ExternalLink } from 'lucide-react';
+import { Series } from '../../../types';
 
 interface ProductItem {
   id: string;
@@ -25,46 +25,22 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
   const [isOrdered, setIsOrdered] = useState<boolean>(false);
 
   // Author details tailored to series
-  const authorName = series.author || 'Wilfried Crea';
-  const artistName = series.artist || series.author || 'Studio OZI';
-  const authorPhoto = series.authorPhotoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80';
-  const authorBio = series.authorBio?.trim() || `Auteur et artiste passionné de la scène afro-manga et webtoon contemporaine. À travers ${series.title}, l'ambition est de sublimer les récits épiques, les mythes ancestraux et les fresques visuelles percutantes pour offrir aux lecteurs du continent et du monde entier une expérience graphique inoubliable.`;
+  const authorName = series.author || '';
+  const artistName = series.artist || '';
+  const authorPhoto = series.authorPhotoUrl || '';
+  const authorBio = series.authorBio?.trim() || '';
 
-  // Default products fallback if series has no custom shop items
-  const defaultProducts: ProductItem[] = [
-    {
-      id: 'artbook',
-      title: 'ARTBOOK DU PROJET',
-      category: 'Livre & Édition',
-      image: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80',
-      priceCfa: 15000,
-      priceEur: 23,
-      description: `Recueil officiel d'illustrations haute définition, planches inédites, croquis préparatoires et coulisses de conception de l'univers de ${series.title}. Reliure rigide collector de 160 pages couleur.`
-    },
-    {
-      id: 'tshirt',
-      title: 'T-SHIRT OFFICIEL',
-      category: 'Vêtements Officiels',
-      image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80',
-      priceCfa: 10000,
-      priceEur: 15,
-      sizes: ['S', 'M', 'L', 'XL', 'XXL'],
-      description: `T-shirt officiel collector en coton 100% peigné bio ultra-doux avec sérigraphie haute résistance représentant les héros de ${series.title}. Coupe décontractée et finitions soignées.`
-    },
-    {
-      id: 'cards',
-      title: 'JEU DE CARTES COLLECTOR',
-      category: 'Goodies & Jeux',
-      image: 'https://images.unsplash.com/photo-1606167668584-78701c57f13d?auto=format&fit=crop&w=800&q=80',
-      priceCfa: 8000,
-      priceEur: 12,
-      description: `Coffret collector de 54 cartes de jeu magnifiquement illustrées mettant en scène les combattants, totems sacrés et divinités de l'univers OZI BD.`
-    }
-  ];
+  const hasAuthorInfo = Boolean(authorName || authorBio || authorPhoto);
+  const hasShopArticles = Array.isArray(series.shopArticles) && series.shopArticles.length > 0;
 
-  // Products tailored to the series (using configured shop articles or fallback)
-  const products: ProductItem[] = (series.shopArticles && series.shopArticles.length > 0)
-    ? series.shopArticles.map((item, idx) => ({
+  // Si ni l'auteur ni aucun article boutique n'est configuré, ne rien afficher
+  if (!hasAuthorInfo && !hasShopArticles) {
+    return null;
+  }
+
+  // Articles boutique réels configurés pour cette série
+  const products: ProductItem[] = hasShopArticles
+    ? series.shopArticles!.map((item, idx) => ({
         id: item.id || `shop-item-${idx}`,
         title: item.title,
         category: item.category || 'Article Officiel',
@@ -75,7 +51,7 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
         linkUrl: item.linkUrl,
         sizes: item.sizes
       }))
-    : defaultProducts;
+    : [];
 
   const handleOpenOrder = (product: ProductItem) => {
     setSelectedProduct(product);
@@ -95,111 +71,150 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
   };
 
   return (
-    <div className="w-full my-12 pt-6 pb-8 text-white border-t border-zinc-800/80">
+    <div className="w-full my-12 pt-6 pb-8 text-white">
       
-      {/* 1. SECTION L'AUTEUR */}
-      <section className="max-w-4xl mx-auto px-4 text-center mb-16">
-        <h2 
-          className="text-3xl sm:text-5xl font-black uppercase text-white tracking-wider mb-8 font-almodobar"
-          style={{ letterSpacing: '0.06em' }}
-        >
-          L'AUTEUR
-        </h2>
+      {/* 1. SECTION L'AUTEUR (visible si des informations sur l'auteur existent) */}
+      {hasAuthorInfo && (
+        <section className={`max-w-4xl mx-auto px-4 text-center ${hasShopArticles ? 'mb-16' : 'mb-6'}`}>
+          <h2 
+            className="text-3xl sm:text-5xl font-black uppercase text-white tracking-wider mb-8 font-almodobar"
+            style={{ letterSpacing: '0.06em' }}
+          >
+            L'AUTEUR
+          </h2>
 
-        {/* Circular Avatar */}
-        <div className="relative mx-auto mb-7 w-36 h-36 sm:w-44 sm:h-44">
-          <div className="w-full h-full rounded-full border-2 border-white/90 overflow-hidden shadow-2xl bg-zinc-900 flex items-center justify-center p-0.5 ring-4 ring-white/10">
-            <img
-              src={authorPhoto}
-              alt={`Portrait de ${authorName}`}
-              className="w-full h-full object-cover object-center rounded-full"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80';
-              }}
-              referrerPolicy="no-referrer"
-            />
-          </div>
-          <div className="absolute -bottom-2 -right-1 px-3 py-1 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 font-bold text-[11px] shadow-lg border border-white/20">
-            Créateur
-          </div>
-        </div>
-
-        {/* Author Bio */}
-        <div className="space-y-4 max-w-2xl mx-auto text-zinc-300 text-xs sm:text-sm leading-relaxed font-sans">
-          <p className="font-semibold text-white text-base sm:text-lg">
-            {authorName} {artistName && artistName !== authorName ? `& ${artistName}` : ''}
-          </p>
-          <p className="text-zinc-300 leading-relaxed text-justify sm:text-center whitespace-pre-line">
-            {authorBio}
-          </p>
-          <p className="text-zinc-400 text-[11px] sm:text-xs italic">
-            Chaque chapitre est minutieusement composé avec amour du détail, découpage dynamique et une colorisation immersive. Merci à toute la communauté pour votre fidélité !
-          </p>
-        </div>
-      </section>
-
-      {/* 2. SECTION BOUTIQUE */}
-      <section className="max-w-6xl mx-auto px-4">
-        <h2 
-          className="text-3xl sm:text-5xl font-black uppercase text-white tracking-wider mb-10 text-center font-almodobar"
-          style={{ letterSpacing: '0.06em' }}
-        >
-          BOUTIQUE
-        </h2>
-
-        {/* 3 Columns Products Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 lg:gap-10">
-          {products.map((product) => (
-            <div 
-              key={product.id}
-              className="flex flex-col group"
-            >
-              {/* Image Frame with White Border & Buy Button */}
-              <div className="relative aspect-square w-full rounded-sm border-2 border-white/80 bg-zinc-950 overflow-visible mb-6 shadow-2xl flex items-center justify-center p-2.5">
-                <div className="w-full h-full overflow-hidden bg-zinc-900 rounded-sm">
-                  <img
-                    src={product.image}
-                    alt={product.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
-
-                {/* Overlapping Buy Button */}
-                <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 z-10">
-                  <button
-                    onClick={() => handleOpenOrder(product)}
-                    className="px-8 py-2 rounded-full bg-[#f05146] hover:bg-[#ff6154] text-white text-sm font-bold shadow-lg shadow-red-950/60 hover:shadow-red-600/40 active:scale-95 transition-all cursor-pointer whitespace-nowrap"
-                  >
-                    Achetez
-                  </button>
-                </div>
+          {/* Circular Avatar */}
+          {authorPhoto ? (
+            <div className="relative mx-auto mb-7 w-36 h-36 sm:w-44 sm:h-44">
+              <div className="w-full h-full rounded-full border-2 border-white/90 overflow-hidden shadow-2xl bg-zinc-900 flex items-center justify-center p-0.5 ring-4 ring-white/10">
+                <img
+                  src={authorPhoto}
+                  alt={`Portrait de ${authorName}`}
+                  className="w-full h-full object-cover object-center rounded-full"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80';
+                  }}
+                  referrerPolicy="no-referrer"
+                />
               </div>
-
-              {/* Title & Description */}
-              <div className="pt-2 text-center sm:text-left">
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <h3 
-                    className="text-lg sm:text-xl font-black text-white uppercase font-almodobar tracking-wide"
-                  >
-                    {product.title}
-                  </h3>
-                  <span className="text-xs font-bold text-orange-400 font-mono">
-                    {product.priceCfa.toLocaleString('fr-FR')} F
-                  </span>
-                </div>
-
-                <p className="text-xs text-zinc-400 leading-relaxed font-sans line-clamp-3">
-                  {product.description}
-                </p>
+              <div className="absolute -bottom-2 -right-1 px-3 py-1 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 font-bold text-[11px] shadow-lg border border-white/20">
+                Créateur
               </div>
             </div>
-          ))}
-        </div>
-      </section>
+          ) : (
+            <div className="relative mx-auto mb-7 w-28 h-28 sm:w-32 sm:h-32 rounded-full border-2 border-white/40 overflow-hidden shadow-xl bg-zinc-900 flex items-center justify-center p-0.5">
+              <span className="text-3xl font-black text-amber-400">
+                {(authorName || 'OZI').charAt(0).toUpperCase()}
+              </span>
+            </div>
+          )}
+
+          {/* Author Bio */}
+          <div className="space-y-4 max-w-2xl mx-auto text-zinc-300 text-xs sm:text-sm leading-relaxed font-sans">
+            <p className="font-semibold text-white text-base sm:text-lg">
+              {authorName} {artistName && artistName !== authorName ? `& ${artistName}` : ''}
+            </p>
+            {authorBio ? (
+              <p className="text-zinc-300 leading-relaxed text-justify sm:text-center whitespace-pre-line">
+                {authorBio}
+              </p>
+            ) : (
+              <p className="text-zinc-400 italic text-xs">
+                Auteur et artiste créateur de la série {series.title} sur la plateforme OZI BD.
+              </p>
+            )}
+            <p className="text-zinc-400 text-[11px] sm:text-xs italic">
+              Chaque chapitre est minutieusement composé avec passion et sens du détail. Merci pour votre lecture !
+            </p>
+          </div>
+        </section>
+      )}
+
+      {/* 2. SECTION BOUTIQUE : STRICTEMENT VISIBLE SEULEMENT SI DES ARTICLES ONT ÉTÉ AJOUTÉS */}
+      {hasShopArticles && products.length > 0 && (
+        <section className={`max-w-6xl mx-auto px-4 ${hasAuthorInfo ? 'pt-8' : ''}`}>
+          <div className="flex flex-col items-center mb-10 text-center">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-bold uppercase tracking-wider mb-2">
+              <ShoppingBag className="w-3.5 h-3.5" />
+              <span>Boutique Officielle</span>
+            </div>
+            <h2 
+              className="text-3xl sm:text-5xl font-black uppercase text-white tracking-wider font-almodobar"
+              style={{ letterSpacing: '0.06em' }}
+            >
+              BOUTIQUE
+            </h2>
+            <p className="text-xs sm:text-sm text-zinc-400 mt-2 max-w-md">
+              Produits dérivés et éditions exclusives créés pour l'univers de {series.title}.
+            </p>
+          </div>
+
+          {/* Columns Products Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 lg:gap-10">
+            {products.map((product) => (
+              <div 
+                key={product.id}
+                className="flex flex-col group"
+              >
+                {/* Image Frame with White Border & Buy Button */}
+                <div className="relative aspect-square w-full rounded-sm border-2 border-white/80 bg-zinc-950 overflow-visible mb-6 shadow-2xl flex items-center justify-center p-2.5">
+                  <div className="w-full h-full overflow-hidden bg-zinc-900 rounded-sm">
+                    <img
+                      src={product.image}
+                      alt={product.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+
+                  {/* Overlapping Buy Button */}
+                  <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 z-10">
+                    {product.linkUrl ? (
+                      <a
+                        href={product.linkUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-8 py-2 rounded-full bg-[#ff8679] hover:bg-[#ffa296] text-white text-sm font-bold shadow-lg shadow-orange-950/60 hover:shadow-orange-600/40 active:scale-95 transition-all cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5"
+                      >
+                        <span>Achetez</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    ) : (
+                      <button
+                        onClick={() => handleOpenOrder(product)}
+                        className="px-8 py-2 rounded-full bg-[#ff8679] hover:bg-[#ffa296] text-white text-sm font-bold shadow-lg shadow-orange-950/60 hover:shadow-orange-600/40 active:scale-95 transition-all cursor-pointer whitespace-nowrap"
+                      >
+                        Achetez
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Title & Description */}
+                <div className="pt-2 text-center sm:text-left">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <h3 
+                      className="text-lg sm:text-xl font-black text-white uppercase font-almodobar tracking-wide"
+                    >
+                      {product.title}
+                    </h3>
+                    <span className="text-xs font-bold text-orange-400 font-mono whitespace-nowrap">
+                      {product.priceCfa.toLocaleString('fr-FR')} F
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-zinc-400 leading-relaxed font-sans line-clamp-3">
+                    {product.description}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Modal Commande Produit */}
-      {selectedProduct && (
+      {hasShopArticles && selectedProduct && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
           onClick={() => setSelectedProduct(null)}
@@ -211,7 +226,7 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
             {/* Close Button */}
             <button
               onClick={() => setSelectedProduct(null)}
-              className="absolute top-4 right-4 p-2 rounded-full bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+              className="absolute top-4 right-4 p-2 rounded-full bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -264,7 +279,7 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
                           onClick={() => setSelectedSize(sz)}
                           className={`w-10 h-10 rounded-xl font-bold text-xs border transition-all ${
                             selectedSize === sz
-                              ? 'bg-[#f05146] text-white border-red-500 shadow-md'
+                              ? 'bg-[#ff8679] text-white border-orange-400 shadow-md'
                               : 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:border-zinc-500'
                           }`}
                         >
@@ -281,14 +296,14 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                      className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 font-bold text-sm flex items-center justify-center"
+                      className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 font-bold text-sm flex items-center justify-center cursor-pointer"
                     >
                       -
                     </button>
                     <span className="font-bold text-sm min-w-[20px] text-center">{quantity}</span>
                     <button
                       onClick={() => setQuantity(quantity + 1)}
-                      className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 font-bold text-sm flex items-center justify-center"
+                      className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 font-bold text-sm flex items-center justify-center cursor-pointer"
                     >
                       +
                     </button>
@@ -331,7 +346,7 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
 
                   <button
                     onClick={handleDirectOrder}
-                    className="w-full py-3 rounded-2xl bg-[#f05146] hover:bg-[#ff6154] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-red-950/50 transition-all cursor-pointer"
+                    className="w-full py-3 rounded-2xl bg-[#ff8679] hover:bg-[#ffa296] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-950/50 transition-all cursor-pointer"
                   >
                     <CreditCard className="w-4 h-4" />
                     <span>Précommander en ligne (Paiement à la livraison)</span>

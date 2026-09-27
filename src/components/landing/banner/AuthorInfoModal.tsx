@@ -28,7 +28,7 @@ export const AuthorInfoModal: React.FC<AuthorInfoModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Ambient Top Glow */}
-        <div className="absolute -top-12 -right-12 w-36 h-36 bg-[#ff5a50]/15 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute -top-12 -right-12 w-36 h-36 bg-[#ff8679]/15 rounded-full blur-2xl pointer-events-none" />
 
         {/* Close Button */}
         <button
@@ -42,7 +42,7 @@ export const AuthorInfoModal: React.FC<AuthorInfoModalProps> = ({
 
         {/* Header */}
         <div className="flex items-center gap-3 mb-5">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#ff5a50] to-orange-500 flex items-center justify-center text-zinc-950 font-black text-xl shadow-lg">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#ff8679] to-orange-500 flex items-center justify-center text-zinc-950 font-black text-xl shadow-lg">
             <User className="w-6 h-6 stroke-[2.5]" />
           </div>
           <div>

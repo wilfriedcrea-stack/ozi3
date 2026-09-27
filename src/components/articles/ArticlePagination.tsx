@@ -121,7 +121,7 @@ export const ArticlePagination: React.FC<ArticlePaginationProps> = ({
                 aria-current={isActive ? 'page' : undefined}
                 className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-bold text-xs sm:text-sm transition-all duration-150 flex items-center justify-center ${
                   isActive
-                    ? 'bg-[#ff5a50] text-white shadow-md shadow-[#ff5a50]/20 scale-105 border border-[#ff5a50]'
+                    ? 'bg-[#ff8679] text-white shadow-md shadow-[#ff8679]/20 scale-105 border border-[#ff8679]'
                     : 'bg-zinc-900/90 border border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white hover:border-zinc-700'
                 }`}
               >

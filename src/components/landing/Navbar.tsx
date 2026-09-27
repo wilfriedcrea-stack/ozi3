@@ -47,7 +47,7 @@ export const Navbar: React.FC = () => {
             onClick={() => navigateTo('accueil')}
             className={`text-base font-semibold tracking-normal transition-colors py-2 focus:outline-none cursor-pointer ${
               viewMode === 'accueil'
-                ? 'text-[#ff5a50]'
+                ? 'text-[#ff8679]'
                 : 'text-[#d4d4d8] hover:text-white'
             }`}
           >
@@ -60,7 +60,7 @@ export const Navbar: React.FC = () => {
             onClick={() => navigateTo('oeuvres')}
             className={`text-base font-semibold tracking-normal transition-colors py-2 focus:outline-none cursor-pointer ${
               viewMode === 'oeuvres'
-                ? 'text-[#ff5a50]'
+                ? 'text-[#ff8679]'
                 : 'text-[#d4d4d8] hover:text-white'
             }`}
           >
@@ -73,7 +73,7 @@ export const Navbar: React.FC = () => {
             onClick={() => navigateTo('articles')}
             className={`text-base font-semibold tracking-normal transition-colors py-2 focus:outline-none cursor-pointer ${
               viewMode === 'articles'
-                ? 'text-[#ff5a50]'
+                ? 'text-[#ff8679]'
                 : 'text-[#d4d4d8] hover:text-white'
             }`}
           >
@@ -89,12 +89,12 @@ export const Navbar: React.FC = () => {
             onClick={() => navigateTo('recherche')}
             className={`hidden md:flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer border ${
               viewMode === 'recherche'
-                ? 'bg-[#ff5a50]/15 text-[#ff5a50] border-[#ff5a50]/50 shadow-sm shadow-[#ff5a50]/10'
+                ? 'bg-[#ff8679]/15 text-[#ff8679] border-[#ff8679]/50 shadow-sm shadow-[#ff8679]/10'
                 : 'bg-[#1a1b22] hover:bg-[#22232c] text-zinc-300 hover:text-white border-zinc-800 hover:border-zinc-700'
             }`}
             title="Rechercher une œuvre, un auteur, un article"
           >
-            <Search className={`w-4 h-4 ${viewMode === 'recherche' ? 'text-[#ff5a50]' : 'text-zinc-400'}`} />
+            <Search className={`w-4 h-4 ${viewMode === 'recherche' ? 'text-[#ff8679]' : 'text-zinc-400'}`} />
             <span className="font-semibold">Recherche</span>
           </button>
 
@@ -103,7 +103,7 @@ export const Navbar: React.FC = () => {
             id="nav-mobile-search-btn"
             onClick={() => navigateTo('recherche')}
             className={`md:hidden p-2 rounded-lg text-zinc-300 hover:text-white focus:outline-none cursor-pointer transition-colors ${
-              viewMode === 'recherche' ? 'text-[#ff5a50] bg-[#ff5a50]/10' : ''
+              viewMode === 'recherche' ? 'text-[#ff8679] bg-[#ff8679]/10' : ''
             }`}
             aria-label="Rechercher"
             title="Rechercher"
@@ -132,7 +132,7 @@ export const Navbar: React.FC = () => {
           <button
             onClick={() => navigateTo('accueil')}
             className={`text-center py-2.5 text-base font-semibold border-b border-zinc-800/60 ${
-              viewMode === 'accueil' ? 'text-[#ff5a50]' : 'text-zinc-200'
+              viewMode === 'accueil' ? 'text-[#ff8679]' : 'text-zinc-200'
             }`}
           >
             Accueil
@@ -141,7 +141,7 @@ export const Navbar: React.FC = () => {
           <button
             onClick={() => navigateTo('oeuvres')}
             className={`text-center py-2.5 text-base font-semibold border-b border-zinc-800/60 ${
-              viewMode === 'oeuvres' ? 'text-[#ff5a50]' : 'text-zinc-200'
+              viewMode === 'oeuvres' ? 'text-[#ff8679]' : 'text-zinc-200'
             }`}
           >
             Œuvres
@@ -150,7 +150,7 @@ export const Navbar: React.FC = () => {
           <button
             onClick={() => navigateTo('articles')}
             className={`text-center py-2.5 text-base font-semibold border-b border-zinc-800/60 ${
-              viewMode === 'articles' ? 'text-[#ff5a50]' : 'text-zinc-200'
+              viewMode === 'articles' ? 'text-[#ff8679]' : 'text-zinc-200'
             }`}
           >
             Articles
@@ -159,7 +159,7 @@ export const Navbar: React.FC = () => {
           <button
             onClick={() => navigateTo('recherche')}
             className={`flex items-center justify-center gap-2 text-center py-2.5 text-base font-semibold ${
-              viewMode === 'recherche' ? 'text-[#ff5a50]' : 'text-zinc-200'
+              viewMode === 'recherche' ? 'text-[#ff8679]' : 'text-zinc-200'
             }`}
           >
             <Search className="w-4 h-4" />

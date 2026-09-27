@@ -65,7 +65,7 @@ export const ArticleDetailPage: React.FC = () => {
         <p className="text-zinc-400 mb-6 max-w-md">L'article demandé n'existe pas ou a été déplacé.</p>
         <button
           onClick={() => setViewMode('articles')}
-          className="px-6 py-2.5 rounded-full bg-[#ff5a50] text-white font-semibold hover:bg-[#ff6b5b] transition-colors"
+          className="px-6 py-2.5 rounded-full bg-[#ff8679] text-white font-semibold hover:bg-[#eb6e60] transition-colors"
         >
           Retour au magazine
         </button>
@@ -154,7 +154,7 @@ export const ArticleDetailPage: React.FC = () => {
               Magazine & Articles
             </button>
             <ChevronRight className="w-3.5 h-3.5 text-zinc-600" />
-            <span className="text-[#ff5a50] font-medium truncate max-w-[200px] sm:max-w-xs">
+            <span className="text-[#ff8679] font-medium truncate max-w-[200px] sm:max-w-xs">
               {currentArticle.category || 'Article'}
             </span>
           </nav>
@@ -173,7 +173,7 @@ export const ArticleDetailPage: React.FC = () => {
         <header className="mb-6 sm:mb-8">
           <div className="flex flex-wrap items-center gap-2.5 mb-3.5">
             {currentArticle.category && (
-              <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-[#ff5a50]/15 border border-[#ff5a50]/30 text-[#ff6b5b]">
+              <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-[#ff8679]/15 border border-[#ff8679]/30 text-[#ffa296]">
                 {currentArticle.category}
               </span>
             )}
@@ -197,7 +197,7 @@ export const ArticleDetailPage: React.FC = () => {
           {/* Author info & Quick Share */}
           <div className="flex flex-wrap items-center justify-between gap-4 pt-3 pb-2 border-t border-zinc-800/60">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#ff5a50] to-orange-500 flex items-center justify-center text-white font-bold text-sm shadow-md">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#ff8679] to-orange-500 flex items-center justify-center text-white font-bold text-sm shadow-md">
                 {currentArticle.author ? currentArticle.author.charAt(0).toUpperCase() : 'O'}
               </div>
               <div>
@@ -252,7 +252,7 @@ export const ArticleDetailPage: React.FC = () => {
 
         {/* Lead Excerpt */}
         {currentArticle.excerpt && (
-          <div className="p-5 sm:p-7 rounded-2xl bg-[#14151e] border-l-4 border-[#ff5a50] shadow-lg mb-8">
+          <div className="p-5 sm:p-7 rounded-2xl bg-[#14151e] border-l-4 border-[#ff8679] shadow-lg mb-8">
             <p className="text-base sm:text-lg md:text-xl text-zinc-100 font-medium leading-relaxed italic">
               « {currentArticle.excerpt} »
             </p>
@@ -288,16 +288,16 @@ export const ArticleDetailPage: React.FC = () => {
               onClick={() => handleShare()}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-800/90 text-zinc-200 hover:text-white hover:bg-zinc-700 border border-zinc-700 text-xs sm:text-sm font-semibold transition-colors"
             >
-              <Share2 className="w-4 h-4 text-[#ff5a50]" />
+              <Share2 className="w-4 h-4 text-[#ff8679]" />
               <span>Partager l'article</span>
             </button>
           </div>
         </div>
 
         {/* CTA Download APK App Banner */}
-        <section className="mb-16 p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-[#1c1313] via-[#14141c] to-[#0c0d12] border border-[#ff5a50]/20 shadow-2xl relative overflow-hidden flex flex-col sm:flex-row items-center justify-between gap-6">
+        <section className="mb-16 p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-[#1c1313] via-[#14141c] to-[#0c0d12] border border-[#ff8679]/20 shadow-2xl relative overflow-hidden flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-[#ff5a50]/20 border border-[#ff5a50]/40 flex items-center justify-center shrink-0 shadow-inner text-[#ff5a50]">
+            <div className="w-14 h-14 rounded-2xl bg-[#ff8679]/20 border border-[#ff8679]/40 flex items-center justify-center shrink-0 shadow-inner text-[#ff8679]">
               <Smartphone className="w-7 h-7" />
             </div>
             <div>
@@ -312,7 +312,7 @@ export const ArticleDetailPage: React.FC = () => {
           <a
             href={apkUrl}
             download={`OZI-Reader-${appVersion?.version || 'v2.4.0'}.apk`}
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#ff5a50] hover:bg-[#ff6b5b] text-white font-bold text-sm transition-all shadow-lg shadow-[#ff5a50]/25 hover:scale-105 shrink-0"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#ff8679] hover:bg-[#eb6e60] text-white font-bold text-sm transition-all shadow-lg shadow-[#ff8679]/25 hover:scale-105 shrink-0"
           >
             <Download className="w-4 h-4" />
             <span>Télécharger l'APK ({appVersion?.version || 'v2.4.0'})</span>
@@ -328,7 +328,7 @@ export const ArticleDetailPage: React.FC = () => {
               </h2>
               <button
                 onClick={() => setViewMode('articles')}
-                className="text-xs sm:text-sm font-semibold text-[#ff5a50] hover:text-[#ff6b5b] flex items-center gap-1"
+                className="text-xs sm:text-sm font-semibold text-[#ff8679] hover:text-[#ffa296] flex items-center gap-1"
               >
                 <span>Voir tout</span>
                 <ChevronRight className="w-4 h-4" />

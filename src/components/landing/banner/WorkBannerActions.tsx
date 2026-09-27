@@ -15,7 +15,7 @@ export const WorkBannerActions: React.FC<WorkBannerActionsProps> = ({
   return (
     <div className={`work-banner__actions flex items-center gap-2.5 z-10 ${className}`}>
       {/* Category / Genre Badge relocated to the right anchor zone */}
-      <span className="inline-block px-3.5 py-1.5 rounded-full text-xs font-black tracking-wider uppercase bg-[#ff5a50]/20 text-[#ff746c] border border-[#ff5a50]/40 backdrop-blur-md shadow-sm font-heading">
+      <span className="inline-block px-3.5 py-1.5 rounded-full text-xs font-black tracking-wider uppercase bg-[#ff8679]/20 text-[#ffa296] border border-[#ff8679]/40 backdrop-blur-md shadow-sm font-heading">
         {series.genre}
       </span>
     </div>

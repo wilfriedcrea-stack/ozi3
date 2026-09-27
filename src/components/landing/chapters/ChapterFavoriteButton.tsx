@@ -86,16 +86,16 @@ export const ChapterFavoriteButton: React.FC<ChapterFavoriteButtonProps> = ({
       }}
       aria-label={isFavorited ? `Retirer des favoris (${formattedCount})` : `Ajouter aux favoris (${formattedCount})`}
       aria-pressed={isFavorited}
-      className={`inline-flex items-center gap-1.5 py-1 px-2 rounded-md transition-colors cursor-pointer select-none focus:outline-none focus-visible:ring-1 focus-visible:ring-[#ff5a50] ${className}`}
+      className={`inline-flex items-center gap-1.5 py-1 px-2 rounded-md transition-colors cursor-pointer select-none focus:outline-none focus-visible:ring-1 focus-visible:ring-[#ff8679] ${className}`}
     >
       <Heart
         className={`w-4 h-4 shrink-0 transition-transform active:scale-125 duration-150 ${
           isFavorited
-            ? 'fill-[#ff5a50] text-[#ff5a50]'
+            ? 'fill-[#ff8679] text-[#ff8679]'
             : 'text-[#9ca3af] hover:text-white'
         }`}
       />
-      <span className={`text-xs font-medium ${isFavorited ? 'text-[#ff5a50]' : 'text-[#9ca3af]'}`}>
+      <span className={`text-xs font-medium ${isFavorited ? 'text-[#ff8679]' : 'text-[#9ca3af]'}`}>
         {formattedCount}
       </span>
     </button>

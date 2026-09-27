@@ -64,7 +64,7 @@ export const HeroSection: React.FC = () => {
         particleCount: 80,
         spread: 70,
         origin: { y: 0.6 },
-        colors: ['#FF5A50', '#FF6B5B', '#F59E0B', '#ffffff']
+        colors: ['#ff8679', '#ffa296', '#F59E0B', '#ffffff']
       });
     } catch {
       // safe fallback
@@ -100,8 +100,8 @@ export const HeroSection: React.FC = () => {
     <section id="section-accueil" className="relative min-h-[85vh] pt-12 sm:pt-16 pb-20 flex items-center justify-center overflow-hidden bg-[#07080c]">
       {/* Dynamic Background Ambient Gradients */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[750px] h-[550px] bg-gradient-to-tr from-[#ff5a50]/20 via-amber-500/10 to-transparent rounded-full blur-[130px]" />
-        <div className="absolute top-20 right-10 w-[450px] h-[450px] bg-[#ff6b5b]/15 rounded-full blur-[120px]" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[750px] h-[550px] bg-gradient-to-tr from-[#ff8679]/20 via-amber-500/10 to-transparent rounded-full blur-[130px]" />
+        <div className="absolute top-20 right-10 w-[450px] h-[450px] bg-[#ff8679]/15 rounded-full blur-[120px]" />
         <div className="absolute bottom-10 left-10 w-[400px] h-[400px] bg-rose-700/10 rounded-full blur-[110px]" />
         
         {/* Subtle geometric grid texture overlay */}
@@ -161,7 +161,7 @@ export const HeroSection: React.FC = () => {
                 className="flex items-center justify-center gap-2.5 px-5 py-4 rounded-2xl bg-[#0d0e15] hover:bg-[#161724] text-slate-200 hover:text-white border border-slate-800 hover:border-slate-700 font-bold text-sm transition-all duration-200 shadow-lg tap-active cursor-pointer"
                 title="Options d'installation PWA ou APK"
               >
-                <Smartphone className="w-4 h-4 text-[#ff5a50]" />
+                <Smartphone className="w-4 h-4 text-[#ff8679]" />
                 <span className="font-heading">Options d'installation</span>
               </button>
 
@@ -169,10 +169,10 @@ export const HeroSection: React.FC = () => {
               <button
                 id="hero-trailer-btn"
                 onClick={handleWatchTrailer}
-                className="flex items-center justify-center gap-2.5 px-5 py-4 rounded-2xl bg-[#0d0e15] hover:bg-[#161724] text-slate-200 hover:text-white border border-slate-800 hover:border-[#ff5a50]/50 font-bold text-sm transition-all duration-200 group shadow-lg tap-active cursor-pointer"
+                className="flex items-center justify-center gap-2.5 px-5 py-4 rounded-2xl bg-[#0d0e15] hover:bg-[#161724] text-slate-200 hover:text-white border border-slate-800 hover:border-[#ff8679]/50 font-bold text-sm transition-all duration-200 group shadow-lg tap-active cursor-pointer"
               >
-                <div className="w-7 h-7 rounded-xl bg-[#ff5a50]/20 text-[#ff5a50] flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Play className="w-3.5 h-3.5 fill-[#ff5a50] ml-0.5" />
+                <div className="w-7 h-7 rounded-xl bg-[#ff8679]/20 text-[#ff8679] flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Play className="w-3.5 h-3.5 fill-[#ff8679] ml-0.5" />
                 </div>
                 <span className="font-heading">Teasers</span>
               </button>
@@ -196,7 +196,7 @@ export const HeroSection: React.FC = () => {
             {/* Live Metrics Strip */}
             <div className="w-full grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6 border-t border-slate-800/80">
               <div className="flex flex-col">
-                <span className="text-2xl sm:text-3xl font-black text-[#ff6b5b] tracking-tight font-almodobar">
+                <span className="text-2xl sm:text-3xl font-black text-[#ff8679] tracking-tight font-almodobar">
                   +54 000
                 </span>
                 <span className="text-xs text-slate-400 font-medium mt-0.5">Lecteurs actifs</span>
@@ -230,7 +230,7 @@ export const HeroSection: React.FC = () => {
           <div className="lg:col-span-5 relative">
             
             {/* Glow backing */}
-            <div className="absolute -inset-1 bg-gradient-to-r from-[#ff5a50] to-amber-500 rounded-3xl blur-xl opacity-30 group-hover:opacity-60 transition duration-1000 group-hover:duration-200 animate-pulse" />
+            <div className="absolute -inset-1 bg-gradient-to-r from-[#ff8679] to-amber-500 rounded-3xl blur-xl opacity-30 group-hover:opacity-60 transition duration-1000 group-hover:duration-200 animate-pulse" />
 
             <div className="relative rounded-3xl bg-[#0d0e15] border border-slate-800 overflow-hidden shadow-2xl">
               
@@ -251,7 +251,7 @@ export const HeroSection: React.FC = () => {
 
                 {/* Genre & Tag badges overlay */}
                 <div className="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-none">
-                  <span className="px-3 py-1 rounded-full bg-[#ff5a50] text-white text-xs font-black uppercase tracking-wider font-almodobar shadow-lg">
+                  <span className="px-3 py-1 rounded-full bg-[#ff8679] text-white text-xs font-black uppercase tracking-wider font-almodobar shadow-lg">
                     {currentHero.genre}
                   </span>
                   <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md text-amber-300 text-xs font-bold font-heading border border-white/10">
@@ -282,7 +282,7 @@ export const HeroSection: React.FC = () => {
                 <div className="flex items-center justify-between gap-3 pt-2">
                   <div className="flex items-center gap-3 text-xs text-slate-400 font-heading">
                     <span className="flex items-center gap-1">
-                      <BookOpen className="w-3.5 h-3.5 text-[#ff6b5b]" />
+                      <BookOpen className="w-3.5 h-3.5 text-[#ff8679]" />
                       <span>{currentHero.chaptersCount || (currentHero.chapters ? currentHero.chapters.length : 1)} chapitres</span>
                     </span>
                     <span>•</span>
@@ -329,7 +329,7 @@ export const HeroSection: React.FC = () => {
                         onClick={() => setActiveHeroIndex(idx)}
                         className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
                           activeHeroIndex === idx 
-                            ? 'w-6 bg-[#ff5a50]' 
+                            ? 'w-6 bg-[#ff8679]' 
                             : 'w-2 bg-slate-700 hover:bg-slate-500'
                         }`}
                         title={s.title}

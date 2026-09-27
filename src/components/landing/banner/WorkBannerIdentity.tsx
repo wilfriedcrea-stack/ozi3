@@ -44,7 +44,7 @@ export const WorkBannerIdentity: React.FC<WorkBannerIdentityProps> = ({
               onClick={() => setIsAuthorInfoOpen(true)}
               aria-label={`Afficher les informations sur l'auteur ${series.author}`}
               title="Informations sur l'auteur"
-              className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/35 text-white backdrop-blur-md transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff5a50] ml-0.5"
+              className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/35 text-white backdrop-blur-md transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff8679] ml-0.5"
             >
               <Info className="w-3 h-3 fill-current stroke-none" />
             </button>
@@ -58,7 +58,7 @@ export const WorkBannerIdentity: React.FC<WorkBannerIdentityProps> = ({
               type="button"
               id="banner-read-first-chapter-btn"
               onClick={onReadFirstChapter}
-              className="inline-flex items-center justify-center px-6 sm:px-8 py-3 rounded-full bg-[#f95e4e] hover:bg-[#e04f40] text-white font-black text-sm sm:text-base tracking-wide shadow-xl shadow-[#f95e4e]/35 hover:scale-105 active:scale-95 transition-all cursor-pointer font-heading drop-shadow-md"
+              className="inline-flex items-center justify-center px-6 sm:px-8 py-3 rounded-full bg-[#ff8679] hover:bg-[#eb6e60] text-white font-black text-sm sm:text-base tracking-wide shadow-xl shadow-[#ff8679]/35 hover:scale-105 active:scale-95 transition-all cursor-pointer font-heading drop-shadow-md"
             >
               <span>Lire le premier chapitre</span>
             </button>

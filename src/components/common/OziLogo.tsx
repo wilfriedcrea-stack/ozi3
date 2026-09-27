@@ -63,13 +63,13 @@ export const OziLogo: React.FC<OziLogoProps> = ({
         />
       ) : (
         <div className="flex items-center gap-2.5">
-          <div className={`${iconSizes} rounded-xl bg-gradient-to-br from-[#FF6B5B] to-[#FF3829] flex items-center justify-center shadow-lg shadow-red-500/20 shrink-0`}>
+          <div className={`${iconSizes} rounded-xl bg-gradient-to-br from-[#ffa296] to-[#eb6051] flex items-center justify-center shadow-lg shadow-orange-500/20 shrink-0`}>
             <div className="w-2/3 h-2/3 rounded-full border-2 border-white flex items-center justify-center">
               <div className="w-2 h-2 rounded-full bg-white"></div>
             </div>
           </div>
           <span className="font-black text-white text-xl tracking-tight font-almodobar">
-            O<span className="text-[#FF5A50]">Z</span>I
+            O<span className="text-[#ff8679]">Z</span>I
           </span>
         </div>
       )}
@@ -80,11 +80,11 @@ export const OziLogo: React.FC<OziLogoProps> = ({
           <div className="flex items-center gap-2">
             {showText && (
               <span className="font-black tracking-tight text-white font-almodobar text-lg leading-none">
-                OZI<span className="text-[#ff5a50] font-normal text-xs ml-1 font-sans">Webtoon</span>
+                OZI<span className="text-[#ff8679] font-normal text-xs ml-1 font-sans">Webtoon</span>
               </span>
             )}
             {showBadge && (
-              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-[#ff5a50]/15 text-[#ff6b5b] border border-[#ff5a50]/30 tracking-wider">
+              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-[#ff8679]/15 text-[#ff8679] border border-[#ff8679]/30 tracking-wider">
                 OFFICIEL
               </span>
             )}

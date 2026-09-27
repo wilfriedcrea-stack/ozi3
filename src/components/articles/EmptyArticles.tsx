@@ -9,7 +9,7 @@ export const EmptyArticles: React.FC<EmptyArticlesProps> = ({ onRefresh }) => {
   return (
     <div className="w-full max-w-[860px] mx-auto px-4 py-20 text-center flex flex-col items-center justify-center">
       <div className="w-16 h-16 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex items-center justify-center text-zinc-400 mb-4 shadow-xl">
-        <Newspaper className="w-8 h-8 text-[#ff5a50]" />
+        <Newspaper className="w-8 h-8 text-[#ff8679]" />
       </div>
       <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
         Aucun article pour le moment
@@ -22,7 +22,7 @@ export const EmptyArticles: React.FC<EmptyArticlesProps> = ({ onRefresh }) => {
           onClick={onRefresh}
           className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700 text-xs font-semibold transition-colors"
         >
-          <Sparkles className="w-3.5 h-3.5 text-[#ff5a50]" />
+          <Sparkles className="w-3.5 h-3.5 text-[#ff8679]" />
           <span>Actualiser les articles</span>
         </button>
       )}

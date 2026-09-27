@@ -154,11 +154,11 @@ export const SearchPage: React.FC = () => {
               Accueil
             </button>
             <ChevronRight className="w-3.5 h-3.5 text-zinc-600" />
-            <span className="text-[#ff5a50] font-semibold">Recherche globale</span>
+            <span className="text-[#ff8679] font-semibold">Recherche globale</span>
           </div>
 
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight mb-3 font-almodobar">
-            Rechercher sur <span className="text-[#ff5a50]">OZI</span>
+            Rechercher sur <span className="text-[#ff8679]">OZI</span>
           </h1>
           <p className="text-sm sm:text-base text-zinc-400 max-w-xl mb-8">
             Explorez l'univers des bandes dessinées africaines, webtoons, actualités et articles exclusifs.
@@ -166,11 +166,11 @@ export const SearchPage: React.FC = () => {
 
           {/* Prominent Search Input Bar */}
           <div className="w-full relative group">
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-[#ff5a50] via-purple-600 to-amber-500 rounded-2xl opacity-40 group-focus-within:opacity-100 transition-opacity duration-300 blur-sm"></div>
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-[#ff8679] via-purple-600 to-amber-500 rounded-2xl opacity-40 group-focus-within:opacity-100 transition-opacity duration-300 blur-sm"></div>
             
-            <div className="relative flex items-center w-full bg-[#14151c] border border-zinc-700/80 group-focus-within:border-[#ff5a50] rounded-2xl shadow-2xl transition-all">
+            <div className="relative flex items-center w-full bg-[#14151c] border border-zinc-700/80 group-focus-within:border-[#ff8679] rounded-2xl shadow-2xl transition-all">
               <div className="pl-4 sm:pl-5 pr-3 text-zinc-400">
-                <Search className="w-5 h-5 sm:w-6 sm:h-6 text-zinc-400 group-focus-within:text-[#ff5a50] transition-colors" />
+                <Search className="w-5 h-5 sm:w-6 sm:h-6 text-zinc-400 group-focus-within:text-[#ff8679] transition-colors" />
               </div>
               
               <input
@@ -229,7 +229,7 @@ export const SearchPage: React.FC = () => {
               onClick={() => setActiveCategory('all')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer shrink-0 ${
                 activeCategory === 'all'
-                  ? 'bg-[#ff5a50] text-white shadow-lg shadow-[#ff5a50]/20'
+                  ? 'bg-[#ff8679] text-white shadow-lg shadow-[#ff8679]/20'
                   : 'bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800'
               }`}
             >
@@ -358,7 +358,7 @@ export const SearchPage: React.FC = () => {
             </p>
             <button
               onClick={clearSearch}
-              className="px-5 py-2.5 rounded-xl bg-[#ff5a50] hover:bg-[#ff5a50]/90 text-white font-bold text-sm shadow-lg transition-all cursor-pointer"
+              className="px-5 py-2.5 rounded-xl bg-[#ff8679] hover:bg-[#ff8679]/90 text-white font-bold text-sm shadow-lg transition-all cursor-pointer"
             >
               Réinitialiser la recherche
             </button>

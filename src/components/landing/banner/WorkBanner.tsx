@@ -30,7 +30,7 @@ export const WorkBanner: React.FC<WorkBannerProps> = ({
   return (
     <div
       id="work-main-banner"
-      className={`work-banner block relative w-full overflow-hidden bg-[#0c0d14] border-b border-zinc-800/80 select-none ${className}`}
+      className={`work-banner block relative w-full overflow-hidden bg-[#0c0d14] select-none ${className}`}
       style={{
         minHeight: '270px'
       }}

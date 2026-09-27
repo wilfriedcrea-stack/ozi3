@@ -12,7 +12,7 @@ export const TeasersSection: React.FC = () => {
         {/* Section Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#ff5a50]/15 border border-[#ff5a50]/30 text-[#ff6b5b] text-xs font-bold uppercase tracking-wider mb-3 font-almodobar">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#ff8679]/15 border border-[#ff8679]/30 text-[#ffa296] text-xs font-bold uppercase tracking-wider mb-3 font-almodobar">
               <Film className="w-3.5 h-3.5" />
               <span>Teasers & Bandes-Annonces</span>
             </div>
@@ -32,7 +32,7 @@ export const TeasersSection: React.FC = () => {
               key={teaser.id}
               id={`teaser-card-${teaser.id}`}
               onClick={() => openTeaserModal(teaser)}
-              className="group relative rounded-3xl bg-[#0d0e15] border border-slate-800 hover:border-[#ff5a50]/50 overflow-hidden shadow-xl hover:shadow-2xl hover:shadow-red-500/10 transition-all duration-300 cursor-pointer flex flex-col tap-active"
+              className="group relative rounded-3xl bg-[#0d0e15] border border-slate-800 hover:border-[#ff8679]/50 overflow-hidden shadow-xl hover:shadow-2xl hover:shadow-red-500/10 transition-all duration-300 cursor-pointer flex flex-col tap-active"
             >
               {/* Video Thumbnail */}
               <div className="relative aspect-video w-full overflow-hidden bg-[#07080c]">
@@ -53,13 +53,13 @@ export const TeasersSection: React.FC = () => {
 
                 {/* Duration & Tag */}
                 <div className="absolute top-3 left-3">
-                  <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#07080c]/80 backdrop-blur-md text-[#ff6b5b] border border-[#ff5a50]/30 font-heading">
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#07080c]/80 backdrop-blur-md text-[#ffa296] border border-[#ff8679]/30 font-heading">
                     {teaser.type === 'trailer' ? 'Bande-Annonce' : teaser.type === 'motion_comic' ? 'Motion Comic' : 'Interview'}
                   </span>
                 </div>
 
                 <div className="absolute bottom-3 right-3 flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-[#07080c]/80 backdrop-blur-md text-[11px] font-mono text-slate-300">
-                  <Clock className="w-3 h-3 text-[#ff5a50]" />
+                  <Clock className="w-3 h-3 text-[#ff8679]" />
                   <span>{teaser.duration}</span>
                 </div>
               </div>
@@ -68,7 +68,7 @@ export const TeasersSection: React.FC = () => {
               <div className="p-5 flex-1 flex flex-col justify-between gap-3">
                 <div>
                   {teaser.seriesTitle && (
-                    <span className="text-[11px] font-bold text-[#ff6b5b] uppercase tracking-wider block mb-1 font-heading">
+                    <span className="text-[11px] font-bold text-[#ff8679] uppercase tracking-wider block mb-1 font-heading">
                       {teaser.seriesTitle}
                     </span>
                   )}

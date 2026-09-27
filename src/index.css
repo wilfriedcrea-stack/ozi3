@@ -1,12 +1,43 @@
 @import "tailwindcss";
 @import "./almodobar-font.css";
 
+@theme {
+  --color-orange-50: #fff5f4;
+  --color-orange-100: #ffe8e5;
+  --color-orange-200: #ffd4cf;
+  --color-orange-300: #ffb5ab;
+  --color-orange-400: #ffa296;
+  --color-orange-500: #ff8679;
+  --color-orange-600: #f06a5b;
+  --color-orange-700: #cc4f41;
+  --color-orange-800: #a83f33;
+  --color-orange-900: #8a372d;
+  --color-orange-950: #4c1a14;
+
+  --color-blue-50: #f0f1fe;
+  --color-blue-100: #e1e3fd;
+  --color-blue-200: #c6c9fb;
+  --color-blue-300: #9fa4f8;
+  --color-blue-400: #747bf4;
+  --color-blue-500: #5252e9;
+  --color-blue-600: #403bdc;
+  --color-blue-700: #332ebf;
+  --color-blue-800: #2b279a;
+  --color-blue-900: #27257a;
+  --color-blue-950: #171549;
+
+  --color-ozi-orange: #ff8679;
+  --color-ozi-blue: #5252e9;
+}
+
 @layer base {
   :root {
     --sat: env(safe-area-inset-top, 0px);
     --sab: env(safe-area-inset-bottom, 0px);
     --sal: env(safe-area-inset-left, 0px);
     --sar: env(safe-area-inset-right, 0px);
+    --ozi-orange: #ff8679;
+    --ozi-blue: #5252e9;
   }
 
   .safe-header {
@@ -66,7 +97,7 @@
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 90, 80, 0.7);
+    background: rgba(255, 134, 121, 0.7);
   }
 }
 
@@ -82,11 +113,15 @@
 
 /* Effets de Glow et palettes OZI officielles */
 .glow-ozi {
-  box-shadow: 0 0 24px -4px rgba(255, 90, 80, 0.45);
+  box-shadow: 0 0 24px -4px rgba(255, 134, 121, 0.45);
 }
 
 .glow-ozi-lg {
-  box-shadow: 0 0 45px -6px rgba(255, 90, 80, 0.5);
+  box-shadow: 0 0 45px -6px rgba(255, 134, 121, 0.5);
+}
+
+.glow-blue {
+  box-shadow: 0 0 24px -4px rgba(82, 82, 233, 0.45);
 }
 
 .glow-coin {
@@ -106,17 +141,17 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* Gradients officiels OZI */
+/* Gradients officiels OZI avec la nouvelle teinte #ff8679 */
 .bg-ozi-primary {
-  background: linear-gradient(135deg, #FF6B5B 0%, #FF5A50 50%, #FF3829 100%);
+  background: linear-gradient(135deg, #ffa296 0%, #ff8679 50%, #eb6051 100%);
 }
 
 .bg-ozi-primary-hover:hover {
-  background: linear-gradient(135deg, #FF7B6D 0%, #FF685F 50%, #FF4839 100%);
+  background: linear-gradient(135deg, #ffb5ab 0%, #ff9589 50%, #f06a5b 100%);
 }
 
 .text-ozi-gradient {
-  background: linear-gradient(135deg, #ffffff 0%, #ffd4cf 40%, #ff5a50 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #ffd4cf 40%, #ff8679 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }

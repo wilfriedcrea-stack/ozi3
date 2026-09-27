@@ -75,7 +75,7 @@ export const FollowWorkButton: React.FC<FollowWorkButtonProps> = ({
       className={`inline-flex items-center justify-center gap-1.5 font-bold rounded-full transition-all duration-200 cursor-pointer select-none shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-white active:scale-95 ${
         isFollowed
           ? 'bg-[#181922] text-white border border-zinc-600 hover:border-zinc-400 hover:bg-[#20222e]'
-          : 'bg-[#ff5a50] hover:bg-[#ff6b5b] text-white shadow-[#ff5a50]/25 hover:shadow-[#ff5a50]/40'
+          : 'bg-[#ff8679] hover:bg-[#eb6e60] text-white shadow-[#ff8679]/25 hover:shadow-[#ff8679]/40'
       } ${
         size === 'sm'
           ? 'px-3.5 py-1.5 text-xs min-h-[36px]'

@@ -88,7 +88,7 @@ export const ChapterRow: React.FC<ChapterRowProps> = ({
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       aria-label={`Lire ${displayTitle}`}
-      className="group w-full block bg-[#000000] text-[#ffffff] border-b border-[#252525] hover:bg-[#111111] transition-colors duration-200 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#ff5a50] select-none"
+      className="group w-full block bg-[#000000] text-[#ffffff] border-b border-[#252525] hover:bg-[#111111] transition-colors duration-200 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#ff8679] select-none"
     >
       {/* DESKTOP LAYOUT (>= 768px) */}
       <div className="hidden md:grid grid-cols-[106px_minmax(0,1fr)_160px_120px_65px] items-center min-h-[102px] w-full px-0">

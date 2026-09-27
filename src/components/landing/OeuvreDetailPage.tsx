@@ -78,7 +78,7 @@ export const OeuvreDetailPage: React.FC = () => {
         <p className="text-zinc-400 mb-6 max-w-md">L'œuvre demandée n'existe pas ou a été retirée du catalogue.</p>
         <button
           onClick={() => setViewMode('oeuvres')}
-          className="px-6 py-2.5 rounded-full bg-[#ff5a50] text-white font-semibold hover:bg-[#ff6b5b] transition-colors"
+          className="px-6 py-2.5 rounded-full bg-[#ff8679] text-white font-semibold hover:bg-[#eb6e60] transition-colors"
         >
           Retour au catalogue
         </button>
@@ -176,9 +176,9 @@ export const OeuvreDetailPage: React.FC = () => {
 
         {/* 2. Direct Synopsis Section (Unframed & Clean) */}
         <section className="mb-10 relative">
-          <div className="flex items-center justify-between gap-4 flex-wrap mb-4 pb-3 border-b border-zinc-800/80">
+          <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
             <h2 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-orange-400 font-heading">
-              Synopsis de l'œuvre
+              Synopsis
             </h2>
             <div className="flex items-center gap-2 text-xs">
               <span className="px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-300 font-medium">
@@ -202,7 +202,7 @@ export const OeuvreDetailPage: React.FC = () => {
           </p>
 
           {/* Tags & Quick Actions */}
-          <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-zinc-800/60">
+          <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
             {currentSeries.tags && currentSeries.tags.length > 0 ? (
               <div className="flex flex-wrap items-center gap-1.5">
                 {currentSeries.tags.map(tag => (
@@ -259,7 +259,7 @@ export const OeuvreDetailPage: React.FC = () => {
 
         {/* Related Series Recommendations */}
         {relatedSeries.length > 0 && (
-          <section className="pt-8 border-t border-zinc-800/80">
+          <section className="pt-8">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl sm:text-2xl font-black text-white font-almodobar">
                 Dans le même univers / Recommandé
