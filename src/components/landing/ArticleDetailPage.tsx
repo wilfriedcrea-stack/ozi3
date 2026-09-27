@@ -19,6 +19,7 @@ import { Article } from '../../types';
 import { ArticleDate } from '../articles/ArticleDate';
 import { ImageFallback } from '../articles/ImageFallback';
 import { ArticleCard } from '../articles/ArticleCard';
+import { ArticleContentRenderer } from '../articles/ArticleContentRenderer';
 
 export const ArticleDetailPage: React.FC = () => {
   const { 
@@ -258,13 +259,9 @@ export const ArticleDetailPage: React.FC = () => {
           </div>
         )}
 
-        {/* Article Body Content */}
-        <div className="prose prose-invert max-w-none space-y-6 text-zinc-200 text-base sm:text-lg leading-relaxed mb-12">
-          {paragraphs.map((p, idx) => (
-            <p key={`para-${idx}`} className="leading-relaxed">
-              {p}
-            </p>
-          ))}
+        {/* Article Body Content with Rich Inline Images & Formatting */}
+        <div className="max-w-none mb-12">
+          <ArticleContentRenderer content={currentArticle.content || currentArticle.excerpt || ''} />
         </div>
 
         {/* Reaction & Engagement Bar */}

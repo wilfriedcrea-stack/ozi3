@@ -21,8 +21,13 @@ const GENRES: Array<'Tous' | SeriesGenre> = [
   'Action & Shonen',
   'Romance & Drame',
   'Mythologie & Histoire',
+  'Thriller & Mystère',
   'Arts Martiaux',
-  'Comédie'
+  'Jeunesse & Aventure',
+  'Horreur',
+  'Comédie',
+  'Seinen',
+  'Tranche de vie'
 ];
 
 type FormatFilter = 'all' | 'série' | 'film';
@@ -44,8 +49,10 @@ export const SeriesCatalog: React.FC = () => {
   const filteredSeries = useMemo(() => {
     return series.filter(s => {
       // Format filter
-      const itemFormat = s.format || (s.chaptersCount > 1 ? 'série' : 'film');
-      const matchesFormat = selectedFormat === 'all' || itemFormat === selectedFormat;
+      const itemFormat = (s.format || (s.chaptersCount > 1 ? 'série' : 'film')).toLowerCase();
+      const matchesFormat = selectedFormat === 'all' ||
+        (selectedFormat === 'série' && (itemFormat === 'série' || itemFormat === 'serie')) ||
+        (selectedFormat === 'film' && itemFormat === 'film');
 
       // Genre filter
       const matchesGenre = selectedGenre === 'Tous' || s.genre === selectedGenre || s.secondaryGenres?.includes(selectedGenre as SeriesGenre);

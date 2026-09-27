@@ -50,12 +50,27 @@ export interface Chapter {
   audioConfig?: AmbientAudioConfig;
 }
 
+export interface SeriesShopItem {
+  id: string;
+  title: string;
+  category?: string;
+  image: string;
+  priceCfa?: number;
+  priceEur?: number;
+  description?: string;
+  linkUrl?: string;
+  sizes?: string[];
+}
+
 export interface Series {
   id: string;
   title: string;
   slug: string;
   author: string;
   artist: string;
+  authorPhotoUrl?: string;
+  authorBio?: string;
+  shopArticles?: SeriesShopItem[];
   studio?: string;
   country: string;
   synopsis: string;
@@ -120,6 +135,7 @@ export interface Article {
   author?: string;
   readTime?: string;
   content?: string;
+  galleryImages?: string[];
 }
 
 export interface PressRelease {
@@ -359,7 +375,7 @@ export interface AdBanner {
 export interface LwsStorageFile {
   name: string;
   path: string;
-  directory: 'covers' | 'banners' | 'chapters' | 'audio';
+  directory: 'covers' | 'banners' | 'chapters' | 'audio' | 'articles' | 'authors' | 'shop';
   size: number;
   sizeFormatted: string;
   mimeType: string;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   FileText, 
   Plus, 
@@ -13,17 +13,52 @@ import {
   XCircle, 
   Clock, 
   User, 
-  Image as ImageIcon 
+  Image as ImageIcon,
+  Upload,
+  ImagePlus,
+  Heading2,
+  Heading3,
+  Quote,
+  Bold,
+  Italic,
+  Sparkles,
+  ExternalLink,
+  Layers
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Article } from '../../types';
+import { uploadToLWS, compressImageToWebP } from '../../services/lwsUploadService';
+import { ArticleContentRenderer } from '../articles/ArticleContentRenderer';
 
 export const AdminArticlesManager: React.FC = () => {
-  const { articles, addArticle, updateArticle, deleteArticle } = useData();
+  const { articles, addArticle, updateArticle, deleteArticle, addLwsFile } = useData();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
 
-  const [formData, setFormData] = useState({
+  const [activeEditorTab, setActiveEditorTab] = useState<'write' | 'preview'>('write');
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [isUploadingInline, setIsUploadingInline] = useState(false);
+  const [showImageInserter, setShowImageInserter] = useState(false);
+  const [inlineImageUrl, setInlineImageUrl] = useState('');
+  const [inlineImageCaption, setInlineImageCaption] = useState('');
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+
+  const contentTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const [formData, setFormData] = useState<{
+    title: string;
+    category: string;
+    image: string;
+    alt: string;
+    author: string;
+    readTime: string;
+    excerpt: string;
+    content: string;
+    galleryImages: string[];
+    publishedAt: string;
+    featured: boolean;
+    published: boolean;
+  }>({
     title: '',
     category: 'Interview & Portrait',
     image: '',
@@ -32,6 +67,7 @@ export const AdminArticlesManager: React.FC = () => {
     readTime: '5 min',
     excerpt: '',
     content: '',
+    galleryImages: [],
     publishedAt: new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase(),
     featured: false,
     published: true
@@ -39,6 +75,9 @@ export const AdminArticlesManager: React.FC = () => {
 
   const handleOpenNew = () => {
     setEditingArticle(null);
+    setActiveEditorTab('write');
+    setShowImageInserter(false);
+    setUploadStatus(null);
     setFormData({
       title: '',
       category: 'Interview & Portrait',
@@ -48,6 +87,7 @@ export const AdminArticlesManager: React.FC = () => {
       readTime: '5 min',
       excerpt: '',
       content: '',
+      galleryImages: [],
       publishedAt: new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase(),
       featured: false,
       published: true
@@ -57,6 +97,9 @@ export const AdminArticlesManager: React.FC = () => {
 
   const handleOpenEdit = (art: Article) => {
     setEditingArticle(art);
+    setActiveEditorTab('write');
+    setShowImageInserter(false);
+    setUploadStatus(null);
     setFormData({
       title: art.title,
       category: art.category || 'Interview & Portrait',
@@ -66,11 +109,127 @@ export const AdminArticlesManager: React.FC = () => {
       readTime: art.readTime || '5 min',
       excerpt: art.excerpt || '',
       content: art.content || '',
+      galleryImages: art.galleryImages || [],
       publishedAt: art.publishedAt || '',
       featured: !!art.featured,
       published: art.published !== false
     });
     setModalOpen(true);
+  };
+
+  // Helper to insert markdown or image into textarea at current cursor position
+  const insertTextAtCursor = (textToInsert: string) => {
+    const textarea = contentTextareaRef.current;
+    if (!textarea) {
+      setFormData(prev => ({
+        ...prev,
+        content: prev.content ? `${prev.content}\n\n${textToInsert}` : textToInsert
+      }));
+      return;
+    }
+
+    const start = textarea.selectionStart || 0;
+    const end = textarea.selectionEnd || 0;
+    const current = formData.content || '';
+    const before = current.substring(0, start);
+    const after = current.substring(end);
+
+    const newContent = `${before}${textToInsert}${after}`;
+    setFormData(prev => ({ ...prev, content: newContent }));
+
+    // Reset cursor position after insert
+    setTimeout(() => {
+      textarea.focus();
+      const nextPos = start + textToInsert.length;
+      textarea.setSelectionRange(nextPos, nextPos);
+    }, 50);
+  };
+
+  // Upload cover image
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingCover(true);
+    setUploadStatus('Compression et téléversement de la couverture...');
+    try {
+      const compressed = await compressImageToWebP(file, 1200, 0.88);
+      const res = await uploadToLWS(
+        compressed.file,
+        `art_cover_${Date.now()}.webp`,
+        'articles'
+      );
+      const finalUrl = res.url || compressed.dataUrl;
+      setFormData(prev => ({ ...prev, image: finalUrl }));
+      if (res.fileInfo) addLwsFile(res.fileInfo);
+      setUploadStatus('Couverture mise à jour !');
+      setTimeout(() => setUploadStatus(null), 2500);
+    } catch (err) {
+      console.error('Cover upload error:', err);
+      setUploadStatus('Erreur de téléversement');
+    } finally {
+      setIsUploadingCover(false);
+    }
+  };
+
+  // Upload inline article image
+  const handleInlineImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingInline(true);
+    setUploadStatus('Téléversement de l\'image d\'illustration...');
+    try {
+      const compressed = await compressImageToWebP(file, 1000, 0.88);
+      const res = await uploadToLWS(
+        compressed.file,
+        `art_inline_${Date.now()}.webp`,
+        'articles'
+      );
+      const finalUrl = res.url || compressed.dataUrl;
+      setInlineImageUrl(finalUrl);
+      if (res.fileInfo) addLwsFile(res.fileInfo);
+      setUploadStatus('Image prête à être insérée !');
+      setTimeout(() => setUploadStatus(null), 2500);
+    } catch (err) {
+      console.error('Inline image upload error:', err);
+      setUploadStatus('Erreur lors du téléversement');
+    } finally {
+      setIsUploadingInline(false);
+    }
+  };
+
+  // Confirm inline image insertion
+  const handleConfirmInsertImage = () => {
+    if (!inlineImageUrl.trim()) return;
+
+    const caption = inlineImageCaption.trim() || 'Illustration article';
+    const markdownImg = `\n\n![${caption}](${inlineImageUrl.trim()})\n\n`;
+    insertTextAtCursor(markdownImg);
+
+    // Save to gallery images if not already present
+    setFormData(prev => {
+      const exists = prev.galleryImages?.includes(inlineImageUrl.trim());
+      return {
+        ...prev,
+        galleryImages: exists ? prev.galleryImages : [...(prev.galleryImages || []), inlineImageUrl.trim()]
+      };
+    });
+
+    setInlineImageUrl('');
+    setInlineImageCaption('');
+    setShowImageInserter(false);
+  };
+
+  const handleInsertFromGallery = (url: string) => {
+    insertTextAtCursor(`\n\n![Illustration](${url})\n\n`);
+  };
+
+  const handleRemoveFromGallery = (url: string) => {
+    setFormData(prev => ({
+      ...prev,
+      galleryImages: (prev.galleryImages || []).filter(u => u !== url)
+    }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -311,25 +470,59 @@ export const AdminArticlesManager: React.FC = () => {
                 </div>
               </div>
 
+              {/* Cover Image & Upload */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  URL de l'image de couverture *
-                </label>
-                <div className="flex gap-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Image de couverture *
+                  </label>
+                  {uploadStatus && (
+                    <span className="text-[11px] font-semibold text-amber-400 animate-pulse">
+                      {uploadStatus}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="url"
                     required
                     value={formData.image}
                     onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                    placeholder="https://images.unsplash.com/photo-..."
+                    placeholder="https://images.unsplash.com/... ou téléversez un fichier"
                     className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-red-500"
                   />
+                  <label className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs cursor-pointer border border-slate-700 shrink-0 transition-all">
+                    <Upload className="w-4 h-4 text-orange-400" />
+                    <span>{isUploadingCover ? 'Téléversement...' : 'Téléverser photo'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleCoverUpload}
+                      disabled={isUploadingCover}
+                    />
+                  </label>
                 </div>
+                {formData.image && (
+                  <div className="mt-2.5 relative aspect-[21/9] w-full max-h-40 rounded-xl overflow-hidden bg-slate-950 border border-slate-800">
+                    <img 
+                      src={formData.image} 
+                      alt="Aperçu couverture" 
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80';
+                      }}
+                    />
+                    <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-md text-[10px] font-bold text-white border border-white/10">
+                      Aperçu couverture
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Extrait / Chapô (court résumé)
+                  Extrait / Chapô (court résumé d'introduction)
                 </label>
                 <textarea
                   rows={2}
@@ -340,17 +533,266 @@ export const AdminArticlesManager: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Contenu complet de l'article (Markdown supporté)
-                </label>
-                <textarea
-                  rows={6}
-                  value={formData.content}
-                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                  placeholder="Rédigez l'article complet ici..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-red-500 font-mono text-xs leading-relaxed"
-                />
+              {/* Rich Content & Image Integration Section */}
+              <div className="space-y-3 pt-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
+                      Contenu & Images de l'article
+                    </label>
+                    <p className="text-[11px] text-slate-500">
+                      Intégrez des illustrations, photos haute résolution et formatez le texte.
+                    </p>
+                  </div>
+
+                  {/* Mode Tab Switcher */}
+                  <div className="flex items-center gap-1 p-1 bg-slate-950 rounded-xl border border-slate-800 self-start sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setActiveEditorTab('write')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                        activeEditorTab === 'write'
+                          ? 'bg-red-600 text-white shadow-md'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      ✏️ Rédiger
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveEditorTab('preview')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                        activeEditorTab === 'preview'
+                          ? 'bg-red-600 text-white shadow-md'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      👁️ Aperçu direct
+                    </button>
+                  </div>
+                </div>
+
+                {/* Toolbar */}
+                {activeEditorTab === 'write' && (
+                  <div className="flex flex-wrap items-center gap-1.5 p-2 bg-slate-950 rounded-xl border border-slate-800 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setShowImageInserter(!showImageInserter)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all ${
+                        showImageInserter 
+                          ? 'bg-amber-500 text-slate-950 shadow-md' 
+                          : 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20'
+                      }`}
+                    >
+                      <ImagePlus className="w-3.5 h-3.5" />
+                      <span>Insérer une image</span>
+                    </button>
+
+                    <div className="w-[1px] h-5 bg-slate-800 mx-1 hidden sm:block" />
+
+                    <button
+                      type="button"
+                      onClick={() => insertTextAtCursor('\n\n## Titre de section\n\n')}
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold border border-slate-800"
+                      title="Ajouter un titre H2"
+                    >
+                      <Heading2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertTextAtCursor('\n\n### Sous-titre\n\n')}
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold border border-slate-800"
+                      title="Ajouter un sous-titre H3"
+                    >
+                      <Heading3 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertTextAtCursor('\n\n> Citation inspirante ici...\n\n')}
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold border border-slate-800"
+                      title="Ajouter une citation"
+                    >
+                      <Quote className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertTextAtCursor('**texte important**')}
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold border border-slate-800"
+                      title="Mettre en gras"
+                    >
+                      <Bold className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertTextAtCursor('*texte en italique*')}
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold border border-slate-800"
+                      title="Mettre en italique"
+                    >
+                      <Italic className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Inline Image Inserter Box */}
+                {showImageInserter && activeEditorTab === 'write' && (
+                  <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-950 to-slate-900 border border-amber-500/30 shadow-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-wider">
+                        <ImagePlus className="w-4 h-4" />
+                        <span>Intégrer une photo dans le corps de l'article</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowImageInserter(false)}
+                        className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-400 mb-1">
+                          1. URL de l'image (ou téléversez ci-contre)
+                        </label>
+                        <input
+                          type="url"
+                          value={inlineImageUrl}
+                          onChange={(e) => setInlineImageUrl(e.target.value)}
+                          placeholder="https://... ou fichier local"
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-400 mb-1">
+                          Téléversement direct
+                        </label>
+                        <label className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs cursor-pointer border border-slate-700 transition-colors">
+                          <Upload className="w-3.5 h-3.5 text-amber-400" />
+                          <span>{isUploadingInline ? 'Téléversement...' : 'Choisir une photo locale'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handleInlineImageUpload}
+                            disabled={isUploadingInline}
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-400 mb-1">
+                        2. Légende / Description sous la photo (optionnel)
+                      </label>
+                      <input
+                        type="text"
+                        value={inlineImageCaption}
+                        onChange={(e) => setInlineImageCaption(e.target.value)}
+                        placeholder="Ex: Planche originale du tome 2, dessinée par l'auteur"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                      />
+                    </div>
+
+                    {inlineImageUrl && (
+                      <div className="relative aspect-[16/9] max-h-36 rounded-xl overflow-hidden bg-slate-950 border border-slate-800">
+                        <img 
+                          src={inlineImageUrl} 
+                          alt="Prévisualisation" 
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowImageInserter(false)}
+                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+                      >
+                        Fermer
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleConfirmInsertImage}
+                        disabled={!inlineImageUrl.trim()}
+                        className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 text-xs font-bold shadow-md cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Insérer dans l'article</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Content Area : Write or Preview */}
+                {activeEditorTab === 'write' ? (
+                  <div>
+                    <textarea
+                      ref={contentTextareaRef}
+                      rows={10}
+                      value={formData.content}
+                      onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                      placeholder="Rédigez l'article ici. Vous pouvez insérer des images n'importe où dans le texte via le bouton 'Insérer une image' ci-dessus (au format ![Légende](url))..."
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-red-500 font-mono text-xs leading-relaxed"
+                    />
+                    <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1">
+                      <span>💡 Conseil : Placez votre curseur à l'endroit désiré puis cliquez sur « Insérer une image » pour l'intégrer entre deux paragraphes.</span>
+                      <span>{(formData.content || '').length} caractères</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 max-h-[450px] overflow-y-auto">
+                    {formData.content ? (
+                      <ArticleContentRenderer content={formData.content} />
+                    ) : (
+                      <div className="text-center py-10 text-slate-500 text-xs italic">
+                        Aucun texte rédigé pour le moment. Basculez sur l'onglet « Rédiger » pour commencer à composer votre article.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Attached Gallery Images List */}
+                {formData.galleryImages && formData.galleryImages.length > 0 && (
+                  <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800/80 space-y-2.5">
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      <Layers className="w-3.5 h-3.5 text-orange-400" />
+                      <span>Photos intégrées / Galerie de l'article ({formData.galleryImages.length})</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      {formData.galleryImages.map((imgUrl, gIdx) => (
+                        <div key={`gallery-${gIdx}`} className="group relative aspect-[4/3] rounded-xl overflow-hidden bg-slate-900 border border-slate-800">
+                          <img 
+                            src={imgUrl} 
+                            alt={`Illustration ${gIdx + 1}`} 
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 p-1">
+                            <button
+                              type="button"
+                              onClick={() => handleInsertFromGallery(imgUrl)}
+                              className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-bold shadow"
+                              title="Réinsérer dans le texte"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveFromGallery(imgUrl)}
+                              className="p-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[10px] shadow"
+                              title="Supprimer de la galerie"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-6 pt-2">

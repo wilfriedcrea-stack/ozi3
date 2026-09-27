@@ -3,15 +3,7 @@ import { Firestore, collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, getD
 import { Series, Teaser, PressRelease, AppVersionInfo, CreatorSubmission, Article } from '../types';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
-export const KNOWN_PERMANENTLY_DELETED_SERIES = [
-  'chainsaw-demon',
-  'gantz',
-  'les-gonmons',
-  'chainsaw-man',
-  'chainsaw',
-  'series-1788259644008',
-  'series-1788357881029'
-];
+export const KNOWN_PERMANENTLY_DELETED_SERIES: string[] = [];
 
 export enum OperationType {
   CREATE = 'create',
@@ -163,41 +155,14 @@ export function subscribeToFirestoreSeries(onUpdate: (seriesList: Series[]) => v
       if (!s || !s.id) return true;
       const idLower = (s.id || '').trim().toLowerCase();
       const slugLower = (s.slug || '').trim().toLowerCase();
-      const titleLower = (s.title || '').trim().toLowerCase();
-      const titleSlug = titleLower.replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-
-      // Permanent hardcoded names that must never reappear
-      if (
-        titleLower.includes('chainsaw') || slugLower.includes('chainsaw') || idLower.includes('chainsaw') ||
-        titleLower.includes('gantz') || slugLower.includes('gantz') || idLower.includes('gantz') ||
-        titleLower.includes('gonmon') || slugLower.includes('gonmon') || idLower.includes('gonmon') ||
-        idLower.includes('1788259644008') || idLower.includes('1788357881029')
-      ) {
-        return true;
-      }
-
-      for (const d of currentDeletedSet) {
-        if (!d) continue;
-        const dl = d.trim().toLowerCase();
-        if (
-          idLower === dl ||
-          slugLower === dl ||
-          titleSlug === dl ||
-          titleLower === dl ||
-          (idLower && idLower.includes(dl)) ||
-          (slugLower && slugLower.includes(dl))
-        ) {
-          return true;
-        }
-      }
-      return false;
+      return currentDeletedSet.has(s.id) || currentDeletedSet.has(idLower) || (s.slug ? currentDeletedSet.has(s.slug) || currentDeletedSet.has(slugLower) : false);
     };
 
     const handleUpdate = () => {
       const merged = new Map<string, Series>();
-      // Canonical /series takes absolute priority
+      // Canonical /series takes absolute priority - all active documents are kept
       currentSeriesDocs.forEach((s, id) => {
-        if (!isDeletedItem(s)) merged.set(id, s);
+        merged.set(id, s);
       });
       // /works only for items not in /series and not deleted
       currentWorksDocs.forEach((s, id) => {
@@ -217,8 +182,7 @@ export function subscribeToFirestoreSeries(onUpdate: (seriesList: Series[]) => v
         });
       }
 
-      const cleanList = deduplicated.filter(s => !isDeletedItem(s));
-      onUpdate(cleanList);
+      onUpdate(deduplicated);
     };
 
     // Real-time synchronization of deleted series ids from config/site_settings
@@ -265,6 +229,9 @@ export function subscribeToFirestoreSeries(onUpdate: (seriesList: Series[]) => v
           slug: data.slug || (data.title ? data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : id),
           author: data.author || data.writer || 'Auteur OZI',
           artist: data.artist || data.illustrator || 'Artiste OZI',
+          authorPhotoUrl: data.authorPhotoUrl || '',
+          authorBio: data.authorBio || '',
+          shopArticles: Array.isArray(data.shopArticles) ? data.shopArticles : [],
           country: data.country || 'Côte d\'Ivoire',
           synopsis: data.synopsis || data.description || 'Découvrez cette œuvre sur OZI.',
           genre: data.genre || 'Action & Shonen',
@@ -307,6 +274,9 @@ export function subscribeToFirestoreSeries(onUpdate: (seriesList: Series[]) => v
           slug: data.slug || (data.title ? data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : id),
           author: data.author || data.writer || 'Auteur OZI',
           artist: data.artist || data.illustrator || 'Artiste OZI',
+          authorPhotoUrl: data.authorPhotoUrl || '',
+          authorBio: data.authorBio || '',
+          shopArticles: Array.isArray(data.shopArticles) ? data.shopArticles : [],
           country: data.country || 'Côte d\'Ivoire',
           synopsis: data.synopsis || data.description || 'Découvrez cette œuvre sur OZI.',
           genre: data.genre || 'Action & Shonen',
@@ -383,37 +353,11 @@ export async function fetchFirestoreSeriesNow(databaseInstance: Firestore = db):
     if (!s || !s.id) return true;
     const idLower = (s.id || '').trim().toLowerCase();
     const slugLower = (s.slug || '').trim().toLowerCase();
-    const titleLower = (s.title || '').trim().toLowerCase();
-    const titleSlug = titleLower.replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-
-    if (
-      titleLower.includes('chainsaw') || slugLower.includes('chainsaw') || idLower.includes('chainsaw') ||
-      titleLower.includes('gantz') || slugLower.includes('gantz') || idLower.includes('gantz') ||
-      titleLower.includes('gonmon') || slugLower.includes('gonmon') || idLower.includes('gonmon') ||
-      idLower.includes('1788259644008') || idLower.includes('1788357881029')
-    ) {
-      return true;
-    }
-
-    for (const d of deletedSet) {
-      if (!d) continue;
-      const dl = d.trim().toLowerCase();
-      if (
-        idLower === dl ||
-        slugLower === dl ||
-        titleSlug === dl ||
-        titleLower === dl ||
-        (idLower && idLower.includes(dl)) ||
-        (slugLower && slugLower.includes(dl))
-      ) {
-        return true;
-      }
-    }
-    return false;
+    return deletedSet.has(s.id) || deletedSet.has(idLower) || (s.slug ? deletedSet.has(s.slug) || deletedSet.has(slugLower) : false);
   };
 
   try {
-    // 1. Check /series collection
+    // 1. Check /series collection - canonical active series
     const seriesCol = collection(databaseInstance, 'series');
     const snapshotSeries = await getDocs(seriesCol);
     snapshotSeries.forEach((docSnap) => {
@@ -424,9 +368,7 @@ export async function fetchFirestoreSeriesNow(databaseInstance: Firestore = db):
         id,
         slug: data.slug || id
       };
-      if (!isItemDeleted(item)) {
-        loadedMap.set(id, item);
-      }
+      loadedMap.set(id, item);
     });
   } catch (err) {
     console.warn('Fetch series notice:', err);
@@ -446,6 +388,9 @@ export async function fetchFirestoreSeriesNow(databaseInstance: Firestore = db):
           slug: data.slug || (data.title ? data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : id),
           author: data.author || data.writer || 'Auteur OZI',
           artist: data.artist || data.illustrator || 'Artiste OZI',
+          authorPhotoUrl: data.authorPhotoUrl || '',
+          authorBio: data.authorBio || '',
+          shopArticles: Array.isArray(data.shopArticles) ? data.shopArticles : [],
           country: data.country || 'Côte d\'Ivoire',
           synopsis: data.synopsis || data.description || 'Découvrez cette œuvre sur OZI.',
           genre: data.genre || 'Action & Shonen',
@@ -491,6 +436,9 @@ export async function fetchFirestoreSeriesNow(databaseInstance: Firestore = db):
           slug: data.slug || (data.title ? data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : id),
           author: data.author || data.writer || 'Auteur OZI',
           artist: data.artist || data.illustrator || 'Artiste OZI',
+          authorPhotoUrl: data.authorPhotoUrl || '',
+          authorBio: data.authorBio || '',
+          shopArticles: Array.isArray(data.shopArticles) ? data.shopArticles : [],
           country: data.country || 'Côte d\'Ivoire',
           synopsis: data.synopsis || data.description || 'Découvrez cette œuvre sur OZI.',
           genre: data.genre || 'Action & Shonen',
@@ -530,7 +478,7 @@ export async function fetchFirestoreSeriesNow(databaseInstance: Firestore = db):
     });
   }
 
-  return deduplicated.filter(s => !isItemDeleted(s));
+  return deduplicated;
 }
 
 // Subscribe to real-time APK Version
@@ -676,7 +624,6 @@ export async function recordDeletedSeriesToFirestore(
   try {
     const current = await fetchSiteSettingsFromFirestore(databaseInstance);
     const existing = new Set<string>(current?.deletedSeriesIds || []);
-    KNOWN_PERMANENTLY_DELETED_SERIES.forEach(kId => existing.add(kId));
     
     for (const rawId of seriesIdentifiers) {
       if (rawId && typeof rawId === 'string') {
@@ -701,7 +648,7 @@ export async function fetchSiteSettingsFromFirestore(databaseInstance: Firestore
   try {
     const snap = await getDocs(collection(databaseInstance, 'config'));
     let headerBannerUrl: string | undefined;
-    const deletedSeriesIdsSet = new Set<string>(KNOWN_PERMANENTLY_DELETED_SERIES);
+    const deletedSeriesIdsSet = new Set<string>();
     snap.forEach((docSnap) => {
       const data = docSnap.data();
       if (docSnap.id === 'site_settings') {
@@ -729,7 +676,7 @@ export function subscribeToFirestoreSiteSettings(onUpdate: (settings: SiteSettin
       if (snap.exists()) {
         const data = snap.data() as SiteSettings;
         if (data) {
-          const combined = new Set<string>(KNOWN_PERMANENTLY_DELETED_SERIES);
+          const combined = new Set<string>();
           if (Array.isArray(data.deletedSeriesIds)) {
             data.deletedSeriesIds.forEach(id => combined.add(id));
           }

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { X, Calendar, Clock, User, Share2, Sparkles, BookOpen } from 'lucide-react';
 import { Article } from '../../types';
 import { ArticleDate } from './ArticleDate';
+import { ArticleContentRenderer } from './ArticleContentRenderer';
 
 interface ArticleDetailModalProps {
   article: Article | null;
@@ -102,9 +103,9 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({ article,
           </p>
         )}
 
-        {/* Content */}
-        <div className="text-sm sm:text-base text-zinc-300 leading-relaxed space-y-4 whitespace-pre-line font-body">
-          {article.content || article.excerpt || "Contenu détaillé de l'article."}
+        {/* Content with rich formatting and inline images */}
+        <div className="pt-2">
+          <ArticleContentRenderer content={article.content || article.excerpt || "Contenu détaillé de l'article."} />
         </div>
 
         {/* Footer Actions */}

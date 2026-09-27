@@ -27,6 +27,9 @@
         "releaseYear": { "type": "number" },
         "language": { "type": "string" },
         "ageRating": { "type": "string" },
+        "authorPhotoUrl": { "type": "string" },
+        "authorBio": { "type": "string" },
+        "shopArticles": { "type": "array" },
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "title", "author", "coverUrl"]
@@ -62,6 +65,7 @@
         "category": { "type": "string" },
         "author": { "type": "string" },
         "publishedAt": { "type": "string" },
+        "galleryImages": { "type": "array" },
         "readTimeMinutes": { "type": "number" }
       },
       "required": ["id", "title", "content"]

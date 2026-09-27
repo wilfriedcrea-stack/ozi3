@@ -73,7 +73,7 @@ export const SearchPage: React.FC = () => {
 
       // Format filter
       if (selectedFormat !== 'Tous') {
-        const fmt = (s.format || '').toLowerCase();
+        const fmt = (s.format || (s.chaptersCount > 1 ? 'série' : 'film')).toLowerCase();
         if (selectedFormat === 'film' && fmt !== 'film') return false;
         if (selectedFormat === 'série' && fmt !== 'série' && fmt !== 'serie') return false;
         if (selectedFormat === 'webtoon' && !fmt.includes('webtoon')) return false;
@@ -303,7 +303,7 @@ export const SearchPage: React.FC = () => {
 
             {/* Genre filter dropdown or chips */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-              {allGenres.slice(0, 7).map((genre) => (
+              {allGenres.map((genre) => (
                 <button
                   key={genre}
                   onClick={() => setSelectedGenre(genre)}

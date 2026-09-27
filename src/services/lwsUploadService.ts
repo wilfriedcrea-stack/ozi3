@@ -14,7 +14,10 @@ export const LWS_CONFIG = {
     covers: 'htdocs/uploads/covers/',
     banners: 'htdocs/uploads/banners/',
     chapters: 'htdocs/uploads/chapters/',
-    audio: 'htdocs/uploads/audio/'
+    audio: 'htdocs/uploads/audio/',
+    articles: 'htdocs/uploads/articles/',
+    authors: 'htdocs/uploads/authors/',
+    shop: 'htdocs/uploads/shop/'
   }
 };
 
@@ -130,7 +133,7 @@ export async function compressImageToWebP(
 export async function uploadToLWS(
   fileOrBlob: File | Blob,
   fileName: string,
-  category: 'covers' | 'banners' | 'chapters' | 'audio',
+  category: 'covers' | 'banners' | 'chapters' | 'audio' | 'articles' | 'authors' | 'shop',
   extraParams?: { workId?: string; chapterNumber?: number },
   onProgress?: UploadProgressCallback
 ): Promise<{ success: boolean; url: string; fileInfo: LwsStorageFile; error?: string }> {

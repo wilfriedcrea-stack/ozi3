@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { ShoppingBag, Check, X, MessageCircle, CreditCard, Sparkles, Star } from 'lucide-react';
-import { Series } from '../../../types';
+import { ShoppingBag, Check, X, MessageCircle, CreditCard, Sparkles, Star, ExternalLink } from 'lucide-react';
+import { Series, SeriesShopItem } from '../../../types';
 
 interface ProductItem {
   id: string;
@@ -10,6 +10,7 @@ interface ProductItem {
   priceCfa: number;
   priceEur: number;
   description: string;
+  linkUrl?: string;
   sizes?: string[];
 }
 
@@ -23,12 +24,14 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
   const [quantity, setQuantity] = useState<number>(1);
   const [isOrdered, setIsOrdered] = useState<boolean>(false);
 
-  // Default author bio tailored to series or fallback
+  // Author details tailored to series
   const authorName = series.author || 'Wilfried Crea';
   const artistName = series.artist || series.author || 'Studio OZI';
+  const authorPhoto = series.authorPhotoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80';
+  const authorBio = series.authorBio?.trim() || `Auteur et artiste passionné de la scène afro-manga et webtoon contemporaine. À travers ${series.title}, l'ambition est de sublimer les récits épiques, les mythes ancestraux et les fresques visuelles percutantes pour offrir aux lecteurs du continent et du monde entier une expérience graphique inoubliable.`;
 
-  // Products tailored to the series
-  const products: ProductItem[] = [
+  // Default products fallback if series has no custom shop items
+  const defaultProducts: ProductItem[] = [
     {
       id: 'artbook',
       title: 'ARTBOOK DU PROJET',
@@ -40,7 +43,7 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
     },
     {
       id: 'tshirt',
-      title: 'T-SHIRT AKOUN',
+      title: 'T-SHIRT OFFICIEL',
       category: 'Vêtements Officiels',
       image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80',
       priceCfa: 10000,
@@ -50,7 +53,7 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
     },
     {
       id: 'cards',
-      title: 'JEU DE CARTE',
+      title: 'JEU DE CARTES COLLECTOR',
       category: 'Goodies & Jeux',
       image: 'https://images.unsplash.com/photo-1606167668584-78701c57f13d?auto=format&fit=crop&w=800&q=80',
       priceCfa: 8000,
@@ -59,6 +62,21 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
     }
   ];
 
+  // Products tailored to the series (using configured shop articles or fallback)
+  const products: ProductItem[] = (series.shopArticles && series.shopArticles.length > 0)
+    ? series.shopArticles.map((item, idx) => ({
+        id: item.id || `shop-item-${idx}`,
+        title: item.title,
+        category: item.category || 'Article Officiel',
+        image: item.image,
+        priceCfa: item.priceCfa ?? 10000,
+        priceEur: item.priceEur ?? 15,
+        description: item.description || `Produit officiel dérivé de l'univers de ${series.title}.`,
+        linkUrl: item.linkUrl,
+        sizes: item.sizes
+      }))
+    : defaultProducts;
+
   const handleOpenOrder = (product: ProductItem) => {
     setSelectedProduct(product);
     setIsOrdered(false);
@@ -66,15 +84,6 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
     if (product.sizes) {
       setSelectedSize(product.sizes[2] || 'L');
     }
-  };
-
-  const handleWhatsAppOrder = () => {
-    if (!selectedProduct) return;
-    const sizeText = selectedProduct.sizes ? ` - Taille : ${selectedSize}` : '';
-    const message = encodeURIComponent(
-      `Bonjour l'équipe OZI Store ! Je souhaite commander :\n- Produit : ${selectedProduct.title} (Série : ${series.title})${sizeText}\n- Quantité : ${quantity}\n- Montant : ${(selectedProduct.priceCfa * quantity).toLocaleString('fr-FR')} FCFA (${(selectedProduct.priceEur * quantity)} €)\nMerci de m'indiquer les modalités de livraison !`
-    );
-    window.open(`https://wa.me/2250700000000?text=${message}`, '_blank');
   };
 
   const handleDirectOrder = () => {
@@ -101,9 +110,12 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
         <div className="relative mx-auto mb-7 w-36 h-36 sm:w-44 sm:h-44">
           <div className="w-full h-full rounded-full border-2 border-white/90 overflow-hidden shadow-2xl bg-zinc-900 flex items-center justify-center p-0.5 ring-4 ring-white/10">
             <img
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80"
+              src={authorPhoto}
               alt={`Portrait de ${authorName}`}
               className="w-full h-full object-cover object-center rounded-full"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80';
+              }}
               referrerPolicy="no-referrer"
             />
           </div>
@@ -117,8 +129,8 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
           <p className="font-semibold text-white text-base sm:text-lg">
             {authorName} {artistName && artistName !== authorName ? `& ${artistName}` : ''}
           </p>
-          <p className="text-zinc-300 leading-relaxed text-justify sm:text-center">
-            Auteur et artiste passionné de la scène afro-manga et webtoon contemporaine. À travers <strong className="text-orange-400 font-medium">{series.title}</strong>, l'ambition est de sublimer les récits épiques, les mythes ancestraux et les fresques visuelles percutantes pour offrir aux lecteurs du continent et du monde entier une expérience graphique inoubliable.
+          <p className="text-zinc-300 leading-relaxed text-justify sm:text-center whitespace-pre-line">
+            {authorBio}
           </p>
           <p className="text-zinc-400 text-[11px] sm:text-xs italic">
             Chaque chapitre est minutieusement composé avec amour du détail, découpage dynamique et une colorisation immersive. Merci à toute la communauté pour votre fidélité !
@@ -293,13 +305,29 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
 
                 {/* CTA Buttons */}
                 <div className="space-y-2.5">
-                  <button
-                    onClick={handleWhatsAppOrder}
+                  {selectedProduct.linkUrl && (
+                    <a
+                      href={selectedProduct.linkUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-950/50 transition-all cursor-pointer"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      <span>Accéder à la boutique en ligne</span>
+                    </a>
+                  )}
+
+                  <a
+                    href={`https://wa.me/2250700000000?text=${encodeURIComponent(
+                      `Bonjour l'équipe OZI Store ! Je souhaite commander :\n- Produit : ${selectedProduct.title} (Série : ${series.title})${selectedProduct.sizes ? ` - Taille : ${selectedSize}` : ''}\n- Quantité : ${quantity}\n- Montant : ${(selectedProduct.priceCfa * quantity).toLocaleString('fr-FR')} FCFA (${(selectedProduct.priceEur * quantity)} €)\nMerci de m'indiquer les modalités de livraison !`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/50 transition-all cursor-pointer"
                   >
                     <MessageCircle className="w-4 h-4" />
                     <span>Commander via WhatsApp OZI Store</span>
-                  </button>
+                  </a>
 
                   <button
                     onClick={handleDirectOrder}
