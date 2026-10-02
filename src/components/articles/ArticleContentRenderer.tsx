@@ -67,7 +67,7 @@ export const ArticleContentRenderer: React.FC<ArticleContentRendererProps> = ({ 
         }
         if (trimmed.startsWith('## ')) {
           return (
-            <h2 key={`h2-${blockIdx}`} className="text-xl sm:text-2xl font-black text-white tracking-tight mt-10 mb-4 font-almodobar border-l-4 border-[#ff5a50] pl-3">
+            <h2 key={`h2-${blockIdx}`} className="text-xl sm:text-2xl font-black text-white tracking-tight mt-10 mb-4 font-almodobar border-l-4 border-[#ff8679] pl-3">
               {trimmed.replace(/^##\s+/, '')}
             </h2>
           );

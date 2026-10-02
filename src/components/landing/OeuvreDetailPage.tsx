@@ -106,20 +106,35 @@ export const OeuvreDetailPage: React.FC = () => {
 
   const firstChapter = chapters[0];
 
+  // Dynamically update document title and social share meta tags in the browser
+  useEffect(() => {
+    if (!currentSeries) return;
+    const originalTitle = document.title;
+    document.title = `Allez découvrir "${currentSeries.title}" — OZI Webtoons & Mangas`;
+
+    return () => {
+      document.title = originalTitle;
+    };
+  }, [currentSeries]);
+
   const handleShare = async () => {
-    const url = window.location.href;
-    const title = `${currentSeries.title} sur OZI`;
-    const text = `Découvrez la série webtoon "${currentSeries.title}" sur la plateforme OZI !`;
+    const slug = currentSeries.slug || currentSeries.id;
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://ozibd.net';
+    const socialUrl = `${origin}/share.php?oeuvre=${encodeURIComponent(slug)}&title=${encodeURIComponent(currentSeries.title)}&cover=${encodeURIComponent(currentSeries.bannerUrl || currentSeries.coverUrl || '')}&author=${encodeURIComponent(currentSeries.author || '')}`;
+    const directUrl = `${origin}/#/oeuvre/${slug}`;
+
+    const title = `Allez découvrir "${currentSeries.title}" sur OZI !`;
+    const text = `Allez découvrir "${currentSeries.title}" de ${currentSeries.author || 'OZI'} sur la plateforme OZI !`;
 
     if (navigator.share) {
       try {
-        await navigator.share({ title, text, url });
+        await navigator.share({ title, text, url: socialUrl });
         return;
       } catch {}
     }
 
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(`${title} : ${directUrl}`);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 3000);
     } catch {}

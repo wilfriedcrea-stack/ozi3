@@ -66,7 +66,7 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({ isOpen, onCl
         onClick={(e) => e.stopPropagation()}
       >
         {/* Ambient Top Glow */}
-        <div className="absolute top-0 right-0 w-48 h-48 bg-[#ff5a50]/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-0 right-0 w-48 h-48 bg-[#ff8679]/15 rounded-full blur-3xl pointer-events-none" />
 
         {/* Close Button */}
         <button
@@ -79,7 +79,7 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({ isOpen, onCl
 
         {/* Modal Header */}
         <div className="flex items-center gap-3 mb-5">
-          <div className="p-3 rounded-2xl bg-[#ff5a50]/10 border border-[#ff5a50]/30 text-[#ff6b5b]">
+          <div className="p-3 rounded-2xl bg-[#ff8679]/10 border border-[#ff8679]/30 text-[#ffa296]">
             <Smartphone className="w-6 h-6" />
           </div>
           <div>
@@ -95,7 +95,7 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({ isOpen, onCl
           <div className="p-4 sm:p-5 rounded-2xl bg-[#141522] border border-slate-700/80 flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded-md bg-[#ff5a50] text-white text-[11px] font-bold font-almodobar">
+                <span className="px-2 py-0.5 rounded-md bg-[#ff8679] text-white text-[11px] font-bold font-almodobar">
                   Android APK
                 </span>
                 <span className="text-xs text-slate-300 font-semibold font-body">Fichier d'installation direct</span>
@@ -112,7 +112,7 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({ isOpen, onCl
 
             <button
               onClick={triggerDirectDownload}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-[#ff5a50] to-[#ff7b6b] hover:opacity-95 text-white font-bold text-sm shadow-lg shadow-[#ff5a50]/20 transition-all font-almodobar cursor-pointer active:scale-95"
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-[#ff8679] to-[#ffa296] hover:opacity-95 text-white font-bold text-sm shadow-lg shadow-[#ff8679]/20 transition-all font-almodobar cursor-pointer active:scale-95"
             >
               <Download className="w-4 h-4" />
               <span>{downloadStarted ? 'Téléchargement lancé...' : `Télécharger le fichier APK (${appVersion.apkSizeMb} Mo)`}</span>
@@ -179,7 +179,7 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({ isOpen, onCl
               onClose();
               setViewMode('admin');
             }}
-            className="flex items-center gap-1 text-[#ff6b5b] hover:text-[#ff8a7d] font-bold cursor-pointer font-almodobar"
+            className="flex items-center gap-1 text-[#ffa296] hover:text-[#ffb5ab] font-bold cursor-pointer font-almodobar"
           >
             <Layers className="w-3.5 h-3.5" />
             <span>Changer le lien APK dans le Studio</span>

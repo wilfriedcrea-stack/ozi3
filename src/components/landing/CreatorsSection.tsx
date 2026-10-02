@@ -69,7 +69,7 @@ export const CreatorsSection: React.FC = () => {
         
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#ff5a50]/15 border border-[#ff5a50]/30 text-[#ff6b5b] text-xs font-bold uppercase tracking-wider mb-4 font-almodobar">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#ff8679]/15 border border-[#ff8679]/30 text-[#ffa296] text-xs font-bold uppercase tracking-wider mb-4 font-almodobar">
             <Sparkles className="w-4 h-4" />
             <span>Studio Créateurs & Auteurs OZI</span>
           </div>
@@ -94,7 +94,7 @@ export const CreatorsSection: React.FC = () => {
           </div>
 
           <div className="p-8 rounded-3xl bg-[#0d0e15] border border-slate-800 flex flex-col items-start shadow-xl">
-            <div className="w-12 h-12 rounded-2xl bg-[#ff5a50]/10 border border-[#ff5a50]/25 text-[#ff6b5b] flex items-center justify-center mb-6">
+            <div className="w-12 h-12 rounded-2xl bg-[#ff8679]/10 border border-[#ff8679]/25 text-[#ffa296] flex items-center justify-center mb-6">
               <Globe className="w-6 h-6" />
             </div>
             <h3 className="text-xl font-black text-white mb-2 font-almodobar">Audience Mondiale</h3>
@@ -116,14 +116,14 @@ export const CreatorsSection: React.FC = () => {
 
         {/* Creator Application Form Box */}
         <div className="rounded-3xl bg-[#0d0e15] border border-slate-800 p-8 sm:p-12 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-[#ff5a50]/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-[#ff8679]/10 rounded-full blur-3xl pointer-events-none" />
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
             
             {/* Left pitch */}
             <div className="lg:col-span-5 flex flex-col justify-between">
               <div>
-                <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wider text-[#ff6b5b] mb-2 font-heading">
+                <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wider text-[#ffa296] mb-2 font-heading">
                   <HeartHandshake className="w-4 h-4" />
                   <span>Appel à Projets Ouvert</span>
                 </div>
@@ -136,15 +136,15 @@ export const CreatorsSection: React.FC = () => {
 
                 <div className="space-y-3 text-xs text-slate-400 mb-6 font-body">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-[#ff5a50]" />
+                    <CheckCircle2 className="w-4 h-4 text-[#ff8679]" />
                     <span>Réponse éditoriale sous 5 jours ouvrés</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-[#ff5a50]" />
+                    <CheckCircle2 className="w-4 h-4 text-[#ff8679]" />
                     <span>Accompagnement scénaristique et colorimétrique</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-[#ff5a50]" />
+                    <CheckCircle2 className="w-4 h-4 text-[#ff8679]" />
                     <span>Contrats transparents et protection des droits d'auteur</span>
                   </div>
                 </div>
@@ -177,7 +177,7 @@ export const CreatorsSection: React.FC = () => {
                       value={formData.creatorName}
                       onChange={(e) => setFormData({ ...formData, creatorName: e.target.value })}
                       placeholder="Ex: Tidiane Traoré"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff5a50]"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff8679]"
                     />
                   </div>
 
@@ -189,7 +189,7 @@ export const CreatorsSection: React.FC = () => {
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       placeholder="votre.email@domaine.com"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff5a50]"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff8679]"
                     />
                   </div>
 
@@ -200,7 +200,7 @@ export const CreatorsSection: React.FC = () => {
                       value={formData.country}
                       onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                       placeholder="Ex: Sénégal, Côte d'Ivoire, Cameroun, France..."
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff5a50]"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff8679]"
                     />
                   </div>
 
@@ -209,7 +209,7 @@ export const CreatorsSection: React.FC = () => {
                     <select
                       value={formData.genre}
                       onChange={(e) => setFormData({ ...formData, genre: e.target.value as SeriesGenre })}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 focus:outline-none focus:border-[#ff5a50] font-heading"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 focus:outline-none focus:border-[#ff8679] font-heading"
                     >
                       {GENRES.map((g) => (
                         <option key={g} value={g}>{g}</option>
@@ -225,7 +225,7 @@ export const CreatorsSection: React.FC = () => {
                       value={formData.seriesTitle}
                       onChange={(e) => setFormData({ ...formData, seriesTitle: e.target.value })}
                       placeholder="Ex: Chroniques de la Terre d'Or"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff5a50]"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff8679]"
                     />
                   </div>
 
@@ -237,7 +237,7 @@ export const CreatorsSection: React.FC = () => {
                       value={formData.pitch}
                       onChange={(e) => setFormData({ ...formData, pitch: e.target.value })}
                       placeholder="Résumez l'univers, le conflit central et le personnage principal en quelques lignes..."
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff5a50]"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff8679]"
                     />
                   </div>
 
@@ -248,7 +248,7 @@ export const CreatorsSection: React.FC = () => {
                       value={formData.portfolioUrl}
                       onChange={(e) => setFormData({ ...formData, portfolioUrl: e.target.value })}
                       placeholder="https://..."
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff5a50]"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff8679]"
                     />
                   </div>
 

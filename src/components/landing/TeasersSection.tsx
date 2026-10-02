@@ -82,7 +82,7 @@ export const TeasersSection: React.FC = () => {
                     <Eye className="w-3.5 h-3.5 text-slate-500" />
                     <span>{(typeof teaser.viewsCount === 'number' ? teaser.viewsCount : 15000).toLocaleString()} vues</span>
                   </div>
-                  <span className="text-[#ff6b5b] font-bold flex items-center gap-1 group-hover:translate-x-1 transition-transform font-heading">
+                  <span className="text-[#ffa296] font-bold flex items-center gap-1 group-hover:translate-x-1 transition-transform font-heading">
                     <span>Regarder</span>
                     <ChevronRight className="w-3.5 h-3.5" />
                   </span>

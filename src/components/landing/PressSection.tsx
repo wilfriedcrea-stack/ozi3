@@ -119,7 +119,7 @@ export const PressSection: React.FC = () => {
           {/* Left Column: Official Articles & News Cards */}
           <div className="lg:col-span-8 flex flex-col gap-4">
             <h3 className="text-lg font-black text-white flex items-center gap-2 font-almodobar mb-2">
-              <FileText className="w-5 h-5 text-[#ff5a50]" />
+              <FileText className="w-5 h-5 text-[#ff8679]" />
               <span>Dernières Publications & Carnets</span>
             </h3>
 
@@ -129,7 +129,7 @@ export const PressSection: React.FC = () => {
                   key={pr.id}
                   id={`article-card-${pr.id}`}
                   onClick={() => setSelectedPress(pr)}
-                  className="rounded-3xl bg-[#0d0e15] border border-slate-800 hover:border-[#ff5a50]/50 transition-all duration-300 cursor-pointer group shadow-xl flex flex-col overflow-hidden tap-active hover:-translate-y-1"
+                  className="rounded-3xl bg-[#0d0e15] border border-slate-800 hover:border-[#ff8679]/50 transition-all duration-300 cursor-pointer group shadow-xl flex flex-col overflow-hidden tap-active hover:-translate-y-1"
                 >
                   {/* Article cover image */}
                   {pr.imageUrl && (
@@ -140,7 +140,7 @@ export const PressSection: React.FC = () => {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-[#0d0e15] via-transparent to-transparent" />
-                      <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#07080c]/80 backdrop-blur-md text-[#ff6b5b] border border-[#ff5a50]/30 font-heading">
+                      <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#07080c]/80 backdrop-blur-md text-[#ffa296] border border-[#ff8679]/30 font-heading">
                         {pr.category}
                       </span>
                     </div>
@@ -172,7 +172,7 @@ export const PressSection: React.FC = () => {
 
                     <div className="flex items-center justify-between text-xs pt-3 border-t border-slate-800/80">
                       <span className="text-slate-400 text-[11px] truncate max-w-[130px] font-body">{pr.author}</span>
-                      <span className="text-[#ff6b5b] font-bold flex items-center gap-1 group-hover:translate-x-1 transition-transform font-heading">
+                      <span className="text-[#ffa296] font-bold flex items-center gap-1 group-hover:translate-x-1 transition-transform font-heading">
                         <span>Lire</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </span>
@@ -203,7 +203,7 @@ export const PressSection: React.FC = () => {
                     <div className="flex flex-col">
                       <span className="text-xs font-bold text-white line-clamp-1 font-heading">{asset.name}</span>
                       <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mt-0.5 font-mono">
-                        <span className="text-[#ff6b5b] font-bold">{asset.format}</span>
+                        <span className="text-[#ffa296] font-bold">{asset.format}</span>
                         <span>•</span>
                         <span>{asset.resolution}</span>
                       </div>
@@ -212,7 +212,7 @@ export const PressSection: React.FC = () => {
 
                   <button
                     onClick={() => handleDownloadAsset(asset)}
-                    className="p-2.5 rounded-xl bg-[#161724] hover:bg-[#ff5a50] hover:text-white text-slate-300 border border-slate-800 transition-colors shrink-0 tap-active"
+                    className="p-2.5 rounded-xl bg-[#161724] hover:bg-[#ff8679] hover:text-white text-slate-300 border border-slate-800 transition-colors shrink-0 tap-active"
                     title="Télécharger l'asset"
                   >
                     <Download className="w-4 h-4" />
@@ -240,7 +240,7 @@ export const PressSection: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             
             <div className="lg:col-span-5">
-              <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#ff6b5b] mb-2 font-heading">
+              <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#ffa296] mb-2 font-heading">
                 <Mail className="w-4 h-4" />
                 <span>Contact Rédaction & Relations Publiques</span>
               </div>
@@ -274,7 +274,7 @@ export const PressSection: React.FC = () => {
                       value={pressContact.name}
                       onChange={(e) => setPressContact({ ...pressContact, name: e.target.value })}
                       placeholder="Ex: Sarah Touré"
-                      className="w-full px-3 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff5a50]"
+                      className="w-full px-3 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff8679]"
                     />
                   </div>
 
@@ -285,7 +285,7 @@ export const PressSection: React.FC = () => {
                       value={pressContact.outlet}
                       onChange={(e) => setPressContact({ ...pressContact, outlet: e.target.value })}
                       placeholder="Ex: Jeune Afrique, RFI, Blog..."
-                      className="w-full px-3 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff5a50]"
+                      className="w-full px-3 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff8679]"
                     />
                   </div>
 
@@ -297,7 +297,7 @@ export const PressSection: React.FC = () => {
                       value={pressContact.email}
                       onChange={(e) => setPressContact({ ...pressContact, email: e.target.value })}
                       placeholder="votre.email@media.com"
-                      className="w-full px-3 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff5a50]"
+                      className="w-full px-3 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff8679]"
                     />
                   </div>
 
@@ -309,7 +309,7 @@ export const PressSection: React.FC = () => {
                       value={pressContact.message}
                       onChange={(e) => setPressContact({ ...pressContact, message: e.target.value })}
                       placeholder="Détails de votre sujet, interview souhaitée, délais..."
-                      className="w-full px-3 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff5a50]"
+                      className="w-full px-3 py-2.5 rounded-xl bg-[#07080c] border border-slate-800 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-[#ff8679]"
                     />
                   </div>
 
@@ -354,8 +354,8 @@ export const PressSection: React.FC = () => {
               </div>
             )}
 
-            <div className="flex items-center gap-2 text-xs text-[#ff6b5b] font-bold mb-2">
-              <span className="px-2.5 py-0.5 rounded bg-[#ff5a50]/20 border border-[#ff5a50]/30 font-heading">
+            <div className="flex items-center gap-2 text-xs text-[#ffa296] font-bold mb-2">
+              <span className="px-2.5 py-0.5 rounded bg-[#ff8679]/20 border border-[#ff8679]/30 font-heading">
                 {selectedPress.category}
               </span>
               <span>•</span>
@@ -373,7 +373,7 @@ export const PressSection: React.FC = () => {
             </h2>
 
             <div className="text-xs text-slate-400 mb-6 italic font-body flex items-center gap-2">
-              <User className="w-3.5 h-3.5 text-[#ff5a50]" />
+              <User className="w-3.5 h-3.5 text-[#ff8679]" />
               <span>Par {selectedPress.author}</span>
             </div>
 

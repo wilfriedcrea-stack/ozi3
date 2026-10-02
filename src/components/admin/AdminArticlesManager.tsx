@@ -257,7 +257,7 @@ export const AdminArticlesManager: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-6">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-[#ff5a50] text-xs font-bold uppercase tracking-wider mb-2">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-[#ff8679] text-xs font-bold uppercase tracking-wider mb-2">
             <FileText className="w-3.5 h-3.5" />
             <span>Magazine Éditorial OZI</span>
           </div>
@@ -325,7 +325,7 @@ export const AdminArticlesManager: React.FC = () => {
             {/* Info */}
             <div className="p-4 flex flex-col flex-1 justify-between gap-3">
               <div>
-                <div className="flex items-center gap-2 text-[10px] text-[#ff5a50] font-bold uppercase tracking-wider mb-1">
+                <div className="flex items-center gap-2 text-[10px] text-[#ff8679] font-bold uppercase tracking-wider mb-1">
                   <Calendar className="w-3 h-3" />
                   <span>{art.publishedAt}</span>
                   {art.readTime && (
@@ -383,7 +383,7 @@ export const AdminArticlesManager: React.FC = () => {
             {/* Modal Header */}
             <div className="p-6 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900 z-10">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-red-500/10 text-[#ff5a50]">
+                <div className="p-2 rounded-xl bg-red-500/10 text-[#ff8679]">
                   <FileText className="w-5 h-5" />
                 </div>
                 <h3 className="text-lg font-bold text-white">

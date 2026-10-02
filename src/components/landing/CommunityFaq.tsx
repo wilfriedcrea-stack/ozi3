@@ -76,7 +76,7 @@ export const CommunityFaq: React.FC = () => {
         
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#ff5a50]/15 border border-[#ff5a50]/30 text-[#ff6b5b] text-xs font-bold uppercase tracking-wider mb-4 font-almodobar">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#ff8679]/15 border border-[#ff8679]/30 text-[#ffa296] text-xs font-bold uppercase tracking-wider mb-4 font-almodobar">
             <Users className="w-4 h-4" />
             <span>Communauté & Réponses</span>
           </div>
@@ -107,7 +107,7 @@ export const CommunityFaq: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-3 pt-4 border-t border-slate-800">
-                <img src={t.avatar} alt={t.name} className="w-10 h-10 rounded-full object-cover border border-[#ff5a50]/40" />
+                <img src={t.avatar} alt={t.name} className="w-10 h-10 rounded-full object-cover border border-[#ff8679]/40" />
                 <div className="flex flex-col">
                   <span className="text-xs font-black text-white font-almodobar">{t.name}</span>
                   <span className="text-[11px] text-slate-500 font-body">{t.role}</span>
@@ -121,7 +121,7 @@ export const CommunityFaq: React.FC = () => {
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-8">
             <h3 className="text-2xl font-black text-white flex items-center justify-center gap-2 font-almodobar">
-              <HelpCircle className="w-6 h-6 text-[#ff5a50]" />
+              <HelpCircle className="w-6 h-6 text-[#ff8679]" />
               <span>Foire Aux Questions Fréquentes</span>
             </h3>
           </div>
@@ -134,7 +134,7 @@ export const CommunityFaq: React.FC = () => {
                   key={index}
                   className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
                     isOpen 
-                      ? 'bg-[#0d0e15] border-[#ff5a50]/50 shadow-lg glow-ozi' 
+                      ? 'bg-[#0d0e15] border-[#ff8679]/50 shadow-lg glow-ozi' 
                       : 'bg-[#0d0e15]/60 border-slate-800 hover:border-slate-700'
                   }`}
                 >
@@ -143,7 +143,7 @@ export const CommunityFaq: React.FC = () => {
                     className="w-full p-5 sm:p-6 text-left flex items-center justify-between gap-4 font-black text-sm sm:text-base text-slate-100 font-almodobar"
                   >
                     <span>{faq.question}</span>
-                    <ChevronDown className={`w-5 h-5 text-[#ff5a50] shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-5 h-5 text-[#ff8679] shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
                   </button>
 
                   {isOpen && (

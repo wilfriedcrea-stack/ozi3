@@ -83,9 +83,9 @@ export const AdminLoginPage: React.FC = () => {
   const isLocked = lockoutSeconds > 0;
 
   return (
-    <div className="min-h-screen bg-[#050608] text-slate-100 flex flex-col justify-between items-center p-4 sm:p-6 font-sans relative overflow-hidden selection:bg-[#ff5a50] selection:text-white">
+    <div className="min-h-screen bg-[#050608] text-slate-100 flex flex-col justify-between items-center p-4 sm:p-6 font-sans relative overflow-hidden selection:bg-[#ff8679] selection:text-white">
       {/* Dynamic ambient lights */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] bg-gradient-to-br from-[#ff5a50]/10 via-amber-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] bg-gradient-to-br from-[#ff8679]/10 via-amber-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-10 left-10 w-[350px] h-[350px] bg-rose-600/5 rounded-full blur-3xl pointer-events-none" />
 
       {/* Top Header Bar */}
@@ -117,7 +117,7 @@ export const AdminLoginPage: React.FC = () => {
             <div className={`w-16 h-16 rounded-2xl border flex items-center justify-center mb-4 shadow-xl transition-all ${
               isLocked 
                 ? 'bg-rose-500/20 border-rose-500/40 text-rose-400 shadow-rose-500/20 animate-pulse'
-                : 'bg-gradient-to-tr from-[#ff5a50]/20 to-amber-500/20 border-[#ff5a50]/30 text-[#ff5a50] shadow-[#ff5a50]/15'
+                : 'bg-gradient-to-tr from-[#ff8679]/20 to-amber-500/20 border-[#ff8679]/30 text-[#ff8679] shadow-[#ff8679]/15'
             }`}>
               {isLocked ? <ShieldAlert className="w-8 h-8" /> : <Lock className="w-8 h-8" />}
             </div>
@@ -125,7 +125,7 @@ export const AdminLoginPage: React.FC = () => {
             <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-[11px] font-bold uppercase tracking-wider mb-2 font-almodobar ${
               isLocked
                 ? 'bg-rose-500/10 border-rose-500/30 text-rose-400'
-                : 'bg-[#ff5a50]/10 border-[#ff5a50]/30 text-[#ff6b5b]'
+                : 'bg-[#ff8679]/10 border-[#ff8679]/30 text-[#ffa296]'
             }`}>
               <Fingerprint className="w-3.5 h-3.5" />
               <span>{isLocked ? 'Accès Bloqué (Anti-Brute Force)' : 'Accès Restreint Administrateur'}</span>
@@ -203,7 +203,7 @@ export const AdminLoginPage: React.FC = () => {
                     if (errorMessage) setErrorMessage(null);
                   }}
                   placeholder="Saisissez votre identifiant administrateur"
-                  className="w-full bg-[#11131c] border border-slate-800 focus:border-[#ff5a50] focus:ring-1 focus:ring-[#ff5a50] rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-600 transition-colors outline-none disabled:opacity-50"
+                  className="w-full bg-[#11131c] border border-slate-800 focus:border-[#ff8679] focus:ring-1 focus:ring-[#ff8679] rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-600 transition-colors outline-none disabled:opacity-50"
                 />
               </div>
             </div>
@@ -243,7 +243,7 @@ export const AdminLoginPage: React.FC = () => {
                     if (errorMessage) setErrorMessage(null);
                   }}
                   placeholder="••••••••••••"
-                  className="w-full bg-[#11131c] border border-slate-800 focus:border-[#ff5a50] focus:ring-1 focus:ring-[#ff5a50] rounded-xl pl-10 pr-10 py-2.5 text-sm text-white placeholder-slate-600 transition-colors outline-none disabled:opacity-50"
+                  className="w-full bg-[#11131c] border border-slate-800 focus:border-[#ff8679] focus:ring-1 focus:ring-[#ff8679] rounded-xl pl-10 pr-10 py-2.5 text-sm text-white placeholder-slate-600 transition-colors outline-none disabled:opacity-50"
                 />
               </div>
             </div>
@@ -257,7 +257,7 @@ export const AdminLoginPage: React.FC = () => {
                   disabled={isLocked}
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-[#ff5a50] focus:ring-[#ff5a50] focus:ring-offset-slate-950"
+                  className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-[#ff8679] focus:ring-[#ff8679] focus:ring-offset-slate-950"
                 />
                 <span className="text-xs text-slate-300">Rester connecté</span>
               </label>
@@ -281,7 +281,7 @@ export const AdminLoginPage: React.FC = () => {
               className={`w-full mt-2 py-3 px-4 rounded-xl font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all font-almodobar ${
                 isLocked 
                   ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-[#ff5a50] via-orange-500 to-amber-500 hover:from-[#ff4438] hover:to-amber-400 text-white shadow-orange-500/25 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50'
+                  : 'bg-gradient-to-r from-[#ff8679] via-orange-500 to-amber-500 hover:from-[#eb6051] hover:to-amber-400 text-white shadow-orange-500/25 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50'
               }`}
             >
               {isLoading ? (

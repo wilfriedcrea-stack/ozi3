@@ -14,60 +14,96 @@ export const ShareWorkButton: React.FC<ShareWorkButtonProps> = ({
   variant = 'icons-row'
 }) => {
   const [copied, setCopied] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const getShareUrl = () => {
+  // Direct internal route for web users
+  const getDirectOeuvreUrl = () => {
+    const slug = series.slug || series.id;
     if (typeof window !== 'undefined') {
-      return `${window.location.origin}${window.location.pathname}#/oeuvre/${series.slug || series.id}`;
+      return `${window.location.origin}${window.location.pathname}#/oeuvre/${slug}`;
     }
-    return `https://ozibd.net/#/oeuvre/${series.slug || series.id}`;
+    return `https://ozibd.net/#/oeuvre/${slug}`;
+  };
+
+  // Social scraper URL with dedicated dynamic metadata (OpenGraph for Facebook / Twitter / WhatsApp)
+  const getSocialShareUrl = () => {
+    const slug = series.slug || series.id;
+    const title = encodeURIComponent(series.title || '');
+    const cover = encodeURIComponent(series.bannerUrl || series.coverUrl || '');
+    const author = encodeURIComponent(series.author || '');
+
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://ozibd.net';
+    return `${origin}/share.php?oeuvre=${encodeURIComponent(slug)}&title=${title}&cover=${cover}&author=${author}`;
+  };
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage((current) => (current === msg ? null : current));
+    }, 3500);
   };
 
   const handleCopyLink = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const url = getShareUrl();
+    const url = getDirectOeuvreUrl();
+    const shareMessage = `Allez découvrir "${series.title}" sur OZI : ${url}`;
 
     try {
       if (navigator.clipboard) {
-        await navigator.clipboard.writeText(url);
+        await navigator.clipboard.writeText(shareMessage);
       } else {
         const textarea = document.createElement('textarea');
-        textarea.value = url;
+        textarea.value = shareMessage;
         document.body.appendChild(textarea);
         textarea.select();
         document.execCommand('copy');
         document.body.removeChild(textarea);
       }
       setCopied(true);
+      showToast(`Lien et message copiés pour "${series.title}" !`);
       setTimeout(() => setCopied(false), 2500);
     } catch {
       // Fallback
     }
   };
 
-  const handleShareFacebook = (e: React.MouseEvent) => {
+  const handleShareFacebook = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const url = encodeURIComponent(getShareUrl());
-    const shareLink = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
-    window.open(shareLink, '_blank', 'noopener,noreferrer,width=600,height=500');
+
+    const inviteMessage = `Allez découvrir "${series.title}" sur OZI !`;
+    const socialUrl = getSocialShareUrl();
+
+    // Copy invitation message to clipboard so user can also paste directly into the Facebook post field
+    try {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(inviteMessage);
+      }
+    } catch {}
+
+    showToast(`Invitation copiée : "${inviteMessage}"`);
+
+    // Facebook Sharer with targeted work URL & quote parameter
+    const fbShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(socialUrl)}&quote=${encodeURIComponent(inviteMessage)}`;
+    window.open(fbShareUrl, '_blank', 'noopener,noreferrer,width=620,height=580');
   };
 
   const handleShareTwitter = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const url = encodeURIComponent(getShareUrl());
-    const text = encodeURIComponent(`Découvrez le webtoon "${series.title}" sur @OZI_BD ! 📖✨`);
-    const shareLink = `https://twitter.com/intent/tweet?url=${url}&text=${text}`;
+    const socialUrl = getSocialShareUrl();
+    const text = encodeURIComponent(`Allez découvrir "${series.title}" sur @OZI_BD ! 📖✨`);
+    const shareLink = `https://twitter.com/intent/tweet?url=${encodeURIComponent(socialUrl)}&text=${text}`;
     window.open(shareLink, '_blank', 'noopener,noreferrer,width=600,height=500');
   };
 
   const handleNativeOrCopyShare = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const url = getShareUrl();
-    const title = `${series.title} — OZI Webtoons`;
-    const text = `Découvrez l'œuvre "${series.title}" par ${series.author} sur la plateforme OZI !`;
+    const url = getDirectOeuvreUrl();
+    const title = `Allez découvrir "${series.title}" sur OZI !`;
+    const text = `Allez découvrir "${series.title}" de ${series.author || 'OZI'} sur la plateforme OZI !`;
 
     if (navigator.share) {
       try {
@@ -87,7 +123,7 @@ export const ShareWorkButton: React.FC<ShareWorkButtonProps> = ({
         <button
           type="button"
           onClick={handleNativeOrCopyShare}
-          aria-label="Partager cette œuvre"
+          aria-label={`Partager "${series.title}"`}
           className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/20 text-white text-xs font-semibold min-h-[40px] transition-all cursor-pointer active:scale-95 shadow-md"
         >
           {copied ? (
@@ -102,18 +138,32 @@ export const ShareWorkButton: React.FC<ShareWorkButtonProps> = ({
             </>
           )}
         </button>
+
+        {/* Floating Toast Notification */}
+        {toastMessage && (
+          <div className="absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap bg-zinc-900 text-white text-[11px] font-semibold px-3 py-1.5 rounded-full border border-zinc-700 shadow-xl pointer-events-none z-50 animate-fade-in">
+            {toastMessage}
+          </div>
+        )}
       </div>
     );
   }
 
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
+    <div className={`relative flex items-center gap-2 ${className}`}>
+      {/* Floating Toast Notification */}
+      {toastMessage && (
+        <div className="absolute -top-9 left-1/2 -translate-x-1/2 whitespace-nowrap bg-zinc-900/95 text-white text-[11px] font-medium px-3 py-1 rounded-full border border-zinc-700/80 shadow-2xl pointer-events-none z-50">
+          {toastMessage}
+        </div>
+      )}
+
       {/* Facebook Button */}
       <button
         type="button"
         onClick={handleShareFacebook}
-        aria-label="Partager sur Facebook"
-        title="Partager sur Facebook"
+        aria-label={`Partager ${series.title} sur Facebook`}
+        title={`Partager "${series.title}" sur Facebook`}
         className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-black/60 hover:bg-[#1877F2] text-white border border-white/15 hover:border-transparent flex items-center justify-center backdrop-blur-md transition-all duration-200 cursor-pointer shadow-md active:scale-90"
       >
         <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" viewBox="0 0 24 24">
@@ -125,8 +175,8 @@ export const ShareWorkButton: React.FC<ShareWorkButtonProps> = ({
       <button
         type="button"
         onClick={handleShareTwitter}
-        aria-label="Partager sur X (Twitter)"
-        title="Partager sur X"
+        aria-label={`Partager ${series.title} sur X`}
+        title={`Partager "${series.title}" sur X`}
         className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-black/60 hover:bg-black text-white border border-white/15 hover:border-white/40 flex items-center justify-center backdrop-blur-md transition-all duration-200 cursor-pointer shadow-md active:scale-90"
       >
         <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" viewBox="0 0 24 24">
@@ -138,7 +188,7 @@ export const ShareWorkButton: React.FC<ShareWorkButtonProps> = ({
       <button
         type="button"
         onClick={handleCopyLink}
-        aria-label={copied ? "Lien copié dans le presse-papier" : "Copier le lien direct"}
+        aria-label={copied ? "Lien copié dans le presse-papier" : `Copier le lien pour ${series.title}`}
         title={copied ? "Lien copié !" : "Copier le lien"}
         className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full border flex items-center justify-center backdrop-blur-md transition-all duration-200 cursor-pointer shadow-md active:scale-90 ${
           copied 

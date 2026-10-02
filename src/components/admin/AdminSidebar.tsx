@@ -52,7 +52,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ activeTab, setActive
     { id: 'monetization', label: 'Monétisation & Payouts', icon: Coins, badge: pendingPayoutsCount > 0 ? `${pendingPayoutsCount} virement` : null, badgeColor: 'bg-amber-500/20 text-amber-300 border border-amber-500/30' },
     { id: 'users', label: 'Utilisateurs & VIP', icon: UserCheck, badge: `${users.length}` },
     { id: 'moderation', label: 'Modération & Charte', icon: ShieldAlert, badge: pendingReportsCount > 0 ? `${pendingReportsCount} report` : null, badgeColor: 'bg-rose-500/20 text-rose-300 border border-rose-500/30' },
-    { id: 'submissions', label: 'Projets Créateurs', icon: Users, badge: pendingSubmissionsCount > 0 ? `${pendingSubmissionsCount} new` : null, badgeColor: 'bg-[#ff5a50] text-white' },
+    { id: 'submissions', label: 'Projets Créateurs', icon: Users, badge: pendingSubmissionsCount > 0 ? `${pendingSubmissionsCount} new` : null, badgeColor: 'bg-[#ff8679] text-white' },
     { id: 'ads', label: 'Publicités & Bannières', icon: Megaphone, badge: `${ads.length}` },
     { id: 'storage', label: 'Stockage LWS CDN', icon: HardDrive, badge: `${lwsFiles.length}` },
     { id: 'teasers', label: 'Teasers & Vidéos', icon: Film, badge: null },

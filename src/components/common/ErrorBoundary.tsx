@@ -45,7 +45,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 window.location.hash = '';
                 window.location.reload();
               }}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-[#ff5a50] text-white font-bold text-sm hover:bg-[#ff6b5b] transition-all shadow-lg shadow-[#ff5a50]/20 active:scale-95 cursor-pointer"
+              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-[#ff8679] text-white font-bold text-sm hover:bg-[#ffa296] transition-all shadow-lg shadow-[#ff8679]/20 active:scale-95 cursor-pointer"
             >
               <RefreshCw className="w-4 h-4" />
               Recharger l'application

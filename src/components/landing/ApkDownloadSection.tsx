@@ -35,7 +35,7 @@ export const ApkDownloadSection: React.FC = () => {
         particleCount: 100,
         spread: 80,
         origin: { y: 0.7 },
-        colors: ['#FF5A50', '#FF6B5B', '#F59E0B', '#ffffff']
+        colors: ['#ff8679', '#ffa296', '#F59E0B', '#ffffff']
       });
     } catch {}
 
@@ -69,7 +69,7 @@ export const ApkDownloadSection: React.FC = () => {
     <section id="section-download" className="py-24 bg-[#07080c] border-t border-slate-800/80 relative overflow-hidden">
       
       {/* Ambient background glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-[#ff5a50]/10 rounded-full blur-[130px] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-[#ff8679]/10 rounded-full blur-[130px] pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         
@@ -92,7 +92,7 @@ export const ApkDownloadSection: React.FC = () => {
           
           {/* Left Column: Direct APK Download Main Action Box */}
           <div className="lg:col-span-7 rounded-3xl bg-[#0d0e15] border border-slate-800 p-6 sm:p-10 flex flex-col justify-between shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-[#ff5a50]/10 rounded-full blur-2xl pointer-events-none" />
+            <div className="absolute top-0 right-0 w-48 h-48 bg-[#ff8679]/10 rounded-full blur-2xl pointer-events-none" />
 
             <div>
               {/* Version & Status */}
@@ -113,7 +113,7 @@ export const ApkDownloadSection: React.FC = () => {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 rounded-2xl bg-[#07080c] border border-slate-800 mb-6">
                 <div>
                   <span className="text-[11px] text-slate-500 font-medium font-body">Taille du fichier</span>
-                  <div className="text-base font-black text-[#ff6b5b] font-almodobar">{appVersion.apkSizeMb} Mo</div>
+                  <div className="text-base font-black text-[#ffa296] font-almodobar">{appVersion.apkSizeMb} Mo</div>
                 </div>
                 <div>
                   <span className="text-[11px] text-slate-500 font-medium font-body">Compatibilité</span>
@@ -128,13 +128,13 @@ export const ApkDownloadSection: React.FC = () => {
               {/* Changelog highlights */}
               <div className="mb-8">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5 font-heading">
-                  <Sparkles className="w-3.5 h-3.5 text-[#ff5a50]" />
+                  <Sparkles className="w-3.5 h-3.5 text-[#ff8679]" />
                   <span>Nouveautés de la version {appVersion.version || '2.4.0'}</span>
                 </h4>
                 <ul className="space-y-2 font-body">
                   {(appVersion.changelog || []).map((item, idx) => (
                     <li key={idx} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-300">
-                      <CheckCircle2 className="w-4 h-4 text-[#ff5a50] shrink-0 mt-0.5" />
+                      <CheckCircle2 className="w-4 h-4 text-[#ff8679] shrink-0 mt-0.5" />
                       <span>{item}</span>
                     </li>
                   ))}
@@ -173,7 +173,7 @@ export const ApkDownloadSection: React.FC = () => {
                   onClick={() => setModalOpen(true)}
                   className="w-full flex items-center justify-center gap-2 py-4 px-6 rounded-2xl bg-[#181926] hover:bg-[#222436] text-slate-200 hover:text-white font-bold text-sm border border-slate-700 transition-all font-almodobar cursor-pointer"
                 >
-                  <Smartphone className="w-5 h-5 text-[#ff5a50]" />
+                  <Smartphone className="w-5 h-5 text-[#ff8679]" />
                   <span>Options d'Installation</span>
                 </button>
               </div>
@@ -185,7 +185,7 @@ export const ApkDownloadSection: React.FC = () => {
                 </span>
                 <button
                   onClick={copyChecksum}
-                  className="flex items-center gap-1 text-[#ff6b5b] hover:text-[#ff8a7d] font-bold tap-active cursor-pointer"
+                  className="flex items-center gap-1 text-[#ffa296] hover:text-[#ffb5ab] font-bold tap-active cursor-pointer"
                 >
                   {copiedChecksum ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                   <span>{copiedChecksum ? 'Copié !' : 'Copier Checksum'}</span>
@@ -208,7 +208,7 @@ export const ApkDownloadSection: React.FC = () => {
                       <div className="w-8 h-8 bg-black rounded-sm flex items-center justify-center p-1"><div className="w-4 h-4 bg-white rounded-xs" /></div>
                       <div className="w-8 h-8 bg-black rounded-sm flex items-center justify-center p-1"><div className="w-4 h-4 bg-white rounded-xs" /></div>
                     </div>
-                    <div className="font-black text-[13px] text-[#ff5a50] tracking-tighter font-almodobar">OZI APK</div>
+                    <div className="font-black text-[13px] text-[#ff8679] tracking-tighter font-almodobar">OZI APK</div>
                     <div className="flex justify-between w-full">
                       <div className="w-8 h-8 bg-black rounded-sm flex items-center justify-center p-1"><div className="w-4 h-4 bg-white rounded-xs" /></div>
                       <div className="grid grid-cols-2 gap-1 w-8 h-8"><div className="bg-black"/><div className="bg-black"/><div className="bg-black"/></div>
@@ -271,7 +271,7 @@ export const ApkDownloadSection: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="flex flex-col items-center text-center p-4">
-              <div className="w-12 h-12 rounded-2xl bg-[#ff5a50]/10 border border-[#ff5a50]/20 text-[#ff6b5b] font-black text-lg flex items-center justify-center mb-4 font-almodobar">
+              <div className="w-12 h-12 rounded-2xl bg-[#ff8679]/10 border border-[#ff8679]/20 text-[#ffa296] font-black text-lg flex items-center justify-center mb-4 font-almodobar">
                 1
               </div>
               <h4 className="font-bold text-sm text-white mb-1.5 font-heading">Télécharger le fichier APK</h4>
@@ -281,7 +281,7 @@ export const ApkDownloadSection: React.FC = () => {
             </div>
 
             <div className="flex flex-col items-center text-center p-4">
-              <div className="w-12 h-12 rounded-2xl bg-[#ff5a50]/10 border border-[#ff5a50]/20 text-[#ff6b5b] font-black text-lg flex items-center justify-center mb-4 font-almodobar">
+              <div className="w-12 h-12 rounded-2xl bg-[#ff8679]/10 border border-[#ff8679]/20 text-[#ffa296] font-black text-lg flex items-center justify-center mb-4 font-almodobar">
                 2
               </div>
               <h4 className="font-bold text-sm text-white mb-1.5 font-heading">Autoriser la source</h4>
@@ -291,7 +291,7 @@ export const ApkDownloadSection: React.FC = () => {
             </div>
 
             <div className="flex flex-col items-center text-center p-4">
-              <div className="w-12 h-12 rounded-2xl bg-[#ff5a50]/10 border border-[#ff5a50]/20 text-[#ff6b5b] font-black text-lg flex items-center justify-center mb-4 font-almodobar">
+              <div className="w-12 h-12 rounded-2xl bg-[#ff8679]/10 border border-[#ff8679]/20 text-[#ffa296] font-black text-lg flex items-center justify-center mb-4 font-almodobar">
                 3
               </div>
               <h4 className="font-bold text-sm text-white mb-1.5 font-heading">Ouvrir & Lire</h4>

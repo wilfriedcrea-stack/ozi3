@@ -54,37 +54,37 @@ export const Footer: React.FC = () => {
             <h4 className="text-xs font-black uppercase tracking-wider text-white font-almodobar">Pages & Navigation</h4>
             <ul className="space-y-2 text-xs sm:text-sm font-body">
               <li>
-                <button onClick={() => navigateTo('accueil')} className="hover:text-[#ff6b5b] transition-colors cursor-pointer">
+                <button onClick={() => navigateTo('accueil')} className="hover:text-[#ffa296] transition-colors cursor-pointer">
                   Accueil
                 </button>
               </li>
               <li>
-                <button onClick={() => navigateTo('oeuvres')} className="hover:text-[#ff6b5b] transition-colors cursor-pointer">
+                <button onClick={() => navigateTo('oeuvres')} className="hover:text-[#ffa296] transition-colors cursor-pointer">
                   Œuvres & Catalogue
                 </button>
               </li>
               <li>
-                <button onClick={() => navigateTo('articles')} className="hover:text-[#ff6b5b] transition-colors cursor-pointer">
+                <button onClick={() => navigateTo('articles')} className="hover:text-[#ffa296] transition-colors cursor-pointer">
                   Articles & Carnets de Création
                 </button>
               </li>
               <li>
-                <button onClick={() => navigateTo('recherche')} className="hover:text-[#ff6b5b] transition-colors cursor-pointer">
+                <button onClick={() => navigateTo('recherche')} className="hover:text-[#ffa296] transition-colors cursor-pointer">
                   Recherche globale
                 </button>
               </li>
               <li>
-                <button onClick={() => navigateTo('accueil', 'section-teasers')} className="hover:text-[#ff6b5b] transition-colors cursor-pointer">
+                <button onClick={() => navigateTo('accueil', 'section-teasers')} className="hover:text-[#ffa296] transition-colors cursor-pointer">
                   Bandes-Annonces & Teasers
                 </button>
               </li>
               <li>
-                <button onClick={() => navigateTo('accueil', 'section-download')} className="hover:text-[#ff6b5b] transition-colors cursor-pointer">
+                <button onClick={() => navigateTo('accueil', 'section-download')} className="hover:text-[#ffa296] transition-colors cursor-pointer">
                   Téléchargement APK Android ({appVersion.version})
                 </button>
               </li>
               <li>
-                <button onClick={() => navigateTo('accueil', 'section-creators')} className="hover:text-[#ff6b5b] transition-colors cursor-pointer">
+                <button onClick={() => navigateTo('accueil', 'section-creators')} className="hover:text-[#ffa296] transition-colors cursor-pointer">
                   Espace Créateurs
                 </button>
               </li>
@@ -101,9 +101,9 @@ export const Footer: React.FC = () => {
             <button
               id="footer-admin-btn"
               onClick={() => navigateTo('admin')}
-              className="flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-xl bg-[#0d0e15] hover:bg-[#161724] text-[#ff6b5b] font-bold text-xs border border-[#ff5a50]/40 shadow-lg glow-ozi transition-all hover:scale-[1.02] font-almodobar cursor-pointer"
+              className="flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-xl bg-[#0d0e15] hover:bg-[#161724] text-[#ffa296] font-bold text-xs border border-[#ff8679]/40 shadow-lg glow-ozi transition-all hover:scale-[1.02] font-almodobar cursor-pointer"
             >
-              <Layers className="w-4 h-4 text-[#ff5a50]" />
+              <Layers className="w-4 h-4 text-[#ff8679]" />
               <span>Ouvrir le Grand Panneau d'Administration / Studio</span>
             </button>
           </div>
@@ -122,7 +122,7 @@ export const Footer: React.FC = () => {
 
           <button
             onClick={scrollToTop}
-            className="flex items-center gap-1.5 text-slate-400 hover:text-[#ff6b5b] transition-colors font-bold font-almodobar cursor-pointer"
+            className="flex items-center gap-1.5 text-slate-400 hover:text-[#ffa296] transition-colors font-bold font-almodobar cursor-pointer"
           >
             <span>Haut de page</span>
             <ArrowUp className="w-3.5 h-3.5" />

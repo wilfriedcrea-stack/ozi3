@@ -70,7 +70,7 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({ article,
         {/* Category & Date */}
         <div className="flex items-center gap-3 mb-2">
           {article.category && (
-            <span className="text-[11px] font-bold text-[#ff5a50] bg-[#ff5a50]/10 border border-[#ff5a50]/30 px-2 py-0.5 rounded uppercase tracking-wider">
+            <span className="text-[11px] font-bold text-[#ff8679] bg-[#ff8679]/10 border border-[#ff8679]/30 px-2 py-0.5 rounded uppercase tracking-wider">
               {article.category}
             </span>
           )}
@@ -98,7 +98,7 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({ article,
 
         {/* Excerpt */}
         {article.excerpt && (
-          <p className="text-sm sm:text-base text-zinc-200 font-medium leading-relaxed mb-4 italic bg-[#1c1c24] p-3.5 rounded-lg border-l-3 border-[#ff5a50]">
+          <p className="text-sm sm:text-base text-zinc-200 font-medium leading-relaxed mb-4 italic bg-[#1c1c24] p-3.5 rounded-lg border-l-3 border-[#ff8679]">
             {article.excerpt}
           </p>
         )}
@@ -120,7 +120,7 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({ article,
 
           <button
             onClick={onClose}
-            className="px-5 py-2 bg-[#ff5a50] hover:bg-[#ff4538] text-white text-xs font-bold rounded-md transition-colors"
+            className="px-5 py-2 bg-[#ff8679] hover:bg-[#eb6051] text-white text-xs font-bold rounded-md transition-colors"
           >
             Fermer
           </button>
