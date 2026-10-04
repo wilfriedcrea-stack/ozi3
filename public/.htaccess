@@ -1,6 +1,14 @@
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
+
+  # Route direct /oeuvre/<slug> or ?oeuvre=<slug> for social bots to share.php
+  RewriteCond %{HTTP_USER_AGENT} (facebookexternalhit|Facebot|Meta-ExternalAgent|Twitterbot|WhatsApp|LinkedInBot|Discordbot|Slackbot|TelegramBot|Pinterest) [NC]
+  RewriteCond %{QUERY_STRING} (^|&)oeuvre=([^&]+) [NC]
+  RewriteRule ^$ /share.php [L,QSA]
+
+  RewriteRule ^oeuvre/([a-zA-Z0-9_-]+)/?$ /share.php?oeuvre=$1 [L,QSA]
+
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d

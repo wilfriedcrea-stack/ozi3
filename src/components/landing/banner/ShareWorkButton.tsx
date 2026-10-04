@@ -25,15 +25,40 @@ export const ShareWorkButton: React.FC<ShareWorkButtonProps> = ({
     return `https://ozibd.net/#/oeuvre/${slug}`;
   };
 
+  // Helper to pick a valid public HTTP(S) image URL (never base64 data: URLs which break query strings)
+  const getValidPublicImageUrl = () => {
+    const candidates = [series.coverUrl, series.bannerUrl];
+    for (const candidate of candidates) {
+      if (
+        candidate &&
+        typeof candidate === 'string' &&
+        !candidate.startsWith('data:') &&
+        candidate.length < 600
+      ) {
+        return candidate.replace(/^http:\/\/ozibd\.net/i, 'https://ozibd.net');
+      }
+    }
+    return 'https://ozibd.net/REF.png';
+  };
+
   // Social scraper URL with dedicated dynamic metadata (OpenGraph for Facebook / Twitter / WhatsApp)
   const getSocialShareUrl = () => {
     const slug = series.slug || series.id;
     const title = encodeURIComponent(series.title || '');
-    const cover = encodeURIComponent(series.bannerUrl || series.coverUrl || '');
+    const cover = encodeURIComponent(getValidPublicImageUrl());
     const author = encodeURIComponent(series.author || '');
+    const shortDesc = encodeURIComponent((series.synopsis || '').slice(0, 160));
+    // Cache-buster so Facebook scraper always fetches fresh Open Graph tags for the work
+    const cacheBuster = Math.floor(Date.now() / 60000);
 
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://ozibd.net';
-    return `${origin}/share.php?oeuvre=${encodeURIComponent(slug)}&title=${title}&cover=${cover}&author=${author}`;
+    const isLocalOrPreview =
+      typeof window === 'undefined' ||
+      window.location.hostname.includes('run.app') ||
+      window.location.hostname.includes('localhost') ||
+      window.location.hostname.includes('127.0.0.1');
+
+    const origin = isLocalOrPreview ? 'https://ozibd.net' : window.location.origin;
+    return `${origin}/share.php?oeuvre=${encodeURIComponent(slug)}&title=${title}&cover=${cover}&author=${author}&desc=${shortDesc}&v=${cacheBuster}`;
   };
 
   const showToast = (msg: string) => {

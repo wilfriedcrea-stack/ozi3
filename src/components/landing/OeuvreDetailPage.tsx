@@ -119,11 +119,24 @@ export const OeuvreDetailPage: React.FC = () => {
 
   const handleShare = async () => {
     const slug = currentSeries.slug || currentSeries.id;
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://ozibd.net';
-    const socialUrl = `${origin}/share.php?oeuvre=${encodeURIComponent(slug)}&title=${encodeURIComponent(currentSeries.title)}&cover=${encodeURIComponent(currentSeries.bannerUrl || currentSeries.coverUrl || '')}&author=${encodeURIComponent(currentSeries.author || '')}`;
+    const isLocalOrPreview =
+      typeof window === 'undefined' ||
+      window.location.hostname.includes('run.app') ||
+      window.location.hostname.includes('localhost') ||
+      window.location.hostname.includes('127.0.0.1');
+
+    const origin = isLocalOrPreview ? 'https://ozibd.net' : window.location.origin;
+    const rawCover = [currentSeries.coverUrl, currentSeries.bannerUrl].find(
+      c => c && typeof c === 'string' && !c.startsWith('data:') && c.length < 600
+    ) || 'https://ozibd.net/REF.png';
+    const cleanCover = rawCover.replace(/^http:\/\/ozibd\.net/i, 'https://ozibd.net');
+    const shortDesc = (currentSeries.synopsis || '').slice(0, 160);
+    const cacheBuster = Math.floor(Date.now() / 60000);
+
+    const socialUrl = `${origin}/share.php?oeuvre=${encodeURIComponent(slug)}&title=${encodeURIComponent(currentSeries.title)}&cover=${encodeURIComponent(cleanCover)}&author=${encodeURIComponent(currentSeries.author || '')}&desc=${encodeURIComponent(shortDesc)}&v=${cacheBuster}`;
     const directUrl = `${origin}/#/oeuvre/${slug}`;
 
-    const title = `Allez découvrir "${currentSeries.title}" sur OZI !`;
+    const title = `Allez découvrir "${currentSeries.title}"`;
     const text = `Allez découvrir "${currentSeries.title}" de ${currentSeries.author || 'OZI'} sur la plateforme OZI !`;
 
     if (navigator.share) {
