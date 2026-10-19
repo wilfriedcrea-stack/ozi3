@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Series } from '../../types';
 import { AdminHeader } from './AdminHeader';
 import { AdminSidebar } from './AdminSidebar';
 import { AdminDashboard } from './AdminDashboard';
@@ -21,7 +22,8 @@ import { useData } from '../../context/DataContext';
 export const AdminStudio: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [newSeriesModalOpen, setNewSeriesModalOpen] = useState<boolean>(false);
-  const { addSeries, adminAuth } = useData();
+  const [editingSeries, setEditingSeries] = useState<Series | null>(null);
+  const { addSeries, updateSeries, adminAuth } = useData();
 
   // Defense-in-depth: Never render studio content if not authenticated
   if (!adminAuth.isAuthenticated) {
@@ -32,6 +34,13 @@ export const AdminStudio: React.FC = () => {
     await addSeries(data);
     setNewSeriesModalOpen(false);
     setActiveTab('series');
+  };
+
+  const handleSaveEditSeries = async (data: any) => {
+    if (editingSeries) {
+      await updateSeries(editingSeries.id, data);
+      setEditingSeries(null);
+    }
   };
 
   return (
@@ -52,7 +61,8 @@ export const AdminStudio: React.FC = () => {
           {activeTab === 'dashboard' && (
             <AdminDashboard 
               onNavigate={setActiveTab} 
-              onNewSeriesClick={() => setNewSeriesModalOpen(true)} 
+              onNewSeriesClick={() => setNewSeriesModalOpen(true)}
+              onEditSeries={(s) => setEditingSeries(s)}
             />
           )}
 
@@ -88,6 +98,14 @@ export const AdminStudio: React.FC = () => {
           series={null}
           onClose={() => setNewSeriesModalOpen(false)}
           onSave={handleSaveNewSeries}
+        />
+      )}
+
+      {editingSeries && (
+        <AdminSeriesModal
+          series={editingSeries}
+          onClose={() => setEditingSeries(null)}
+          onSave={handleSaveEditSeries}
         />
       )}
 

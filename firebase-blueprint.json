@@ -29,6 +29,7 @@
         "ageRating": { "type": "string" },
         "authorPhotoUrl": { "type": "string" },
         "authorBio": { "type": "string" },
+        "authorQuote": { "type": "string" },
         "shopArticles": { "type": "array" },
         "updatedAt": { "type": "string" }
       },

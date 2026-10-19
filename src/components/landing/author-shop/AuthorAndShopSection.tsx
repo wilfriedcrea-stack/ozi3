@@ -29,6 +29,7 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
   const artistName = series.artist || '';
   const authorPhoto = series.authorPhotoUrl || '';
   const authorBio = series.authorBio?.trim() || '';
+  const authorQuote = series.authorQuote?.trim() || 'Chaque chapitre est minutieusement composé avec passion et sens du détail. Merci pour votre lecture !';
 
   const hasAuthorInfo = Boolean(authorName || authorBio || authorPhoto);
   const hasShopArticles = Array.isArray(series.shopArticles) && series.shopArticles.length > 0;
@@ -124,7 +125,7 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
               </p>
             )}
             <p className="text-zinc-400 text-[11px] sm:text-xs italic">
-              Chaque chapitre est minutieusement composé avec passion et sens du détail. Merci pour votre lecture !
+              {authorQuote}
             </p>
           </div>
         </section>

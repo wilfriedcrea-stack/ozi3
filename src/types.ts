@@ -70,6 +70,7 @@ export interface Series {
   artist: string;
   authorPhotoUrl?: string;
   authorBio?: string;
+  authorQuote?: string;
   shopArticles?: SeriesShopItem[];
   studio?: string;
   country: string;

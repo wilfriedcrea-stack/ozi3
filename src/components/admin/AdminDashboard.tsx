@@ -16,16 +16,19 @@ import {
   Search,
   Filter,
   CheckCircle2,
-  ExternalLink
+  ExternalLink,
+  Edit3
 } from 'lucide-react';
+import { Series } from '../../types';
 import { useData } from '../../context/DataContext';
 
 interface AdminDashboardProps {
   onNavigate: (tab: string) => void;
   onNewSeriesClick: () => void;
+  onEditSeries?: (series: Series) => void;
 }
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNewSeriesClick }) => {
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNewSeriesClick, onEditSeries }) => {
   const { series, appVersion, analytics, submissions, firebaseConfig, openOeuvrePage, openReader } = useData();
 
   const [searchCatalog, setSearchCatalog] = useState('');
@@ -409,7 +412,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
               <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between gap-2">
                 <button
                   onClick={() => openOeuvrePage(s.id)}
-                  className="flex-1 py-1.5 px-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-purple-300 border border-purple-500/20 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                  className="flex-1 py-1.5 px-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-purple-300 border border-purple-500/20 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                   title="Voir cette œuvre sur le site public"
                 >
                   <Eye className="w-3.5 h-3.5 text-purple-400" />
@@ -417,8 +420,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
                 </button>
 
                 <button
+                  onClick={() => onEditSeries ? onEditSeries(s) : onNavigate('series')}
+                  className="flex-1 py-1.5 px-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  title="Modifier les métadonnées de la série et la signature auteur"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Modifier</span>
+                </button>
+
+                <button
                   onClick={() => onNavigate('series')}
-                  className="flex-1 py-1.5 px-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                  className="flex-1 py-1.5 px-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                   title="Gérer les épisodes dans le Studio"
                 >
                   <BookOpen className="w-3.5 h-3.5 text-amber-400" />

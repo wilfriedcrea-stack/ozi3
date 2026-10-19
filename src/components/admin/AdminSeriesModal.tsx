@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Save, 
@@ -18,7 +18,8 @@ import {
   Trash2,
   ExternalLink,
   Layers,
-  FileText
+  FileText,
+  Quote
 } from 'lucide-react';
 import { Series, SeriesGenre, SeriesStatus, SeriesShopItem } from '../../types';
 import { useData } from '../../context/DataContext';
@@ -45,6 +46,8 @@ const ALL_GENRES: SeriesGenre[] = [
   'Tranche de vie'
 ];
 
+export const DEFAULT_AUTHOR_QUOTE = 'Chaque chapitre est minutieusement composé avec passion et sens du détail. Merci pour votre lecture !';
+
 export const AdminSeriesModal: React.FC<AdminSeriesModalProps> = ({ series, onClose, onSave }) => {
   const [activeTab, setActiveTab] = useState<'all' | 'author' | 'shop' | 'media' | 'info'>('all');
 
@@ -53,6 +56,9 @@ export const AdminSeriesModal: React.FC<AdminSeriesModalProps> = ({ series, onCl
   const [artist, setArtist] = useState(series?.artist || '');
   const [authorPhotoUrl, setAuthorPhotoUrl] = useState(series?.authorPhotoUrl || '');
   const [authorBio, setAuthorBio] = useState(series?.authorBio || '');
+  const [authorQuote, setAuthorQuote] = useState(
+    (series?.authorQuote && series.authorQuote.trim()) || DEFAULT_AUTHOR_QUOTE
+  );
   const [genre, setGenre] = useState<SeriesGenre>(series?.genre || 'Afro-Fantasy');
   const [country, setCountry] = useState(series?.country || 'Côte d\'Ivoire');
   const [releaseYear, setReleaseYear] = useState(series?.releaseYear || new Date().getFullYear());
@@ -63,6 +69,49 @@ export const AdminSeriesModal: React.FC<AdminSeriesModalProps> = ({ series, onCl
   const [coverUrl, setCoverUrl] = useState(series?.coverUrl || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80');
   const [bannerUrl, setBannerUrl] = useState(series?.bannerUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80');
   const [tagsInput, setTagsInput] = useState(series?.tags?.join(', ') || 'Afro-Futurisme, Webtoon, Épique');
+
+  // Sync state when series prop changes (e.g. editing different works)
+  useEffect(() => {
+    if (series) {
+      setTitle(series.title || '');
+      setAuthor(series.author || '');
+      setArtist(series.artist || '');
+      setAuthorPhotoUrl(series.authorPhotoUrl || '');
+      setAuthorBio(series.authorBio || '');
+      setAuthorQuote(
+        (series.authorQuote && series.authorQuote.trim()) || DEFAULT_AUTHOR_QUOTE
+      );
+      setGenre(series.genre || 'Afro-Fantasy');
+      setCountry(series.country || "Côte d'Ivoire");
+      setReleaseYear(series.releaseYear || new Date().getFullYear());
+      setAgeRating(series.ageRating || 'Tous publics');
+      setStatus(series.status || 'ongoing');
+      setIsExclusive(series.isExclusive ?? true);
+      setSynopsis(series.synopsis || '');
+      setCoverUrl(series.coverUrl || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80');
+      setBannerUrl(series.bannerUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80');
+      setTagsInput(series.tags?.join(', ') || 'Afro-Futurisme, Webtoon, Épique');
+      setShopArticles(series.shopArticles || []);
+    } else {
+      setTitle('');
+      setAuthor('');
+      setArtist('');
+      setAuthorPhotoUrl('');
+      setAuthorBio('');
+      setAuthorQuote(DEFAULT_AUTHOR_QUOTE);
+      setGenre('Afro-Fantasy');
+      setCountry("Côte d'Ivoire");
+      setReleaseYear(new Date().getFullYear());
+      setAgeRating('Tous publics');
+      setStatus('ongoing');
+      setIsExclusive(true);
+      setSynopsis('');
+      setCoverUrl('https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80');
+      setBannerUrl('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80');
+      setTagsInput('Afro-Futurisme, Webtoon, Épique');
+      setShopArticles([]);
+    }
+  }, [series]);
 
   // Shop Articles State
   const [shopArticles, setShopArticles] = useState<SeriesShopItem[]>(series?.shopArticles || []);
@@ -214,6 +263,7 @@ export const AdminSeriesModal: React.FC<AdminSeriesModalProps> = ({ series, onCl
       artist: artist.trim() || author.trim(),
       authorPhotoUrl: authorPhotoUrl.trim(),
       authorBio: authorBio.trim(),
+      authorQuote: authorQuote.trim(),
       shopArticles,
       genre,
       country,
@@ -303,6 +353,18 @@ export const AdminSeriesModal: React.FC<AdminSeriesModalProps> = ({ series, onCl
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab('info')}
+            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'info' 
+                ? 'bg-amber-500 text-zinc-950 shadow-md font-black' 
+                : 'bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>1. Métadonnées Générales</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('author')}
             className={`px-3.5 py-1.5 rounded-xl font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'author' 
@@ -311,23 +373,8 @@ export const AdminSeriesModal: React.FC<AdminSeriesModalProps> = ({ series, onCl
             }`}
           >
             <User className="w-3.5 h-3.5" />
-            <span>Auteur & Biographie</span>
+            <span>2. Informations sur l'Auteur</span>
             {authorPhotoUrl && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('shop')}
-            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'shop' 
-                ? 'bg-amber-500 text-zinc-950 shadow-md font-black' 
-                : 'bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800'
-            }`}
-          >
-            <ShoppingBag className="w-3.5 h-3.5" />
-            <span>Articles Boutique</span>
-            <span className="px-1.5 py-0.2 rounded-full bg-orange-500/20 text-orange-400 text-[10px] font-bold">
-              {shopArticles.length}
-            </span>
           </button>
           <button
             type="button"
@@ -339,31 +386,34 @@ export const AdminSeriesModal: React.FC<AdminSeriesModalProps> = ({ series, onCl
             }`}
           >
             <ImageIcon className="w-3.5 h-3.5" />
-            <span>Synopsis & Visuels</span>
+            <span>3. Synopsis & Visuels</span>
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('info')}
+            onClick={() => setActiveTab('shop')}
             className={`px-3.5 py-1.5 rounded-xl font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'info' 
+              activeTab === 'shop' 
                 ? 'bg-amber-500 text-zinc-950 shadow-md font-black' 
                 : 'bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800'
             }`}
           >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Paramètres & Tags</span>
+            <ShoppingBag className="w-3.5 h-3.5" />
+            <span>4. Articles Boutique</span>
+            <span className="px-1.5 py-0.2 rounded-full bg-orange-500/20 text-orange-400 text-[10px] font-bold">
+              {shopArticles.length}
+            </span>
           </button>
         </div>
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
 
-          {/* 1. INFORMATIONS GÉNÉRALES DE L'ŒUVRE */}
+          {/* 1. INFORMATIONS GÉNÉRALES & MÉTADONNÉES DE L'ŒUVRE */}
           {showInfo && (
             <div className="p-5 rounded-3xl bg-zinc-950/70 border border-zinc-800 space-y-4">
               <div className="flex items-center gap-2 pb-2 border-b border-zinc-800 text-xs font-bold uppercase tracking-wider text-amber-400">
                 <FileText className="w-4 h-4 text-amber-400" />
-                <span>1. Informations Générales de la Série</span>
+                <span>1. Métadonnées & Informations Générales de la Série</span>
               </div>
 
               <div>
@@ -460,6 +510,39 @@ export const AdminSeriesModal: React.FC<AdminSeriesModalProps> = ({ series, onCl
                   {isExclusive ? 'Oui (Exclusivité)' : 'Non (Standard)'}
                 </button>
               </div>
+
+              {/* Phrase de signature de l'auteur dans les métadonnées */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-950/40 via-zinc-900 to-zinc-900 border-2 border-amber-500/50 space-y-2.5 shadow-md">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                  <label className="text-xs font-bold text-amber-300 flex items-center gap-2">
+                    <Quote className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>Phrase de signature / Mot de remerciement de l'auteur (en italique)</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAuthorQuote(DEFAULT_AUTHOR_QUOTE)}
+                      className="text-[10px] text-amber-400/80 hover:text-amber-300 underline cursor-pointer"
+                    >
+                      Rétablir défaut
+                    </button>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                      Métadonnées de la série
+                    </span>
+                  </div>
+                </div>
+                <textarea
+                  rows={2}
+                  value={authorQuote}
+                  onChange={(e) => setAuthorQuote(e.target.value)}
+                  placeholder={DEFAULT_AUTHOR_QUOTE}
+                  className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-amber-500/40 text-xs text-amber-100 italic focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 leading-relaxed font-sans placeholder-zinc-500"
+                />
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-zinc-400">
+                  <span>✨ Cette phrase s'affiche en italique juste en dessous de la biographie de l'auteur sur la page publique de l'œuvre.</span>
+                  <span className="text-[10px] text-amber-400/80 font-mono">{authorQuote.length} caractères</span>
+                </div>
+              </div>
             </div>
           )}
 
@@ -473,7 +556,7 @@ export const AdminSeriesModal: React.FC<AdminSeriesModalProps> = ({ series, onCl
                   </div>
                   <div>
                     <h3 className="text-sm sm:text-base font-black uppercase text-amber-400 tracking-wide">
-                      Profil & Biographie de l'Auteur
+                      2. Informations sur l'Auteur
                     </h3>
                     <p className="text-[11px] text-zinc-400">
                       Ces informations s'affichent directement sur la page de l'œuvre dans la section « L'AUTEUR ».
@@ -481,7 +564,7 @@ export const AdminSeriesModal: React.FC<AdminSeriesModalProps> = ({ series, onCl
                   </div>
                 </div>
                 <span className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-bold">
-                  Section Auteur
+                  2. Informations sur l'Auteur
                 </span>
               </div>
 
@@ -590,6 +673,41 @@ export const AdminSeriesModal: React.FC<AdminSeriesModalProps> = ({ series, onCl
                 <span className="text-[10px] text-zinc-500 block mt-1">
                   💡 Ce texte sera mis en forme dans la page publique de l'œuvre sous le portrait de l'auteur.
                 </span>
+              </div>
+
+              {/* Phrase de signature / Mot de remerciement de l'auteur (en italique) - placé juste sous la biographie */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-950/40 via-zinc-900 to-zinc-900 border-2 border-amber-500/50 space-y-2.5 shadow-md">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                  <label className="text-xs font-bold text-amber-300 flex items-center gap-2">
+                    <Quote className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>Phrase de signature / Mot de remerciement de l'auteur (en italique)</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAuthorQuote(DEFAULT_AUTHOR_QUOTE)}
+                      className="text-[10px] text-amber-400/80 hover:text-amber-300 underline cursor-pointer"
+                    >
+                      Rétablir phrase par défaut
+                    </button>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                      {authorQuote.length} car.
+                    </span>
+                  </div>
+                </div>
+
+                <textarea
+                  rows={2}
+                  value={authorQuote}
+                  onChange={(e) => setAuthorQuote(e.target.value)}
+                  placeholder={DEFAULT_AUTHOR_QUOTE}
+                  className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-amber-500/40 text-xs text-amber-100 italic focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 leading-relaxed font-sans placeholder-zinc-500"
+                />
+
+                <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                  <span>✨ Cette phrase est pré-remplie par défaut et s'affiche en italique sous la biographie de l'auteur sur la page publique de l'œuvre.</span>
+                  <span className="text-[10px] text-amber-400/80 font-medium">Modifiable dans les métadonnées</span>
+                </div>
               </div>
             </div>
           )}

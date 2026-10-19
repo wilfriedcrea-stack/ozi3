@@ -16,7 +16,8 @@ import {
   Layers,
   Image as ImageIcon,
   RefreshCw,
-  AlertTriangle
+  AlertTriangle,
+  Quote
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Series, Chapter } from '../../types';
@@ -299,6 +300,13 @@ export const AdminSeriesManager: React.FC = () => {
                       <span>•</span>
                       <span>{s.totalReads.toLocaleString()} lectures</span>
                     </div>
+
+                    {s.authorQuote && (
+                      <p className="text-[11px] text-amber-300/90 italic mt-2 line-clamp-1 flex items-center gap-1.5 bg-amber-950/30 px-2.5 py-1 rounded-lg border border-amber-500/20 max-w-xl">
+                        <Quote className="w-3 h-3 text-amber-400 shrink-0" />
+                        <span className="truncate">« {s.authorQuote} »</span>
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -333,10 +341,11 @@ export const AdminSeriesManager: React.FC = () => {
 
                   <button
                     onClick={() => handleOpenEditSeries(s)}
-                    className="p-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700 text-xs font-semibold"
-                    title="Modifier les métadonnées de la série"
+                    className="p-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 hover:text-amber-200 border border-amber-500/30 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Modifier les métadonnées de la série et la signature de l'auteur"
                   >
-                    <Edit3 className="w-3.5 h-3.5" />
+                    <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Modifier Métadonnées</span>
                   </button>
 
                   <button

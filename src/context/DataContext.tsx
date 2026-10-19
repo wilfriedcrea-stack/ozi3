@@ -398,6 +398,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       artist: String(s?.artist || s?.illustrator || fallback?.artist || 'Artiste OZI'),
       authorPhotoUrl: s?.authorPhotoUrl || fallback?.authorPhotoUrl || '',
       authorBio: s?.authorBio || fallback?.authorBio || '',
+      authorQuote: (s?.authorQuote && typeof s.authorQuote === 'string' && s.authorQuote.trim() !== '')
+        ? s.authorQuote.trim()
+        : ((fallback?.authorQuote && typeof fallback.authorQuote === 'string' && fallback.authorQuote.trim() !== '')
+            ? fallback.authorQuote.trim()
+            : 'Chaque chapitre est minutieusement composé avec passion et sens du détail. Merci pour votre lecture !'),
       shopArticles: Array.isArray(s?.shopArticles) ? s.shopArticles : (fallback?.shopArticles || []),
       country: String(s?.country || fallback?.country || 'Côte d\'Ivoire'),
       synopsis: String(s?.synopsis || s?.description || fallback?.synopsis || 'Découvrez cette œuvre sur OZI.'),
