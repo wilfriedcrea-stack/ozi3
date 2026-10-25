@@ -247,7 +247,7 @@ export const HomeFeaturedShowcase: React.FC = () => {
                     <button
                       id={`hero-showcase-read-btn-${idx}`}
                       onClick={() => handleReadClick(slide)}
-                      className="inline-flex items-center justify-center gap-2.5 px-7 sm:px-8 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-[#ff5242] via-[#ff6b57] to-[#ff8353] hover:from-[#ff6253] hover:via-[#ff7c69] hover:to-[#ff9365] text-white font-bold text-sm sm:text-base shadow-[0_8px_25px_rgba(255,107,87,0.45)] hover:shadow-[0_12px_35px_rgba(255,107,87,0.65)] hover:scale-[1.03] active:scale-[0.98] transition-all duration-200 cursor-pointer font-sans"
+                      className="inline-flex items-center justify-center gap-2.5 px-7 sm:px-8 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl bg-[#f95e4e] hover:bg-[#fa6f60] text-white font-bold text-sm sm:text-base shadow-[0_8px_25px_rgba(249,94,78,0.45)] hover:shadow-[0_12px_35px_rgba(249,94,78,0.65)] hover:scale-[1.03] active:scale-[0.98] transition-all duration-200 cursor-pointer font-sans"
                       title={`Voir ${slide.title}`}
                     >
                       <Play className="w-4 h-4 fill-white text-white shrink-0" />

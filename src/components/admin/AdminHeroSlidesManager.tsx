@@ -353,7 +353,7 @@ export const AdminHeroSlidesManager: React.FC = () => {
                   </p>
 
                   {/* 4. Action Button in colors */}
-                  <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#ff5242] via-[#ff6b57] to-[#ff8353] text-white font-bold text-xs sm:text-sm shadow-lg shadow-[#ff6b57]/30">
+                  <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#f95e4e] text-white font-bold text-xs sm:text-sm shadow-lg shadow-[#f95e4e]/30">
                     <Play className="w-3.5 h-3.5 fill-white text-white shrink-0" />
                     <span>{previewSlide.buttonText || 'Voir le manhwa'}</span>
                   </div>
