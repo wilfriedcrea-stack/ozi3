@@ -191,16 +191,19 @@ export const AdminHeroSlidesManager: React.FC = () => {
           </div>
 
           {/* Mini Interactive Hero Visual */}
-          <div className="relative w-full h-[320px] sm:h-[380px] bg-[#07080c] overflow-hidden select-none">
+          <div className="relative w-full h-[320px] sm:h-[380px] bg-[#121316] overflow-hidden select-none">
             {/* Background Image */}
             <img
-              src={previewSlide.imageUrl || '/assets/aistudio/Sans_titre-2_1c012a78.png'}
+              src={previewSlide.imageUrl || '/assets/aistudio/Sans_titre-3_b6d37864.png'}
               alt={previewSlide.title}
-              className="absolute inset-0 w-full h-full object-cover object-right brightness-[0.88] contrast-[1.05]"
+              className="absolute inset-0 w-full h-full object-cover object-right brightness-100 contrast-[1.02]"
             />
 
-            {/* Gradient Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-r from-[#07080c] via-[#07080c]/85 via-50% to-transparent pointer-events-none" />
+            {/* Soft Gradient Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-r from-black/45 via-black/20 via-55% to-transparent pointer-events-none" />
+
+            {/* Subtle bottom vignette */}
+            <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/35 to-transparent pointer-events-none" />
 
             {/* Left Content Overlay */}
             <div className="relative z-10 h-full max-w-lg p-6 sm:p-10 flex flex-col justify-center items-start text-left">
@@ -210,7 +213,7 @@ export const AdminHeroSlidesManager: React.FC = () => {
                   <img
                     src={previewSlide.logoUrl}
                     alt={previewSlide.title}
-                    className="max-h-20 sm:max-h-24 w-auto object-contain drop-shadow-[0_8px_20px_rgba(0,0,0,0.9)]"
+                    className="w-full max-w-[260px] sm:max-w-[320px] max-h-28 sm:max-h-36 object-contain object-left drop-shadow-[0_8px_20px_rgba(0,0,0,0.7)]"
                   />
                 ) : (
                   <h3 className="text-3xl font-black text-white font-almodobar">
@@ -220,14 +223,13 @@ export const AdminHeroSlidesManager: React.FC = () => {
               </div>
 
               {/* Synopsis */}
-              <p className="text-zinc-100 text-xs sm:text-sm font-semibold line-clamp-3 leading-relaxed mb-6 drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
+              <p className="text-zinc-100 text-xs sm:text-sm font-bold line-clamp-3 leading-relaxed mb-6 drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)]">
                 {previewSlide.synopsis}
               </p>
 
-              {/* CTA Button */}
-              <div className="inline-flex items-center gap-2.5 px-6 py-2.5 rounded-full bg-[#ff7b6b] text-white font-bold text-xs sm:text-sm shadow-lg shadow-[#ff7b6b]/30">
+              {/* Single CTA Button without arrow */}
+              <div className="inline-flex items-center px-6 py-2.5 rounded-full bg-[#ff7b6b] text-white font-bold text-xs sm:text-sm shadow-lg shadow-[#ff7b6b]/30">
                 <span>{previewSlide.buttonText || 'Lire le premier chapitre'}</span>
-                <ArrowRight className="w-4 h-4 stroke-[2.5]" />
               </div>
             </div>
           </div>
@@ -472,10 +474,17 @@ export const AdminHeroSlidesManager: React.FC = () => {
                 <div className="flex flex-wrap gap-2 mt-2">
                   <button
                     type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, imageUrl: '/assets/aistudio/Sans_titre-3_b6d37864.png' }))}
+                    className="px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-[11px] text-zinc-300 transition-colors"
+                  >
+                    Capture Référence (Sans titre-3)
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setFormData(prev => ({ ...prev, imageUrl: '/assets/aistudio/Sans_titre-2_1c012a78.png' }))}
                     className="px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-[11px] text-zinc-300 transition-colors"
                   >
-                    Image originale Kamina
+                    Capture Référence (Sans titre-2)
                   </button>
                   <button
                     type="button"

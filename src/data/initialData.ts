@@ -1425,7 +1425,7 @@ export const INITIAL_HERO_SLIDES: HomeHeroSlide[] = [
   {
     id: 'slide-kamina',
     title: 'Kamina',
-    imageUrl: '/assets/aistudio/Sans_titre-2_1c012a78.png',
+    imageUrl: '/assets/aistudio/Sans_titre-3_b6d37864.png',
     logoUrl: '/images/kamina-logo.svg',
     synopsis: "Dans un monde dystopique aux confins de la magie ancestrale et de la technologie occulte, une jeune guerrière se dresse seule contre l'ordre corrompu pour briser les chaînes du destin.",
     buttonText: 'Lire le premier chapitre',
