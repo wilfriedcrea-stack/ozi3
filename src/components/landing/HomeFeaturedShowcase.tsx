@@ -199,7 +199,13 @@ export const HomeFeaturedShowcase: React.FC = () => {
                     <img
                       src={slide.logoUrl}
                       alt={`Logo ${slide.title}`}
-                      className="w-full max-w-[280px] sm:max-w-[360px] md:max-w-[420px] max-h-36 sm:max-h-48 md:max-h-56 object-contain object-left filter drop-shadow-[0_10px_25px_rgba(0,0,0,0.7)] select-none transition-transform duration-300 hover:scale-102"
+                      style={slide.logoHeight ? {
+                        maxHeight: `${slide.logoHeight}px`,
+                        maxWidth: `${Math.round(slide.logoHeight * 2.8)}px`
+                      } : undefined}
+                      className={`w-auto object-contain object-left filter drop-shadow-[0_10px_25px_rgba(0,0,0,0.7)] select-none transition-all duration-300 hover:scale-102 ${
+                        slide.logoHeight ? 'max-w-full' : 'max-w-[280px] sm:max-w-[360px] md:max-w-[420px] max-h-36 sm:max-h-48 md:max-h-56'
+                      }`}
                       onError={() => {
                         setLogoError(prev => ({ ...prev, [slide.id]: true }));
                       }}
