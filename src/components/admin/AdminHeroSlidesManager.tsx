@@ -16,7 +16,8 @@ import {
   Flame,
   ArrowRight,
   BookOpen,
-  Layers
+  Layers,
+  Play
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { HomeHeroSlide } from '../../types';
@@ -39,6 +40,7 @@ export const AdminHeroSlidesManager: React.FC = () => {
     title: string;
     imageUrl: string;
     logoUrl: string;
+    formatStatus: string;
     synopsis: string;
     buttonText: string;
     seriesId: string;
@@ -48,8 +50,9 @@ export const AdminHeroSlidesManager: React.FC = () => {
     title: '',
     imageUrl: '',
     logoUrl: '',
+    formatStatus: 'WEBTOON • EN COURS',
     synopsis: '',
-    buttonText: 'Lire le premier chapitre',
+    buttonText: 'Voir le manhwa',
     seriesId: series[0]?.id || '',
     active: true,
     order: 1
@@ -63,10 +66,11 @@ export const AdminHeroSlidesManager: React.FC = () => {
     setEditingSlide(null);
     setFormData({
       title: 'Nouvelle Œuvre Vedette',
-      imageUrl: '/assets/aistudio/Sans_titre-2_1c012a78.png',
+      imageUrl: '/assets/aistudio/Sans_titre-3_b6d37864.png',
       logoUrl: '/images/kamina-logo.svg',
+      formatStatus: 'WEBTOON • EN COURS',
       synopsis: "Dans un monde dystopique aux confins de la magie ancestrale et de la technologie occulte, une jeune guerrière se dresse seule contre l'ordre corrompu.",
-      buttonText: 'Lire le premier chapitre',
+      buttonText: 'Voir le manhwa',
       seriesId: series[0]?.id || '',
       active: true,
       order: (heroSlides?.length || 0) + 1
@@ -81,8 +85,9 @@ export const AdminHeroSlidesManager: React.FC = () => {
       title: slide.title,
       imageUrl: slide.imageUrl,
       logoUrl: slide.logoUrl || '',
+      formatStatus: slide.formatStatus || 'WEBTOON • EN COURS',
       synopsis: slide.synopsis,
-      buttonText: slide.buttonText || 'Lire le premier chapitre',
+      buttonText: slide.buttonText || 'Voir le manhwa',
       seriesId: slide.seriesId || (series[0]?.id || ''),
       active: slide.active,
       order: slide.order
@@ -200,36 +205,45 @@ export const AdminHeroSlidesManager: React.FC = () => {
             />
 
             {/* Soft Gradient Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-r from-black/45 via-black/20 via-55% to-transparent pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/25 via-50% to-transparent pointer-events-none" />
 
             {/* Subtle bottom vignette */}
             <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/35 to-transparent pointer-events-none" />
 
             {/* Left Content Overlay */}
             <div className="relative z-10 h-full max-w-lg p-6 sm:p-10 flex flex-col justify-center items-start text-left">
-              {/* Overlaid Logo */}
-              <div className="mb-4">
+              {/* 1. Overlaid Logo */}
+              <div className="mb-3">
                 {previewSlide.logoUrl ? (
                   <img
                     src={previewSlide.logoUrl}
                     alt={previewSlide.title}
-                    className="w-full max-w-[260px] sm:max-w-[320px] max-h-28 sm:max-h-36 object-contain object-left drop-shadow-[0_8px_20px_rgba(0,0,0,0.7)]"
+                    className="w-full max-w-[240px] sm:max-w-[300px] max-h-24 sm:max-h-32 object-contain object-left drop-shadow-[0_8px_20px_rgba(0,0,0,0.7)]"
                   />
                 ) : (
-                  <h3 className="text-3xl font-black text-white font-almodobar">
+                  <h3 className="text-2xl sm:text-3xl font-black text-white font-almodobar">
                     {previewSlide.title}
                   </h3>
                 )}
               </div>
 
-              {/* Synopsis */}
-              <p className="text-zinc-100 text-xs sm:text-sm font-bold line-clamp-3 leading-relaxed mb-6 drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)]">
-                {previewSlide.synopsis}
-              </p>
+              {/* 2. Format & Status Line */}
+              <div className="text-[11px] sm:text-xs font-bold tracking-wider uppercase text-white/95 mb-3 drop-shadow">
+                {previewSlide.formatStatus || 'WEBTOON • EN COURS'}
+              </div>
 
-              {/* Single CTA Button without arrow */}
-              <div className="inline-flex items-center px-6 py-2.5 rounded-full bg-[#ff7b6b] text-white font-bold text-xs sm:text-sm shadow-lg shadow-[#ff7b6b]/30">
-                <span>{previewSlide.buttonText || 'Lire le premier chapitre'}</span>
+              {/* Block: Description & Button lower down */}
+              <div className="flex flex-col items-start mt-1.5 space-y-4">
+                {/* 3. Synopsis - slightly smaller */}
+                <p className="text-white/90 text-[11px] sm:text-xs font-normal line-clamp-3 leading-relaxed drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)]">
+                  {previewSlide.synopsis}
+                </p>
+
+                {/* 4. Action Button in colors */}
+                <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#ff5242] via-[#ff6b57] to-[#ff8353] text-white font-bold text-xs sm:text-sm shadow-lg shadow-[#ff6b57]/30">
+                  <Play className="w-3.5 h-3.5 fill-white text-white shrink-0" />
+                  <span>{previewSlide.buttonText || 'Voir le manhwa'}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -474,6 +488,13 @@ export const AdminHeroSlidesManager: React.FC = () => {
                 <div className="flex flex-wrap gap-2 mt-2">
                   <button
                     type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, imageUrl: '/assets/aistudio/2026-10-25_13_36_26_40d98bf0.png' }))}
+                    className="px-2.5 py-1 rounded-lg bg-[#ff7b6b]/20 hover:bg-[#ff7b6b]/30 text-[11px] text-[#ff8679] font-bold transition-colors"
+                  >
+                    Disposition Référence (Myst Might)
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setFormData(prev => ({ ...prev, imageUrl: '/assets/aistudio/Sans_titre-3_b6d37864.png' }))}
                     className="px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-[11px] text-zinc-300 transition-colors"
                   >
@@ -554,7 +575,21 @@ export const AdminHeroSlidesManager: React.FC = () => {
                 </div>
               </div>
 
-              {/* 4. Synopsis / Summary Text */}
+              {/* 4. Format & Status Metadata (ex: WEBTOON • EN COURS) */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
+                  Format & Statut affiché sous le logo
+                </label>
+                <input
+                  type="text"
+                  value={formData.formatStatus}
+                  onChange={(e) => setFormData(prev => ({ ...prev, formatStatus: e.target.value }))}
+                  placeholder="ex: WEBTOON • EN COURS ou MANGA • TERMINÉ"
+                  className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#ff7b6b] text-white text-sm focus:outline-none"
+                />
+              </div>
+
+              {/* 5. Synopsis / Summary Text */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
                   Résumé / Synopsis narratif *
@@ -569,7 +604,7 @@ export const AdminHeroSlidesManager: React.FC = () => {
                 />
               </div>
 
-              {/* 5. Button Text & Target Series */}
+              {/* 6. Button Text & Target Series */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
@@ -579,7 +614,7 @@ export const AdminHeroSlidesManager: React.FC = () => {
                     type="text"
                     value={formData.buttonText}
                     onChange={(e) => setFormData(prev => ({ ...prev, buttonText: e.target.value }))}
-                    placeholder="ex: Lire le premier chapitre"
+                    placeholder="ex: Voir le manhwa"
                     className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#ff7b6b] text-white text-sm focus:outline-none"
                   />
                 </div>

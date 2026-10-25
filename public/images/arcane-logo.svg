@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 160" width="100%" height="100%" fill="none">
+  <defs>
+    <filter id="arcane-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.8"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="10" flood-color="#ff4d42" flood-opacity="0.4"/>
+    </filter>
+    <linearGradient id="arcane-gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="50%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#ef4444"/>
+    </linearGradient>
+  </defs>
+
+  <g filter="url(#arcane-glow)">
+    <!-- Angular Hextech / Zaun Wings -->
+    <path d="M 30 95 L 90 25 L 120 70 L 60 120 Z" fill="#ef4444" opacity="0.9"/>
+    <path d="M 430 95 L 370 25 L 340 70 L 400 120 Z" fill="#ef4444" opacity="0.9"/>
+
+    <!-- Arcane Hextech Core -->
+    <circle cx="230" cy="35" r="16" fill="#f59e0b" stroke="#ffffff" stroke-width="3"/>
+    <polygon points="230,12 245,35 230,58 215,35" fill="#ffffff" opacity="0.8"/>
+
+    <!-- Main Title "ARCANE" Bold Stylized Lettering -->
+    <text x="230" y="105" 
+      font-family="'Cinzel', 'Trajan Pro', 'Impact', sans-serif" 
+      font-weight="900" 
+      font-size="64" 
+      fill="#ffffff" 
+      stroke="#12131a" 
+      stroke-width="8" 
+      paint-order="stroke fill"
+      text-anchor="middle" 
+      letter-spacing="10">
+      ARCANE
+    </text>
+
+    <!-- Subtitle Ribbon -->
+    <g transform="translate(130, 118)">
+      <rect x="0" y="0" width="200" height="26" rx="4" fill="#ff4d42"/>
+      <text x="100" y="18" 
+        font-family="sans-serif" 
+        font-weight="900" 
+        font-size="11" 
+        fill="#ffffff" 
+        text-anchor="middle" 
+        letter-spacing="3">
+        LES FLAMMES DE LA LAGUNE
+      </text>
+    </g>
+  </g>
+</svg>

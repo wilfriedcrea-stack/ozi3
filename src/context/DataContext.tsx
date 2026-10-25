@@ -517,7 +517,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed.map((s: HomeHeroSlide, idx: number) => ({
+            ...s,
+            buttonText: (s.buttonText && s.buttonText !== 'Lire le premier chapitre') ? s.buttonText : 'Voir le manhwa',
+            formatStatus: s.formatStatus || 'WEBTOON • EN COURS',
+            logoUrl: s.logoUrl || (s.id === 'slide-arcane' ? '/images/arcane-logo.svg' : (s.id === 'slide-dakar' ? '/images/dakar-logo.svg' : '')),
+            order: s.order ?? (idx + 1)
+          }));
         }
       }
       return INITIAL_HERO_SLIDES;

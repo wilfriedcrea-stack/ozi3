@@ -389,6 +389,7 @@ export interface HomeHeroSlide {
   title: string;
   imageUrl: string;
   logoUrl?: string;
+  formatStatus?: string;
   synopsis: string;
   buttonText?: string;
   seriesId?: string;
