@@ -384,3 +384,20 @@ export interface LwsStorageFile {
   uploadedAt: string;
 }
 
+export interface HomeHeroSlide {
+  id: string;
+  title: string;
+  imageUrl: string;
+  logoUrl?: string;
+  synopsis: string;
+  buttonText?: string;
+  seriesId?: string;
+  chapterId?: string;
+  active: boolean;
+  order: number;
+  gradientOverlay?: 'cinematic' | 'dark' | 'soft';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+

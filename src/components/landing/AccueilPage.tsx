@@ -1,4 +1,5 @@
 import React from 'react';
+import { HomeFeaturedShowcase } from './HomeFeaturedShowcase';
 import { HeroSection } from './HeroSection';
 import { TeasersSection } from './TeasersSection';
 import { ApkDownloadSection } from './ApkDownloadSection';
@@ -8,6 +9,9 @@ import { CommunityFaq } from './CommunityFaq';
 export const AccueilPage: React.FC = () => {
   return (
     <div>
+      {/* 0. Top Artwork Showcase: Logo overlay, Dark Gradient, Synopsis & Read CTA */}
+      <HomeFeaturedShowcase />
+
       {/* 1. Hero Presentation & APK CTA */}
       <HeroSection />
 

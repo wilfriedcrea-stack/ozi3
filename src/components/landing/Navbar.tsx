@@ -20,7 +20,7 @@ export const Navbar: React.FC = () => {
   return (
     <header 
       id="main-navbar"
-      className="sticky top-0 z-40 w-full h-20 sm:h-22 bg-[#141418] border-b border-[#1e1f26] shadow-md transition-colors duration-200"
+      className="sticky top-0 z-40 w-full h-20 sm:h-22 bg-[#141418] border-none shadow-none transition-colors duration-200"
     >
       <div className="max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8 grid grid-cols-3 items-center">
         

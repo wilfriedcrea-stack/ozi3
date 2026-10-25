@@ -15,7 +15,8 @@ import {
   UserCheck,
   FileText,
   Eye,
-  KeyRound
+  KeyRound,
+  Sparkles
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { OziLogo } from '../common/OziLogo';
@@ -29,6 +30,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ activeTab, setActive
   const { 
     setViewMode, 
     series, 
+    heroSlides,
     submissions, 
     firebaseConfig, 
     creatorPayouts, 
@@ -47,6 +49,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ activeTab, setActive
 
   const NAV_ITEMS = [
     { id: 'dashboard', label: 'Vue d\'ensemble', icon: BarChart3, badge: null },
+    { id: 'hero-slides', label: 'Bannières Accueil', icon: Sparkles, badge: `${heroSlides?.length || 0}`, badgeColor: 'bg-[#ff7b6b]/20 text-[#ff8679] border border-[#ff7b6b]/30' },
     { id: 'series', label: 'Séries & Chapitres', icon: BookOpen, badge: `${series.length}` },
     { id: 'articles', label: 'Articles & Magazine', icon: FileText, badge: `${articles.length}` },
     { id: 'monetization', label: 'Monétisation & Payouts', icon: Coins, badge: pendingPayoutsCount > 0 ? `${pendingPayoutsCount} virement` : null, badgeColor: 'bg-amber-500/20 text-amber-300 border border-amber-500/30' },

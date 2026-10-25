@@ -16,6 +16,7 @@ import { AdminUsersManager } from './AdminUsersManager';
 import { AdminAdsManager } from './AdminAdsManager';
 import { AdminStorageManager } from './AdminStorageManager';
 import { AdminArticlesManager } from './AdminArticlesManager';
+import { AdminHeroSlidesManager } from './AdminHeroSlidesManager';
 import { AdminPasswordModal } from './AdminPasswordModal';
 import { useData } from '../../context/DataContext';
 
@@ -65,6 +66,8 @@ export const AdminStudio: React.FC = () => {
               onEditSeries={(s) => setEditingSeries(s)}
             />
           )}
+
+          {activeTab === 'hero-slides' && <AdminHeroSlidesManager />}
 
           {activeTab === 'series' && <AdminSeriesManager />}
 

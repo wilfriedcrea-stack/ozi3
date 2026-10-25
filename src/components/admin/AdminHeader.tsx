@@ -46,6 +46,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ activeTab, onNewSeries
   const getTabTitle = () => {
     switch (activeTab) {
       case 'dashboard': return 'Tableau de Bord & Analytics';
+      case 'hero-slides': return 'Vitrine & Bannières d\'Accueil';
       case 'series': return 'Gestion des Séries & Éditeur de Chapitres Webtoon';
       case 'monetization': return 'Monétisation, Tarifs Coins & Payouts Mobile Money';
       case 'moderation': return 'Modération des Commentaires & Salubrité';

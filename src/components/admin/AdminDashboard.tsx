@@ -29,7 +29,7 @@ interface AdminDashboardProps {
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNewSeriesClick, onEditSeries }) => {
-  const { series, appVersion, analytics, submissions, firebaseConfig, openOeuvrePage, openReader } = useData();
+  const { series, heroSlides, appVersion, analytics, submissions, firebaseConfig, openOeuvrePage, openReader } = useData();
 
   const [searchCatalog, setSearchCatalog] = useState('');
   const [filterGenre, setFilterGenre] = useState('Tous');
@@ -85,6 +85,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
           >
             <Plus className="w-4 h-4" />
             <span>Créer une Série</span>
+          </button>
+
+          <button
+            onClick={() => onNavigate('hero-slides')}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-[#ff7b6b] hover:text-white text-zinc-200 border border-zinc-700 hover:border-[#ff7b6b] text-xs font-semibold transition-all shadow-md"
+            title="Gérer les bannières majeures de l'accueil"
+          >
+            <Sparkles className="w-4 h-4 text-[#ff8679]" />
+            <span>Bannières Accueil ({heroSlides?.length || 0})</span>
           </button>
 
           <button

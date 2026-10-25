@@ -9,7 +9,8 @@ import {
   MonetizationSettings,
   CreatorPayout,
   ReportedComment,
-  ModerationLog
+  ModerationLog,
+  HomeHeroSlide
 } from '../types';
 
 export const INITIAL_SERIES: Series[] = [
@@ -1419,4 +1420,47 @@ export const INITIAL_MODERATION_LOGS: ModerationLog[] = [
     timestamp: '2026-08-01T10:00:00Z'
   }
 ];
+
+export const INITIAL_HERO_SLIDES: HomeHeroSlide[] = [
+  {
+    id: 'slide-kamina',
+    title: 'Kamina',
+    imageUrl: '/assets/aistudio/Sans_titre-2_1c012a78.png',
+    logoUrl: '/images/kamina-logo.svg',
+    synopsis: "Dans un monde dystopique aux confins de la magie ancestrale et de la technologie occulte, une jeune guerrière se dresse seule contre l'ordre corrompu pour briser les chaînes du destin.",
+    buttonText: 'Lire le premier chapitre',
+    seriesId: 'arcane-zaun-abidjan',
+    active: true,
+    order: 1,
+    gradientOverlay: 'cinematic',
+    createdAt: '2026-08-20T10:00:00Z'
+  },
+  {
+    id: 'slide-arcane',
+    title: 'Arcane : Les Flammes de la Lagune',
+    imageUrl: 'https://images.unsplash.com/photo-1515260268569-9271009adfdb?auto=format&fit=crop&w=1920&q=85',
+    logoUrl: '',
+    synopsis: "Entre la haute-ville scintillante de Piltover et les souterrains brumeux de Zaun, deux sœurs séparées par le destin se livrent une guerre fratricide impitoyable.",
+    buttonText: 'Lire le premier chapitre',
+    seriesId: 'arcane-zaun-abidjan',
+    active: true,
+    order: 2,
+    gradientOverlay: 'cinematic',
+    createdAt: '2026-08-22T10:00:00Z'
+  },
+  {
+    id: 'slide-dakar',
+    title: 'Dakar Street Racers',
+    imageUrl: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=1920&q=85',
+    logoUrl: '',
+    synopsis: "Sur la corniche de Dakar et dans les ruelles animées de la Médina, des pilotes clandestins s'affrontent dans des courses effrénées au volant de bolides hybrides customisés.",
+    buttonText: 'Lire le premier chapitre',
+    seriesId: 'dakar-drift',
+    active: true,
+    order: 3,
+    gradientOverlay: 'cinematic',
+    createdAt: '2026-08-25T10:00:00Z'
+  }
+];
+
 

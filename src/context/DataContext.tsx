@@ -23,7 +23,8 @@ import {
   LwsStorageFile,
   Article,
   AdminAuthState,
-  AdminCredentials
+  AdminCredentials,
+  HomeHeroSlide
 } from '../types';
 import { 
   INITIAL_SERIES, 
@@ -41,7 +42,8 @@ import {
   INITIAL_USERS,
   INITIAL_COIN_TRANSACTIONS,
   INITIAL_ADS,
-  INITIAL_LWS_FILES
+  INITIAL_LWS_FILES,
+  INITIAL_HERO_SLIDES
 } from '../data/initialData';
 import { initialArticles } from '../data/initialArticles';
 import { ambientAudio } from '../lib/ambientAudioEngine';
@@ -206,10 +208,18 @@ interface DataContextType {
   siteBannerUrl: string;
   updateSiteBannerUrl: (url: string) => Promise<boolean>;
 
+  // Home Hero Slides Showcase
+  heroSlides: HomeHeroSlide[];
+  addHeroSlide: (slide: Omit<HomeHeroSlide, 'id' | 'createdAt'>) => void;
+  updateHeroSlide: (id: string, updates: Partial<HomeHeroSlide>) => void;
+  deleteHeroSlide: (id: string) => void;
+  reorderHeroSlides: (slides: HomeHeroSlide[]) => void;
+
   // Interactions
   likeSeries: (seriesId: string) => void;
   likeChapter: (seriesId: string, chapterId: string) => void;
 }
+
 
 const DataContext = createContext<DataContextType | null>(null);
 
@@ -234,7 +244,8 @@ const STORAGE_KEYS = {
   LWS_FILES: 'ozi_lws_files_v1',
   ARTICLES: 'ozi_articles_data_v1',
   SITE_BANNER: 'ozi_site_banner_url_v1',
-  DELETED_SERIES: 'ozi_deleted_series_ids_v1'
+  DELETED_SERIES: 'ozi_deleted_series_ids_v1',
+  HERO_SLIDES: 'ozi_hero_slides_v1'
 };
 
 export const KNOWN_DELETED_SERIES_IDS: string[] = [];
@@ -497,6 +508,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return initialArticles;
     } catch {
       return initialArticles;
+    }
+  });
+
+  const [heroSlides, setHeroSlides] = useState<HomeHeroSlide[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.HERO_SLIDES);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+      return INITIAL_HERO_SLIDES;
+    } catch {
+      return INITIAL_HERO_SLIDES;
     }
   });
 
@@ -2022,12 +2048,52 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  const saveHeroSlides = useCallback((slides: HomeHeroSlide[]) => {
+    setHeroSlides(slides);
+    try {
+      localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(slides));
+    } catch (e) {
+      console.warn('Erreur sauvegarde hero slides:', e);
+    }
+  }, []);
+
+  const addHeroSlide = useCallback((slideData: Omit<HomeHeroSlide, 'id' | 'createdAt'>) => {
+    const newSlide: HomeHeroSlide = {
+      ...slideData,
+      id: `slide-${Date.now()}`,
+      order: slideData.order ?? (heroSlides.length + 1),
+      createdAt: new Date().toISOString()
+    };
+    const updated = [newSlide, ...heroSlides];
+    saveHeroSlides(updated);
+  }, [heroSlides, saveHeroSlides]);
+
+  const updateHeroSlide = useCallback((id: string, updates: Partial<HomeHeroSlide>) => {
+    const updated = heroSlides.map(s => s.id === id ? { ...s, ...updates, updatedAt: new Date().toISOString() } : s);
+    saveHeroSlides(updated);
+  }, [heroSlides, saveHeroSlides]);
+
+  const deleteHeroSlide = useCallback((id: string) => {
+    const updated = heroSlides.filter(s => s.id !== id);
+    saveHeroSlides(updated);
+  }, [heroSlides, saveHeroSlides]);
+
+  const reorderHeroSlides = useCallback((newOrder: HomeHeroSlide[]) => {
+    const reordered = newOrder.map((s, idx) => ({ ...s, order: idx + 1 }));
+    saveHeroSlides(reordered);
+  }, [saveHeroSlides]);
+
   return (
     <DataContext.Provider value={{
       series,
       teasers,
       pressReleases,
       articles,
+      heroSlides,
+      addHeroSlide,
+      updateHeroSlide,
+      deleteHeroSlide,
+      reorderHeroSlides,
       mediaKit,
       appVersion,
       analytics,

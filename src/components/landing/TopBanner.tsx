@@ -42,7 +42,7 @@ export const TopBanner: React.FC = () => {
     <aside 
       id="top-image-banner"
       aria-label="Bannière Mosaïque Manga & Webtoon OZI"
-      className="relative w-full bg-[#101014] cursor-pointer group select-none overflow-hidden border-b border-[#22232b]"
+      className="relative w-full bg-[#101014] cursor-pointer group select-none overflow-hidden border-none"
       onClick={handleBannerClick}
       title="OZI - Cliquez pour explorer le catalogue"
     >
