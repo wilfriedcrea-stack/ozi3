@@ -249,6 +249,7 @@ export interface AdminUser {
   permissions: string[];
   lastLogin: string;
   is2FAEnabled: boolean;
+  avatarUrl?: string;
 }
 
 export interface AdminAuthState {

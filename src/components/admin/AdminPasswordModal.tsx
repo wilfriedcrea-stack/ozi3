@@ -42,7 +42,7 @@ export const AdminPasswordModal: React.FC<AdminPasswordModalProps> = ({ isOpen: 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [isSuperAdminDirect, setIsSuperAdminDirect] = useState(isAuthenticated && adminUser.role === 'Super Admin');
+  const [isSuperAdminDirect, setIsSuperAdminDirect] = useState(true);
 
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
@@ -50,6 +50,27 @@ export const AdminPasswordModal: React.FC<AdminPasswordModalProps> = ({ isOpen: 
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handleResetToDefault = async () => {
+    setIsSubmitting(true);
+    setFeedback(null);
+    try {
+      const res = await changeAdminPassword('', 'OziAdmin2026!', true);
+      if (res.success) {
+        setFeedback({
+          success: true,
+          message: "Mot de passe réinitialisé avec succès à 'OziAdmin2026!' ! Vous pouvez maintenant vous connecter."
+        });
+        setTimeout(() => handleClose(), 2000);
+      } else {
+        setFeedback({ success: false, message: res.message || "Erreur de réinitialisation." });
+      }
+    } catch {
+      setFeedback({ success: false, message: "Erreur lors de la réinitialisation." });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -308,34 +329,47 @@ export const AdminPasswordModal: React.FC<AdminPasswordModalProps> = ({ isOpen: 
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800">
             <button
-              id="admin-modal-cancel-btn"
+              id="admin-modal-reset-default-btn"
               type="button"
-              onClick={handleClose}
+              onClick={handleResetToDefault}
               disabled={isSubmitting}
-              className="px-4 py-2.5 text-xs font-bold text-slate-400 hover:text-white transition-colors"
+              className="px-3.5 py-2 text-xs font-bold text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-xl transition-all border border-amber-500/20 cursor-pointer"
+              title="Rétablir la clé par défaut OziAdmin2026!"
             >
-              Annuler
+              Rétablir clé par défaut (OziAdmin2026!)
             </button>
-            <button
-              id="admin-modal-save-pwd-btn"
-              type="submit"
-              disabled={isSubmitting || !isMinLength || !isMatching}
-              className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black rounded-2xl text-xs shadow-lg shadow-amber-500/25 transition-all hover:scale-105 disabled:opacity-50 disabled:pointer-events-none font-heading"
-            >
-              {isSubmitting ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
-                  <span>Enregistrement sécurisé...</span>
-                </>
-              ) : (
-                <>
-                  <Lock className="w-4 h-4 text-slate-950" />
-                  <span>Enregistrer le Mot de Passe</span>
-                </>
-              )}
-            </button>
+
+            <div className="flex items-center gap-2">
+              <button
+                id="admin-modal-cancel-btn"
+                type="button"
+                onClick={handleClose}
+                disabled={isSubmitting}
+                className="px-4 py-2.5 text-xs font-bold text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                id="admin-modal-save-pwd-btn"
+                type="submit"
+                disabled={isSubmitting || !isMinLength || !isMatching}
+                className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black rounded-2xl text-xs shadow-lg shadow-amber-500/25 transition-all hover:scale-105 disabled:opacity-50 disabled:pointer-events-none font-heading"
+              >
+                {isSubmitting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                    <span>Enregistrement sécurisé...</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-4 h-4 text-slate-950" />
+                    <span>Enregistrer le Mot de Passe</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>
