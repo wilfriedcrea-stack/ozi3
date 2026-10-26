@@ -56,6 +56,7 @@ import {
   recordFailedLoginAttempt, 
   resetFailedLoginAttempts 
 } from '../utils/securityUtils';
+import { normalizeImageUrl } from '../utils/imageUtils';
 import { 
   initializeFirebaseCustom, 
   testFirestoreConnection, 
@@ -526,14 +527,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map((s: HomeHeroSlide, idx: number) => ({
             ...s,
+            imageUrl: normalizeImageUrl(s.imageUrl),
+            logoUrl: s.logoUrl ? normalizeImageUrl(s.logoUrl) : (s.id === 'slide-arcane' ? '/images/arcane-logo.svg' : (s.id === 'slide-dakar' ? '/images/dakar-logo.svg' : '')),
             buttonText: (s.buttonText && s.buttonText !== 'Lire le premier chapitre') ? s.buttonText : 'Voir le manhwa',
             formatStatus: s.formatStatus || 'WEBTOON • EN COURS',
-            logoUrl: s.logoUrl || (s.id === 'slide-arcane' ? '/images/arcane-logo.svg' : (s.id === 'slide-dakar' ? '/images/dakar-logo.svg' : '')),
             order: s.order ?? (idx + 1)
           }));
         }
       }
-      return INITIAL_HERO_SLIDES;
+      return INITIAL_HERO_SLIDES.map(s => ({
+        ...s,
+        imageUrl: normalizeImageUrl(s.imageUrl),
+        logoUrl: s.logoUrl ? normalizeImageUrl(s.logoUrl) : ''
+      }));
     } catch {
       return INITIAL_HERO_SLIDES;
     }
@@ -2139,9 +2145,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isSyncingHeroSlides, setIsSyncingHeroSlides] = useState(false);
 
   const saveHeroSlides = useCallback((slides: HomeHeroSlide[]) => {
-    setHeroSlides(slides);
+    const normalized = slides.map((s, idx) => ({
+      ...s,
+      imageUrl: normalizeImageUrl(s.imageUrl),
+      logoUrl: s.logoUrl ? normalizeImageUrl(s.logoUrl) : '',
+      order: s.order ?? (idx + 1)
+    }));
+    setHeroSlides(normalized);
     try {
-      localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(slides));
+      localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(normalized));
     } catch (e) {
       console.warn('Erreur sauvegarde hero slides:', e);
     }
@@ -2149,7 +2161,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const fb = initializeFirebaseCustom();
       if (fb.db) {
-        syncHeroSlidesToFirestore(fb.db, slides).catch(err => {
+        syncHeroSlidesToFirestore(fb.db, normalized).catch(err => {
           console.warn('Auto sync hero slides to Firestore note:', err);
         });
       }
@@ -2163,11 +2175,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!fb.db) {
         return { success: false, message: 'Client Firestore indisponible.' };
       }
-      const res = await syncHeroSlidesToFirestore(fb.db, heroSlides);
+      const normalized = heroSlides.map((s, idx) => ({
+        ...s,
+        imageUrl: normalizeImageUrl(s.imageUrl),
+        logoUrl: s.logoUrl ? normalizeImageUrl(s.logoUrl) : '',
+        order: s.order ?? (idx + 1)
+      }));
+      const res = await syncHeroSlidesToFirestore(fb.db, normalized);
       if (res.success) {
+        setHeroSlides(normalized);
+        try {
+          localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(normalized));
+        } catch {}
         return { 
           success: true, 
-          message: `Synchronisation réussie ! Les ${heroSlides.length} bannières sont maintenant actives et visibles sur tous les appareils.` 
+          message: `Synchronisation réussie ! Les ${normalized.length} bannières sont maintenant actives et visibles sur tous les appareils.` 
         };
       } else {
         return { success: false, message: 'Erreur lors de la synchronisation Firestore.' };

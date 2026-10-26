@@ -2,6 +2,7 @@ import { db } from '../lib/firebase';
 import { Firestore, collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, getDocFromServer, getDocs, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { Series, Teaser, PressRelease, AppVersionInfo, CreatorSubmission, Article, HomeHeroSlide } from '../types';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
+import { normalizeImageUrl } from '../utils/imageUtils';
 
 export const KNOWN_PERMANENTLY_DELETED_SERIES: string[] = [];
 
@@ -895,6 +896,8 @@ export async function syncHeroSlidesToFirestore(
     const nowIso = new Date().toISOString();
     const cleanedSlides = slides.map((s, idx) => cleanFirestoreObject({
       ...s,
+      imageUrl: normalizeImageUrl(s.imageUrl),
+      logoUrl: s.logoUrl ? normalizeImageUrl(s.logoUrl) : '',
       order: s.order ?? (idx + 1),
       updatedAt: nowIso
     }));
@@ -929,7 +932,13 @@ export async function fetchHeroSlidesFromFirestore(
     if (configSnap.exists()) {
       const data = configSnap.data();
       if (data && Array.isArray(data.slides) && data.slides.length > 0) {
-        return data.slides.sort((a: HomeHeroSlide, b: HomeHeroSlide) => (a.order || 0) - (b.order || 0));
+        return data.slides
+          .map((s: HomeHeroSlide) => ({
+            ...s,
+            imageUrl: normalizeImageUrl(s.imageUrl),
+            logoUrl: s.logoUrl ? normalizeImageUrl(s.logoUrl) : ''
+          }))
+          .sort((a: HomeHeroSlide, b: HomeHeroSlide) => (a.order || 0) - (b.order || 0));
       }
     }
 
@@ -938,7 +947,12 @@ export async function fetchHeroSlidesFromFirestore(
     if (!colSnap.empty) {
       const list: HomeHeroSlide[] = [];
       colSnap.forEach(d => {
-        list.push(d.data() as HomeHeroSlide);
+        const slide = d.data() as HomeHeroSlide;
+        list.push({
+          ...slide,
+          imageUrl: normalizeImageUrl(slide.imageUrl),
+          logoUrl: slide.logoUrl ? normalizeImageUrl(slide.logoUrl) : ''
+        });
       });
       return list.sort((a, b) => (a.order || 0) - (b.order || 0));
     }
@@ -955,7 +969,13 @@ export function subscribeToFirestoreHeroSlides(onUpdate: (slides: HomeHeroSlide[
       if (snap.exists()) {
         const data = snap.data();
         if (data && Array.isArray(data.slides) && data.slides.length > 0) {
-          const sorted = [...data.slides].sort((a: HomeHeroSlide, b: HomeHeroSlide) => (a.order || 0) - (b.order || 0));
+          const sorted = [...data.slides]
+            .map((s: HomeHeroSlide) => ({
+              ...s,
+              imageUrl: normalizeImageUrl(s.imageUrl),
+              logoUrl: s.logoUrl ? normalizeImageUrl(s.logoUrl) : ''
+            }))
+            .sort((a: HomeHeroSlide, b: HomeHeroSlide) => (a.order || 0) - (b.order || 0));
           onUpdate(sorted);
         }
       }

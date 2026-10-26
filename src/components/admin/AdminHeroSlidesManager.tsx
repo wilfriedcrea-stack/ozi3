@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { HomeHeroSlide } from '../../types';
+import { normalizeImageUrl } from '../../utils/imageUtils';
 
 export const AdminHeroSlidesManager: React.FC = () => {
   const { 
@@ -129,10 +130,16 @@ export const AdminHeroSlidesManager: React.FC = () => {
       return;
     }
 
+    const cleanedData = {
+      ...formData,
+      imageUrl: normalizeImageUrl(formData.imageUrl),
+      logoUrl: formData.logoUrl ? normalizeImageUrl(formData.logoUrl) : ''
+    };
+
     if (editingSlide) {
-      updateHeroSlide(editingSlide.id, formData);
+      updateHeroSlide(editingSlide.id, cleanedData);
     } else {
-      addHeroSlide(formData);
+      addHeroSlide(cleanedData);
     }
 
     setSaveSuccess(true);
