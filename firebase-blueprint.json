@@ -126,9 +126,35 @@
         "createdAt": { "type": "string" }
       },
       "required": ["creatorName", "email", "projectTitle"]
+    },
+    "HomeHeroSlide": {
+      "title": "HomeHeroSlide",
+      "description": "Bannière vedette en tête de la page d'accueil",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "logoHeight": { "type": "number" },
+        "formatStatus": { "type": "string" },
+        "synopsis": { "type": "string" },
+        "buttonText": { "type": "string" },
+        "seriesId": { "type": "string" },
+        "chapterId": { "type": "string" },
+        "active": { "type": "boolean" },
+        "order": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "title", "imageUrl"]
     }
   },
   "firestore": {
+    "/hero_slides/{slideId}": {
+      "schema": "HomeHeroSlide",
+      "description": "Bannières d'accueil visibles sur le site et toutes les plateformes"
+    },
     "/series/{seriesId}": {
       "schema": "Series",
       "description": "Catalogue public des séries et webtoons"

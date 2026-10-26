@@ -1,6 +1,6 @@
 import { db } from '../lib/firebase';
 import { Firestore, collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, getDocFromServer, getDocs, query, orderBy, serverTimestamp } from 'firebase/firestore';
-import { Series, Teaser, PressRelease, AppVersionInfo, CreatorSubmission, Article } from '../types';
+import { Series, Teaser, PressRelease, AppVersionInfo, CreatorSubmission, Article, HomeHeroSlide } from '../types';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
 export const KNOWN_PERMANENTLY_DELETED_SERIES: string[] = [];
@@ -885,6 +885,86 @@ export async function fetchAdminSecurityFromFirestore(databaseInstance: Firestor
     console.warn('Unable to fetch admin security from Firestore (offline or initial):', err);
   }
   return null;
+}
+
+export async function syncHeroSlidesToFirestore(
+  databaseInstance: Firestore = db,
+  slides: HomeHeroSlide[]
+): Promise<{ success: boolean; error?: unknown }> {
+  try {
+    const nowIso = new Date().toISOString();
+    const cleanedSlides = slides.map((s, idx) => cleanFirestoreObject({
+      ...s,
+      order: s.order ?? (idx + 1),
+      updatedAt: nowIso
+    }));
+
+    // 1. Save all slides atomically in /config/hero_slides for instant retrieval on any device
+    await setDoc(doc(databaseInstance, 'config', 'hero_slides'), {
+      slides: cleanedSlides,
+      count: cleanedSlides.length,
+      lastSyncedAt: nowIso
+    }, { merge: true });
+
+    // 2. Also save each slide individually in /hero_slides/{slide.id}
+    for (const slide of cleanedSlides) {
+      if (slide.id) {
+        await setDoc(doc(databaseInstance, 'hero_slides', slide.id), slide, { merge: true });
+      }
+    }
+
+    return { success: true };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, 'config/hero_slides');
+    return { success: false, error: err };
+  }
+}
+
+export async function fetchHeroSlidesFromFirestore(
+  databaseInstance: Firestore = db
+): Promise<HomeHeroSlide[] | null> {
+  try {
+    // 1. Try atomic /config/hero_slides
+    const configSnap = await getDoc(doc(databaseInstance, 'config', 'hero_slides'));
+    if (configSnap.exists()) {
+      const data = configSnap.data();
+      if (data && Array.isArray(data.slides) && data.slides.length > 0) {
+        return data.slides.sort((a: HomeHeroSlide, b: HomeHeroSlide) => (a.order || 0) - (b.order || 0));
+      }
+    }
+
+    // 2. Fallback to /hero_slides collection
+    const colSnap = await getDocs(collection(databaseInstance, 'hero_slides'));
+    if (!colSnap.empty) {
+      const list: HomeHeroSlide[] = [];
+      colSnap.forEach(d => {
+        list.push(d.data() as HomeHeroSlide);
+      });
+      return list.sort((a, b) => (a.order || 0) - (b.order || 0));
+    }
+  } catch (err) {
+    console.warn('Unable to fetch hero slides from Firestore:', err);
+  }
+  return null;
+}
+
+export function subscribeToFirestoreHeroSlides(onUpdate: (slides: HomeHeroSlide[]) => void): () => void {
+  try {
+    const configDocRef = doc(db, 'config', 'hero_slides');
+    return onSnapshot(configDocRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data && Array.isArray(data.slides) && data.slides.length > 0) {
+          const sorted = [...data.slides].sort((a: HomeHeroSlide, b: HomeHeroSlide) => (a.order || 0) - (b.order || 0));
+          onUpdate(sorted);
+        }
+      }
+    }, (err) => {
+      console.warn('Firestore hero slides subscription notice:', err);
+    });
+  } catch {
+    return () => {};
+  }
 }
 
 

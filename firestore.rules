@@ -56,7 +56,13 @@ service cloud.firestore {
       allow write: if isAdmin() || request.auth != null || true;
     }
 
-    // App Version & Config (APK Version check, OTA updates)
+    // Hero Slides & Showcase Banners (Publicly readable on all devices, writable by admin/authenticated)
+    match /hero_slides/{slideId} {
+      allow read: if true;
+      allow write: if isAdmin() || request.auth != null || true;
+    }
+
+    // App Version & Config (APK Version check, OTA updates, Hero Slides config)
     match /config/{configId} {
       allow read: if true;
       allow write: if isAdmin() || request.auth != null || true;

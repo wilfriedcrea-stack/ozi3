@@ -77,7 +77,10 @@ import {
   fetchSiteSettingsFromFirestore,
   subscribeToFirestoreSiteSettings,
   recordDeletedSeriesToFirestore,
-  deduplicateSeries
+  deduplicateSeries,
+  syncHeroSlidesToFirestore,
+  fetchHeroSlidesFromFirestore,
+  subscribeToFirestoreHeroSlides
 } from '../services/firebaseService';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
@@ -214,6 +217,8 @@ interface DataContextType {
   updateHeroSlide: (id: string, updates: Partial<HomeHeroSlide>) => void;
   deleteHeroSlide: (id: string) => void;
   reorderHeroSlides: (slides: HomeHeroSlide[]) => void;
+  syncHeroSlidesToFirestoreNow: () => Promise<{ success: boolean; message: string }>;
+  isSyncingHeroSlides: boolean;
 
   // Interactions
   likeSeries: (seriesId: string) => void;
@@ -860,6 +865,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.warn('Initial site settings banner fetch note:', bannerErr);
           }
 
+          // Cloud sync Hero Slides from Firestore (for all devices)
+          try {
+            const remoteSlides = await fetchHeroSlidesFromFirestore(fb.db);
+            if (remoteSlides && remoteSlides.length > 0) {
+              setHeroSlides(remoteSlides);
+              try {
+                localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(remoteSlides));
+              } catch {}
+            }
+          } catch (slideErr) {
+            console.warn('Initial hero slides fetch note:', slideErr);
+          }
+
           const initialData = await fetchFirestoreSeriesNow(fb.db);
           if (initialData && initialData.length > 0) {
             setSeries(() => {
@@ -918,10 +936,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
+    const unsubscribeHeroSlides = subscribeToFirestoreHeroSlides((remoteSlides) => {
+      if (remoteSlides && remoteSlides.length > 0) {
+        setHeroSlides(remoteSlides);
+        try {
+          localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(remoteSlides));
+        } catch {}
+      }
+    });
+
     return () => {
       unsubscribeSeries();
       unsubscribeVersion();
       unsubscribeBanner();
+      unsubscribeHeroSlides();
     };
   }, []);
 
@@ -2054,6 +2082,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  const [isSyncingHeroSlides, setIsSyncingHeroSlides] = useState(false);
+
   const saveHeroSlides = useCallback((slides: HomeHeroSlide[]) => {
     setHeroSlides(slides);
     try {
@@ -2061,7 +2091,39 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {
       console.warn('Erreur sauvegarde hero slides:', e);
     }
+    // Auto-sync in background to Firestore so changes propagate across all devices
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        syncHeroSlidesToFirestore(fb.db, slides).catch(err => {
+          console.warn('Auto sync hero slides to Firestore note:', err);
+        });
+      }
+    } catch {}
   }, []);
+
+  const syncHeroSlidesToFirestoreNow = useCallback(async (): Promise<{ success: boolean; message: string }> => {
+    setIsSyncingHeroSlides(true);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (!fb.db) {
+        return { success: false, message: 'Client Firestore indisponible.' };
+      }
+      const res = await syncHeroSlidesToFirestore(fb.db, heroSlides);
+      if (res.success) {
+        return { 
+          success: true, 
+          message: `Synchronisation réussie ! Les ${heroSlides.length} bannières sont maintenant actives et visibles sur tous les appareils.` 
+        };
+      } else {
+        return { success: false, message: 'Erreur lors de la synchronisation Firestore.' };
+      }
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Erreur lors de la synchronisation.' };
+    } finally {
+      setIsSyncingHeroSlides(false);
+    }
+  }, [heroSlides]);
 
   const addHeroSlide = useCallback((slideData: Omit<HomeHeroSlide, 'id' | 'createdAt'>) => {
     const newSlide: HomeHeroSlide = {
@@ -2100,6 +2162,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateHeroSlide,
       deleteHeroSlide,
       reorderHeroSlides,
+      syncHeroSlidesToFirestoreNow,
+      isSyncingHeroSlides,
       mediaKit,
       appVersion,
       analytics,

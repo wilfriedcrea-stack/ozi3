@@ -19,7 +19,10 @@ import {
   Layers,
   Play,
   Sliders,
-  Maximize2
+  Maximize2,
+  RefreshCw,
+  Cloud,
+  Smartphone
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { HomeHeroSlide } from '../../types';
@@ -31,8 +34,24 @@ export const AdminHeroSlidesManager: React.FC = () => {
     updateHeroSlide, 
     deleteHeroSlide, 
     reorderHeroSlides,
+    syncHeroSlidesToFirestoreNow,
+    isSyncingHeroSlides,
     series 
   } = useData();
+
+  const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleManualSync = async () => {
+    setSyncFeedback(null);
+    const result = await syncHeroSlidesToFirestoreNow();
+    setSyncFeedback({
+      type: result.success ? 'success' : 'error',
+      text: result.message
+    });
+    setTimeout(() => {
+      setSyncFeedback(null);
+    }, 4500);
+  };
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSlide, setEditingSlide] = useState<HomeHeroSlide | null>(null);
@@ -187,14 +206,48 @@ export const AdminHeroSlidesManager: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={handleOpenAdd}
-          className="inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-[#ff7b6b] hover:bg-[#ff8679] text-white font-bold text-sm shadow-lg shadow-[#ff7b6b]/20 hover:scale-105 active:scale-95 transition-all cursor-pointer font-almodobar shrink-0"
-        >
-          <Plus className="w-4 h-4 stroke-[2.5]" />
-          <span>Ajouter une Bannière</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          <button
+            onClick={handleManualSync}
+            disabled={isSyncingHeroSlides}
+            className="inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-white font-bold text-sm border border-zinc-700 hover:border-zinc-500 shadow-md transition-all cursor-pointer disabled:opacity-50"
+            title="Synchroniser avec le Cloud Firestore pour que toutes les bannières soient immédiatement visibles sur tous les appareils et téléphones"
+          >
+            <RefreshCw className={`w-4 h-4 text-[#ff8679] ${isSyncingHeroSlides ? 'animate-spin' : ''}`} />
+            <span>{isSyncingHeroSlides ? 'Synchronisation...' : 'Synchroniser'}</span>
+          </button>
+
+          <button
+            onClick={handleOpenAdd}
+            className="inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-[#ff7b6b] hover:bg-[#ff8679] text-white font-bold text-sm shadow-lg shadow-[#ff7b6b]/20 hover:scale-105 active:scale-95 transition-all cursor-pointer font-almodobar shrink-0"
+          >
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+            <span>Ajouter une Bannière</span>
+          </button>
+        </div>
       </div>
+
+      {/* Cloud Sync Feedback Notification */}
+      {syncFeedback && (
+        <div className={`p-4 rounded-2xl border text-sm flex items-center gap-3 animate-in fade-in shadow-lg ${
+          syncFeedback.type === 'success' 
+            ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300' 
+            : 'bg-rose-950/80 border-rose-500/40 text-rose-300'
+        }`}>
+          {syncFeedback.type === 'success' ? (
+            <Check className="w-5 h-5 text-emerald-400 shrink-0" />
+          ) : (
+            <X className="w-5 h-5 text-rose-400 shrink-0" />
+          )}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
+            <span className="font-bold">{syncFeedback.text}</span>
+            <span className="text-xs text-zinc-400 flex items-center gap-1">
+              <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+              Diffusé en direct sur ordinateurs, smartphones & tablettes.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Success Notification */}
       {saveSuccess && (
@@ -352,10 +405,14 @@ export const AdminHeroSlidesManager: React.FC = () => {
                     {previewSlide.synopsis}
                   </p>
 
-                  {/* 4. Action Button in colors */}
-                  <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#f95e4e] text-white font-bold text-xs sm:text-sm shadow-lg shadow-[#f95e4e]/30">
-                    <Play className="w-3.5 h-3.5 fill-white text-white shrink-0" />
-                    <span>{previewSlide.buttonText || 'Voir le manhwa'}</span>
+                  {/* 4. Action Button with subtle animated halo */}
+                  <div className="relative inline-flex items-center">
+                    <div className="absolute -inset-1 rounded-xl bg-gradient-to-r from-[#f95e4e] via-[#8b5cf6] via-[#06b6d4] to-[#f59e0b] opacity-35 blur-md pointer-events-none" />
+                    <div className="absolute -inset-[1px] rounded-xl bg-gradient-to-r from-[#f95e4e] via-[#a855f7] via-[#38bdf8] to-[#fbbf24] p-[1px] opacity-75 pointer-events-none" />
+                    <div className="relative z-10 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#f95e4e] text-white font-bold text-xs sm:text-sm shadow-lg shadow-[#f95e4e]/30">
+                      <Play className="w-3.5 h-3.5 fill-white text-white shrink-0" />
+                      <span>{previewSlide.buttonText || 'Voir le manhwa'}</span>
+                    </div>
                   </div>
                 </div>
               </div>
