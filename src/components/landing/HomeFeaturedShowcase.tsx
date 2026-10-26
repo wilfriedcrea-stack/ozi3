@@ -84,7 +84,7 @@ export const HomeFeaturedShowcase: React.FC = () => {
     };
   }, []);
 
-  // Auto-advance rotation (7 seconds cycle) with reset on manual interaction
+  // Auto-advance rotation (4 seconds cycle - reduced by 3s) with reset on manual interaction
   useEffect(() => {
     if (slidesToRender.length <= 1 || isPaused || isDocumentHidden) {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -103,7 +103,7 @@ export const HomeFeaturedShowcase: React.FC = () => {
         }, 900);
         return next;
       });
-    }, 7000);
+    }, 4000);
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);

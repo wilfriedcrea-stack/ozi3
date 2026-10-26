@@ -587,11 +587,18 @@ export const AdminHeroSlidesManager: React.FC = () => {
 
       {/* Modal Add / Edit Slide */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
-          <div className="relative w-full max-w-2xl bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-2xl my-8">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-4 mb-6">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-in fade-in duration-150"
+          onClick={() => setModalOpen(false)}
+        >
+          <div 
+            className="relative w-full max-w-2xl max-h-[90vh] rounded-3xl bg-zinc-900 border border-zinc-800 shadow-2xl text-zinc-100 flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Sticky Header */}
+            <div className="shrink-0 bg-zinc-900/95 backdrop-blur-md px-6 py-4 sm:py-5 border-b border-zinc-800 flex items-center justify-between z-10">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-2xl bg-[#ff7b6b]/15 text-[#ff8679]">
+                <div className="p-2.5 rounded-2xl bg-[#f95e4e]/15 text-[#f95e4e]">
                   <Sparkles className="w-5 h-5" />
                 </div>
                 <div>
@@ -605,325 +612,336 @@ export const AdminHeroSlidesManager: React.FC = () => {
               </div>
 
               <button
+                type="button"
                 onClick={() => setModalOpen(false)}
-                className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
+                className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                title="Fermer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="space-y-5">
-              {/* 1. Title / Name */}
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
-                  Titre de référence / Nom de l'œuvre *
-                </label>
-                <input
-                  type="text"
-                  value={formData.title}
-                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                  required
-                  placeholder="ex: Kamina, Orisha Rebirth, Arcane..."
-                  className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#ff7b6b] text-white text-sm focus:outline-none"
-                />
-              </div>
-
-              {/* 2. Background Image */}
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
-                  Image d'arrière-plan / Illustration de l'œuvre *
-                </label>
-                <div className="flex flex-col sm:flex-row items-stretch gap-2">
+            {/* Scrollable Form Body */}
+            <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
+                {/* 1. Title / Name */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
+                    Titre de référence / Nom de l'œuvre *
+                  </label>
                   <input
                     type="text"
-                    value={formData.imageUrl}
-                    onChange={(e) => setFormData(prev => ({ ...prev, imageUrl: e.target.value }))}
+                    value={formData.title}
+                    onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                     required
-                    placeholder="URL de l'image (ex: /assets/aistudio/... ou https://...)"
-                    className="flex-1 px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#ff7b6b] text-white text-sm focus:outline-none"
+                    placeholder="ex: Kamina, Orisha Rebirth, Arcane..."
+                    className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#f95e4e] text-white text-sm focus:outline-none"
                   />
-                  <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold cursor-pointer transition-colors shrink-0">
-                    <Upload className="w-4 h-4" />
-                    <span>Téléverser</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => handleFileUpload(e, 'imageUrl')}
-                      className="hidden"
-                    />
+                </div>
+
+                {/* 2. Background Image */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
+                    Image d'arrière-plan / Illustration de l'œuvre *
                   </label>
+                  <div className="flex flex-col sm:flex-row items-stretch gap-2">
+                    <input
+                      type="text"
+                      value={formData.imageUrl}
+                      onChange={(e) => setFormData(prev => ({ ...prev, imageUrl: e.target.value }))}
+                      required
+                      placeholder="URL de l'image (ex: /assets/aistudio/... ou https://...)"
+                      className="flex-1 px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#f95e4e] text-white text-sm focus:outline-none"
+                    />
+                    <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold cursor-pointer transition-colors shrink-0">
+                      <Upload className="w-4 h-4" />
+                      <span>Téléverser</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleFileUpload(e, 'imageUrl')}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+
+                  {/* Quick Presets */}
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, imageUrl: '/assets/aistudio/2026-10-25_13_36_26_40d98bf0.png' }))}
+                      className="px-2.5 py-1 rounded-lg bg-[#f95e4e]/20 hover:bg-[#f95e4e]/30 text-[11px] text-[#f95e4e] font-bold transition-colors"
+                    >
+                      Disposition Référence (Myst Might)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, imageUrl: '/assets/aistudio/Sans_titre-3_b6d37864.png' }))}
+                      className="px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-[11px] text-zinc-300 transition-colors"
+                    >
+                      Capture Référence (Sans titre-3)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, imageUrl: '/assets/aistudio/Sans_titre-2_1c012a78.png' }))}
+                      className="px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-[11px] text-zinc-300 transition-colors"
+                    >
+                      Capture Référence (Sans titre-2)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, imageUrl: 'https://images.unsplash.com/photo-1515260268569-9271009adfdb?auto=format&fit=crop&w=1920&q=85' }))}
+                      className="px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-[11px] text-zinc-300 transition-colors"
+                    >
+                      Cyberpunk
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, imageUrl: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=1920&q=85' }))}
+                      className="px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-[11px] text-zinc-300 transition-colors"
+                    >
+                      Racing Dakar
+                    </button>
+                  </div>
                 </div>
 
-                {/* Quick Presets */}
-                <div className="flex flex-wrap gap-2 mt-2">
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, imageUrl: '/assets/aistudio/2026-10-25_13_36_26_40d98bf0.png' }))}
-                    className="px-2.5 py-1 rounded-lg bg-[#ff7b6b]/20 hover:bg-[#ff7b6b]/30 text-[11px] text-[#ff8679] font-bold transition-colors"
-                  >
-                    Disposition Référence (Myst Might)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, imageUrl: '/assets/aistudio/Sans_titre-3_b6d37864.png' }))}
-                    className="px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-[11px] text-zinc-300 transition-colors"
-                  >
-                    Capture Référence (Sans titre-3)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, imageUrl: '/assets/aistudio/Sans_titre-2_1c012a78.png' }))}
-                    className="px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-[11px] text-zinc-300 transition-colors"
-                  >
-                    Capture Référence (Sans titre-2)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, imageUrl: 'https://images.unsplash.com/photo-1515260268569-9271009adfdb?auto=format&fit=crop&w=1920&q=85' }))}
-                    className="px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-[11px] text-zinc-300 transition-colors"
-                  >
-                    Cyberpunk
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, imageUrl: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=1920&q=85' }))}
-                    className="px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-[11px] text-zinc-300 transition-colors"
-                  >
-                    Racing Dakar
-                  </button>
-                </div>
-              </div>
+                {/* 3. Logo Overlaid on the Left */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
+                    Logo de l'œuvre (en surimpression à gauche)
+                  </label>
+                  <div className="flex flex-col sm:flex-row items-stretch gap-2">
+                    <input
+                      type="text"
+                      value={formData.logoUrl}
+                      onChange={(e) => setFormData(prev => ({ ...prev, logoUrl: e.target.value }))}
+                      placeholder="URL du logo transparent (ex: /images/kamina-logo.svg ou PNG)"
+                      className="flex-1 px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#f95e4e] text-white text-sm focus:outline-none"
+                    />
+                    <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold cursor-pointer transition-colors shrink-0">
+                      <Upload className="w-4 h-4" />
+                      <span>Téléverser Logo</span>
+                      <input
+                        type="file"
+                        accept="image/*,.svg"
+                        onChange={(e) => handleFileUpload(e, 'logoUrl')}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
 
-              {/* 3. Logo Overlaid on the Left */}
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
-                  Logo de l'œuvre (en surimpression à gauche)
-                </label>
-                <div className="flex flex-col sm:flex-row items-stretch gap-2">
+                  {/* Quick Presets for Logo */}
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, logoUrl: '/images/kamina-logo.svg' }))}
+                      className="px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-[11px] text-zinc-300 transition-colors"
+                    >
+                      Logo Kamina SVG officiel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, logoUrl: '/images/ozi-logo.svg' }))}
+                      className="px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-[11px] text-zinc-300 transition-colors"
+                    >
+                      Logo OZI
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, logoUrl: '' }))}
+                      className="px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-[11px] text-zinc-400 transition-colors"
+                    >
+                      Aucun (titre typographique)
+                    </button>
+                  </div>
+
+                  {/* Logo Size Control within Form */}
+                  <div className="mt-4 p-4 rounded-2xl bg-zinc-950/80 border border-zinc-800/80 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300">
+                        Taille du logo : <span className="text-[#f95e4e] font-mono">{formData.logoHeight || 150} px</span>
+                      </label>
+                      <span className="text-[11px] text-zinc-500">
+                        Hauteur d'affichage du logo
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {[
+                        { label: 'Compact', size: 110 },
+                        { label: 'Normal', size: 150 },
+                        { label: 'Grand', size: 200 },
+                        { label: 'Maxi', size: 260 },
+                      ].map(p => (
+                        <button
+                          key={p.size}
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, logoHeight: p.size }))}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            (formData.logoHeight || 150) === p.size
+                              ? 'bg-[#f95e4e] text-white shadow-sm'
+                              : 'bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800'
+                          }`}
+                        >
+                          {p.label} ({p.size}px)
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-3 pt-1">
+                      <input
+                        type="range"
+                        min="70"
+                        max="320"
+                        step="5"
+                        value={formData.logoHeight || 150}
+                        onChange={(e) => setFormData(prev => ({ ...prev, logoHeight: parseInt(e.target.value) || 150 }))}
+                        className="flex-1 accent-[#f95e4e] cursor-pointer"
+                      />
+                      <input
+                        type="number"
+                        min="70"
+                        max="320"
+                        value={formData.logoHeight || 150}
+                        onChange={(e) => setFormData(prev => ({ ...prev, logoHeight: parseInt(e.target.value) || 150 }))}
+                        className="w-16 px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-center text-xs font-mono font-bold"
+                      />
+                    </div>
+
+                    {/* Instant mini preview inside form - clean contained size */}
+                    {formData.logoUrl && (
+                      <div className="mt-2 p-3 rounded-xl bg-[#121316] border border-zinc-800/80 flex flex-col gap-1.5">
+                        <span className="text-[10px] uppercase font-bold text-zinc-500">
+                          Aperçu proportionnel à {formData.logoHeight || 150}px :
+                        </span>
+                        <div className="flex items-center justify-start overflow-hidden py-1 max-h-24">
+                          <img
+                            src={formData.logoUrl}
+                            alt="Aperçu du logo"
+                            style={{
+                              height: `${Math.min(formData.logoHeight || 150, 96)}px`,
+                              maxHeight: '96px',
+                              maxWidth: '100%'
+                            }}
+                            className="w-auto object-contain object-left filter drop-shadow transition-all duration-150"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 4. Format & Status Metadata (ex: WEBTOON • EN COURS) */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
+                    Format & Statut affiché sous le logo
+                  </label>
                   <input
                     type="text"
-                    value={formData.logoUrl}
-                    onChange={(e) => setFormData(prev => ({ ...prev, logoUrl: e.target.value }))}
-                    placeholder="URL du logo transparent (ex: /images/kamina-logo.svg ou PNG)"
-                    className="flex-1 px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#ff7b6b] text-white text-sm focus:outline-none"
+                    value={formData.formatStatus}
+                    onChange={(e) => setFormData(prev => ({ ...prev, formatStatus: e.target.value }))}
+                    placeholder="ex: WEBTOON • EN COURS ou MANGA • TERMINÉ"
+                    className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#f95e4e] text-white text-sm focus:outline-none"
                   />
-                  <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold cursor-pointer transition-colors shrink-0">
-                    <Upload className="w-4 h-4" />
-                    <span>Téléverser Logo</span>
-                    <input
-                      type="file"
-                      accept="image/*,.svg"
-                      onChange={(e) => handleFileUpload(e, 'logoUrl')}
-                      className="hidden"
-                    />
+                </div>
+
+                {/* 5. Synopsis / Summary Text */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
+                    Résumé / Synopsis narratif *
                   </label>
+                  <textarea
+                    rows={3}
+                    value={formData.synopsis}
+                    onChange={(e) => setFormData(prev => ({ ...prev, synopsis: e.target.value }))}
+                    required
+                    placeholder="Texte de présentation de l'œuvre affiché sur le dégradé à gauche..."
+                    className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#f95e4e] text-white text-sm focus:outline-none"
+                  />
                 </div>
 
-                {/* Quick Presets for Logo */}
-                <div className="flex flex-wrap items-center gap-2 mt-2">
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, logoUrl: '/images/kamina-logo.svg' }))}
-                    className="px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-[11px] text-zinc-300 transition-colors"
-                  >
-                    Logo Kamina SVG officiel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, logoUrl: '/images/ozi-logo.svg' }))}
-                    className="px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-[11px] text-zinc-300 transition-colors"
-                  >
-                    Logo OZI
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, logoUrl: '' }))}
-                    className="px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-[11px] text-zinc-400 transition-colors"
-                  >
-                    Aucun (titre typographique)
-                  </button>
-                </div>
-
-                {/* Logo Size Control within Form */}
-                <div className="mt-4 p-4 rounded-2xl bg-zinc-950/80 border border-zinc-800/80 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300">
-                      Taille du logo : <span className="text-[#ff8679] font-mono">{formData.logoHeight || 150} px</span>
+                {/* 6. Button Text & Target Series */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
+                      Texte du bouton d'action
                     </label>
-                    <span className="text-[11px] text-zinc-500">
-                      Hauteur d'affichage du logo
-                    </span>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    {[
-                      { label: 'Compact', size: 110 },
-                      { label: 'Normal', size: 150 },
-                      { label: 'Grand', size: 200 },
-                      { label: 'Maxi', size: 260 },
-                    ].map(p => (
-                      <button
-                        key={p.size}
-                        type="button"
-                        onClick={() => setFormData(prev => ({ ...prev, logoHeight: p.size }))}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          (formData.logoHeight || 150) === p.size
-                            ? 'bg-[#ff7b6b] text-white shadow-sm'
-                            : 'bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800'
-                        }`}
-                      >
-                        {p.label} ({p.size}px)
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-3 pt-1">
                     <input
-                      type="range"
-                      min="70"
-                      max="320"
-                      step="5"
-                      value={formData.logoHeight || 150}
-                      onChange={(e) => setFormData(prev => ({ ...prev, logoHeight: parseInt(e.target.value) || 150 }))}
-                      className="flex-1 accent-[#ff7b6b] cursor-pointer"
+                      type="text"
+                      value={formData.buttonText}
+                      onChange={(e) => setFormData(prev => ({ ...prev, buttonText: e.target.value }))}
+                      placeholder="ex: Voir le manhwa"
+                      className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#f95e4e] text-white text-sm focus:outline-none"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
+                      Œuvre liée (Catalogue)
+                    </label>
+                    <select
+                      value={formData.seriesId}
+                      onChange={(e) => setFormData(prev => ({ ...prev, seriesId: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#f95e4e] text-white text-sm focus:outline-none"
+                    >
+                      {series.map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.title} ({s.genre})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* 7. Active switch & Order */}
+                <div className="flex items-center justify-between p-4 rounded-xl bg-zinc-950 border border-zinc-800">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="slide-active-checkbox"
+                      checked={formData.active}
+                      onChange={(e) => setFormData(prev => ({ ...prev, active: e.target.checked }))}
+                      className="w-4 h-4 accent-[#f95e4e] rounded cursor-pointer"
+                    />
+                    <label htmlFor="slide-active-checkbox" className="text-xs font-bold text-zinc-300 cursor-pointer">
+                      Afficher immédiatement sur l'accueil
+                    </label>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-zinc-400">Ordre :</span>
                     <input
                       type="number"
-                      min="70"
-                      max="320"
-                      value={formData.logoHeight || 150}
-                      onChange={(e) => setFormData(prev => ({ ...prev, logoHeight: parseInt(e.target.value) || 150 }))}
-                      className="w-16 px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-center text-xs font-mono font-bold"
+                      min="1"
+                      max="99"
+                      value={formData.order}
+                      onChange={(e) => setFormData(prev => ({ ...prev, order: parseInt(e.target.value) || 1 }))}
+                      className="w-16 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-center text-xs"
                     />
                   </div>
-
-                  {/* Instant mini preview inside form */}
-                  {formData.logoUrl && (
-                    <div className="mt-2 p-3 rounded-xl bg-[#121316] border border-zinc-800/80 flex flex-col gap-1.5">
-                      <span className="text-[10px] uppercase font-bold text-zinc-500">
-                        Aperçu réel à {formData.logoHeight || 150}px :
-                      </span>
-                      <div className="flex items-center justify-start overflow-hidden py-1">
-                        <img
-                          src={formData.logoUrl}
-                          alt="Aperçu du logo"
-                          style={{
-                            maxHeight: `${formData.logoHeight || 150}px`,
-                            maxWidth: `${Math.round((formData.logoHeight || 150) * 2.8)}px`
-                          }}
-                          className="w-auto object-contain object-left filter drop-shadow transition-all duration-150"
-                        />
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
 
-              {/* 4. Format & Status Metadata (ex: WEBTOON • EN COURS) */}
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
-                  Format & Statut affiché sous le logo
-                </label>
-                <input
-                  type="text"
-                  value={formData.formatStatus}
-                  onChange={(e) => setFormData(prev => ({ ...prev, formatStatus: e.target.value }))}
-                  placeholder="ex: WEBTOON • EN COURS ou MANGA • TERMINÉ"
-                  className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#ff7b6b] text-white text-sm focus:outline-none"
-                />
-              </div>
-
-              {/* 5. Synopsis / Summary Text */}
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
-                  Résumé / Synopsis narratif *
-                </label>
-                <textarea
-                  rows={3}
-                  value={formData.synopsis}
-                  onChange={(e) => setFormData(prev => ({ ...prev, synopsis: e.target.value }))}
-                  required
-                  placeholder="Texte de présentation de l'œuvre affiché sur le dégradé à gauche..."
-                  className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#ff7b6b] text-white text-sm focus:outline-none"
-                />
-              </div>
-
-              {/* 6. Button Text & Target Series */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
-                    Texte du bouton d'action
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.buttonText}
-                    onChange={(e) => setFormData(prev => ({ ...prev, buttonText: e.target.value }))}
-                    placeholder="ex: Voir le manhwa"
-                    className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#ff7b6b] text-white text-sm focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
-                    Œuvre liée (Catalogue)
-                  </label>
-                  <select
-                    value={formData.seriesId}
-                    onChange={(e) => setFormData(prev => ({ ...prev, seriesId: e.target.value }))}
-                    className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#ff7b6b] text-white text-sm focus:outline-none"
+              {/* Sticky Footer */}
+              <div className="shrink-0 bg-zinc-900/95 backdrop-blur-md px-6 py-4 border-t border-zinc-800 flex items-center justify-between gap-3">
+                <span className="text-[11px] text-zinc-400 hidden sm:inline">
+                  ⚡ Modifie en temps réel et prépare la synchronisation
+                </span>
+                <div className="flex items-center gap-3 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => setModalOpen(false)}
+                    className="px-5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold transition-colors cursor-pointer"
                   >
-                    {series.map(s => (
-                      <option key={s.id} value={s.id}>
-                        {s.title} ({s.genre})
-                      </option>
-                    ))}
-                  </select>
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 rounded-xl bg-[#f95e4e] hover:bg-[#fa7364] text-white text-xs font-bold shadow-lg shadow-[#f95e4e]/20 hover:scale-105 active:scale-95 transition-all cursor-pointer font-almodobar"
+                  >
+                    {editingSlide ? 'Enregistrer les modifications' : 'Créer la bannière'}
+                  </button>
                 </div>
-              </div>
-
-              {/* 6. Active switch & Order */}
-              <div className="flex items-center justify-between p-4 rounded-xl bg-zinc-950 border border-zinc-800">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id="slide-active-checkbox"
-                    checked={formData.active}
-                    onChange={(e) => setFormData(prev => ({ ...prev, active: e.target.checked }))}
-                    className="w-4 h-4 accent-[#ff7b6b] rounded cursor-pointer"
-                  />
-                  <label htmlFor="slide-active-checkbox" className="text-xs font-bold text-zinc-300 cursor-pointer">
-                    Afficher immédiatement sur l'accueil
-                  </label>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-400">Ordre :</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max="99"
-                    value={formData.order}
-                    onChange={(e) => setFormData(prev => ({ ...prev, order: parseInt(e.target.value) || 1 }))}
-                    className="w-16 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-center text-xs"
-                  />
-                </div>
-              </div>
-
-              {/* Actions Footer */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="px-5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold transition-colors cursor-pointer"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-[#ff7b6b] hover:bg-[#ff8679] text-white text-xs font-bold shadow-lg shadow-[#ff7b6b]/20 hover:scale-105 active:scale-95 transition-all cursor-pointer font-almodobar"
-                >
-                  {editingSlide ? 'Enregistrer les modifications' : 'Créer la bannière'}
-                </button>
               </div>
             </form>
           </div>
