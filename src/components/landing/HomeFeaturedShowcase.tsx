@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { HomeHeroSlide } from '../../types';
+import { normalizeImageUrl } from '../../utils/imageUtils';
 
 export const HomeFeaturedShowcase: React.FC = () => {
   const { 
@@ -63,13 +64,15 @@ export const HomeFeaturedShowcase: React.FC = () => {
     if (slidesToRender.length <= 1) return;
     const nextIdx = (currentIndex + 1) % slidesToRender.length;
     const nextSlide = slidesToRender[nextIdx];
-    if (nextSlide?.imageUrl) {
+    const imgUrl = normalizeImageUrl(nextSlide?.imageUrl);
+    if (imgUrl) {
       const img = new Image();
-      img.src = nextSlide.imageUrl;
+      img.src = imgUrl;
     }
-    if (nextSlide?.logoUrl) {
+    const logoUrl = normalizeImageUrl(nextSlide?.logoUrl);
+    if (logoUrl) {
       const logo = new Image();
-      logo.src = nextSlide.logoUrl;
+      logo.src = logoUrl;
     }
   }, [currentIndex, slidesToRender]);
 
@@ -367,7 +370,7 @@ export const HomeFeaturedShowcase: React.FC = () => {
             >
               {/* Background Artwork Image */}
               <img
-                src={slide.imageUrl || '/assets/aistudio/Sans_titre-3_b6d37864.png'}
+                src={normalizeImageUrl(slide.imageUrl, '/assets/aistudio/Sans_titre-3_b6d37864.png')}
                 alt={slide.title}
                 className="w-full h-full object-cover object-right sm:object-center brightness-100 contrast-[1.02]"
                 onError={(e) => {
@@ -401,7 +404,7 @@ export const HomeFeaturedShowcase: React.FC = () => {
                 >
                   {slide.logoUrl && !logoError[slide.id] ? (
                     <img
-                      src={slide.logoUrl}
+                      src={normalizeImageUrl(slide.logoUrl)}
                       alt={`Logo ${slide.title}`}
                       style={slide.logoHeight ? {
                         maxHeight: `${slide.logoHeight}px`,

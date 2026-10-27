@@ -368,9 +368,12 @@ export const AdminHeroSlidesManager: React.FC = () => {
             <div className="relative w-full h-[340px] sm:h-[400px] bg-[#121316] overflow-hidden select-none">
               {/* Background Image */}
               <img
-                src={previewSlide.imageUrl || '/assets/aistudio/Sans_titre-3_b6d37864.png'}
+                src={normalizeImageUrl(previewSlide.imageUrl, '/assets/aistudio/Sans_titre-3_b6d37864.png')}
                 alt={previewSlide.title}
                 className="absolute inset-0 w-full h-full object-cover object-right brightness-100 contrast-[1.02]"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/assets/aistudio/Sans_titre-3_b6d37864.png';
+                }}
               />
 
               {/* Soft Gradient Overlay */}
@@ -385,13 +388,16 @@ export const AdminHeroSlidesManager: React.FC = () => {
                 <div className="mb-3 flex items-center justify-start min-h-[60px]">
                   {previewSlide.logoUrl ? (
                     <img
-                      src={previewSlide.logoUrl}
+                      src={normalizeImageUrl(previewSlide.logoUrl)}
                       alt={previewSlide.title}
                       style={{
                         maxHeight: `${currentLogoHeight}px`,
                         maxWidth: `${Math.round(currentLogoHeight * 2.8)}px`
                       }}
                       className="w-auto object-contain object-left drop-shadow-[0_8px_20px_rgba(0,0,0,0.7)] transition-all duration-200 select-none"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
                     />
                   ) : (
                     <h3 className="text-2xl sm:text-3xl font-black text-white font-almodobar">
@@ -472,20 +478,26 @@ export const AdminHeroSlidesManager: React.FC = () => {
                       title="Cliquer pour prévisualiser ci-dessus"
                     >
                       <img
-                        src={slide.imageUrl || '/assets/aistudio/Sans_titre-2_1c012a78.png'}
+                        src={normalizeImageUrl(slide.imageUrl, '/assets/aistudio/Sans_titre-2_1c012a78.png')}
                         alt={slide.title}
                         className="w-full h-full object-cover object-right group-hover:scale-105 transition-transform"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/assets/aistudio/Sans_titre-2_1c012a78.png';
+                        }}
                       />
                       {slide.logoUrl && (
                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-1">
                           <img
-                            src={slide.logoUrl}
+                            src={normalizeImageUrl(slide.logoUrl)}
                             alt=""
                             className="max-h-8 sm:max-h-10 object-contain drop-shadow"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
                           />
                         </div>
                       )}
-                      <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-bold text-white">
+                      <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-bold text-white z-10">
                         #{index + 1}
                       </div>
                     </div>
@@ -656,6 +668,7 @@ export const AdminHeroSlidesManager: React.FC = () => {
                       type="text"
                       value={formData.imageUrl}
                       onChange={(e) => setFormData(prev => ({ ...prev, imageUrl: e.target.value }))}
+                      onBlur={() => setFormData(prev => ({ ...prev, imageUrl: normalizeImageUrl(prev.imageUrl) }))}
                       required
                       placeholder="URL de l'image (ex: /assets/aistudio/... ou https://...)"
                       className="flex-1 px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#f95e4e] text-white text-sm focus:outline-none"
@@ -671,6 +684,23 @@ export const AdminHeroSlidesManager: React.FC = () => {
                       />
                     </label>
                   </div>
+
+                  {/* Instant mini preview for background image */}
+                  {formData.imageUrl && (
+                    <div className="mt-2 relative h-20 rounded-xl overflow-hidden border border-zinc-800 bg-black">
+                      <img
+                        src={normalizeImageUrl(formData.imageUrl, '/assets/aistudio/Sans_titre-3_b6d37864.png')}
+                        alt="Aperçu fond"
+                        className="w-full h-full object-cover object-right"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/assets/aistudio/Sans_titre-3_b6d37864.png';
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent flex items-center px-3 pointer-events-none">
+                        <span className="text-[11px] font-bold text-zinc-300">Aperçu du fond</span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Quick Presets */}
                   <div className="flex flex-wrap gap-2 mt-2">
@@ -722,6 +752,7 @@ export const AdminHeroSlidesManager: React.FC = () => {
                       type="text"
                       value={formData.logoUrl}
                       onChange={(e) => setFormData(prev => ({ ...prev, logoUrl: e.target.value }))}
+                      onBlur={() => setFormData(prev => ({ ...prev, logoUrl: prev.logoUrl ? normalizeImageUrl(prev.logoUrl) : '' }))}
                       placeholder="URL du logo transparent (ex: /images/kamina-logo.svg ou PNG)"
                       className="flex-1 px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#f95e4e] text-white text-sm focus:outline-none"
                     />
@@ -823,7 +854,7 @@ export const AdminHeroSlidesManager: React.FC = () => {
                         </span>
                         <div className="flex items-center justify-start overflow-hidden py-1 max-h-24">
                           <img
-                            src={formData.logoUrl}
+                            src={normalizeImageUrl(formData.logoUrl)}
                             alt="Aperçu du logo"
                             style={{
                               height: `${Math.min(formData.logoHeight || 150, 96)}px`,
@@ -831,6 +862,9 @@ export const AdminHeroSlidesManager: React.FC = () => {
                               maxWidth: '100%'
                             }}
                             className="w-auto object-contain object-left filter drop-shadow transition-all duration-150"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.opacity = '0.3';
+                            }}
                           />
                         </div>
                       </div>
