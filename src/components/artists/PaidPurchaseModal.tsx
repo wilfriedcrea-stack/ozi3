@@ -137,14 +137,30 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
               origin: { y: 0.6 }
             });
 
-            // Automatically trigger first PDF download
-            generateAndDownloadArtbookPdf({
-              artbook,
-              userName: name.trim(),
-              userEmail: email.trim().toLowerCase(),
-              isPaid: true,
-              transactionRef: generatedRef
-            });
+            // Automatically trigger download (direct link or high-res PDF generation)
+            const directUrl = (artbook.downloadUrl || artbook.pdfDownloadUrl || '').trim();
+            if (directUrl) {
+              try {
+                const dlAnchor = document.createElement('a');
+                dlAnchor.href = directUrl;
+                dlAnchor.target = '_blank';
+                dlAnchor.rel = 'noopener noreferrer';
+                dlAnchor.download = `${artbook.title.replace(/[^a-zA-Z0-9_-]/g, '_')}_Artbook.pdf`;
+                document.body.appendChild(dlAnchor);
+                dlAnchor.click();
+                document.body.removeChild(dlAnchor);
+              } catch (e) {
+                window.open(directUrl, '_blank');
+              }
+            } else {
+              generateAndDownloadArtbookPdf({
+                artbook,
+                userName: name.trim(),
+                userEmail: email.trim().toLowerCase(),
+                isPaid: true,
+                transactionRef: generatedRef
+              });
+            }
           } else {
             setStep('failed');
             setErrorMsg('La passerelle de paiement n\'a pas validé la transaction.');
@@ -162,6 +178,22 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
 
   const handleDownloadPurchasedPdf = async () => {
     if (!downloadAuthorized) return;
+    const directUrl = (artbook.downloadUrl || artbook.pdfDownloadUrl || '').trim();
+    if (directUrl) {
+      try {
+        const dlAnchor = document.createElement('a');
+        dlAnchor.href = directUrl;
+        dlAnchor.target = '_blank';
+        dlAnchor.rel = 'noopener noreferrer';
+        dlAnchor.download = `${artbook.title.replace(/[^a-zA-Z0-9_-]/g, '_')}_Artbook.pdf`;
+        document.body.appendChild(dlAnchor);
+        dlAnchor.click();
+        document.body.removeChild(dlAnchor);
+      } catch (e) {
+        window.open(directUrl, '_blank');
+      }
+      return;
+    }
     setIsDownloadingPdf(true);
     try {
       await generateAndDownloadArtbookPdf({

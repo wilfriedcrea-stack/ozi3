@@ -70,7 +70,7 @@ export const FreeDownloadModal: React.FC<FreeDownloadModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      // 1. Record download in database
+      // 1. Record download in database (lead with email, phone, name)
       const downloadRecordId = `dl-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       await recordArtbookDownload({
         id: downloadRecordId,
@@ -85,26 +85,56 @@ export const FreeDownloadModal: React.FC<FreeDownloadModalProps> = ({
         userId: currentUser?.uid
       });
 
-      // 2. Generate and download genuine PDF
-      const pdfResult = await generateAndDownloadArtbookPdf({
-        artbook,
-        userName: name.trim(),
-        userEmail: email.trim().toLowerCase(),
-        isPaid: false
-      });
+      // 2. Direct download trigger using configured link
+      const directUrl = (artbook.downloadUrl || artbook.pdfDownloadUrl || '').trim();
+      let hasTriggeredDirect = false;
 
-      if (pdfResult.success) {
-        setDownloadFilename(pdfResult.filename);
-        setDownloadSuccess(true);
-        // Trigger celebratory confetti
-        confetti({
-          particleCount: 80,
-          spread: 70,
-          origin: { y: 0.6 }
-        });
-      } else {
-        setErrorMsg('Une erreur est survenue lors de la génération du PDF. Veuillez réessayer.');
+      if (directUrl) {
+        try {
+          const dlAnchor = document.createElement('a');
+          dlAnchor.href = directUrl;
+          dlAnchor.target = '_blank';
+          dlAnchor.rel = 'noopener noreferrer';
+          dlAnchor.download = `${artbook.title.replace(/[^a-zA-Z0-9_-]/g, '_')}_Artbook.pdf`;
+          document.body.appendChild(dlAnchor);
+          dlAnchor.click();
+          document.body.removeChild(dlAnchor);
+          hasTriggeredDirect = true;
+          setDownloadFilename(artbook.title + ' (Fichier Officiel)');
+          setDownloadSuccess(true);
+        } catch (linkErr) {
+          console.warn('Direct link trigger notice:', linkErr);
+          window.open(directUrl, '_blank');
+          hasTriggeredDirect = true;
+          setDownloadFilename(artbook.title + ' (Fichier Officiel)');
+          setDownloadSuccess(true);
+        }
       }
+
+      // If no direct link configured, fallback to high-res PDF generation
+      if (!hasTriggeredDirect) {
+        const pdfResult = await generateAndDownloadArtbookPdf({
+          artbook,
+          userName: name.trim(),
+          userEmail: email.trim().toLowerCase(),
+          isPaid: false
+        });
+
+        if (pdfResult.success) {
+          setDownloadFilename(pdfResult.filename);
+          setDownloadSuccess(true);
+        } else {
+          setErrorMsg('Une erreur est survenue lors du téléchargement. Veuillez réessayer.');
+          return;
+        }
+      }
+
+      // Trigger celebratory confetti
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
     } catch (err) {
       console.error('Error during download:', err);
       setErrorMsg('Impossible de finaliser le téléchargement. Veuillez vérifier votre connexion.');
@@ -114,6 +144,22 @@ export const FreeDownloadModal: React.FC<FreeDownloadModalProps> = ({
   };
 
   const handleRedownload = async () => {
+    const directUrl = (artbook.downloadUrl || artbook.pdfDownloadUrl || '').trim();
+    if (directUrl) {
+      try {
+        const dlAnchor = document.createElement('a');
+        dlAnchor.href = directUrl;
+        dlAnchor.target = '_blank';
+        dlAnchor.rel = 'noopener noreferrer';
+        dlAnchor.download = `${artbook.title.replace(/[^a-zA-Z0-9_-]/g, '_')}_Artbook.pdf`;
+        document.body.appendChild(dlAnchor);
+        dlAnchor.click();
+        document.body.removeChild(dlAnchor);
+      } catch (e) {
+        window.open(directUrl, '_blank');
+      }
+      return;
+    }
     setIsSubmitting(true);
     await generateAndDownloadArtbookPdf({
       artbook,
@@ -153,36 +199,49 @@ export const FreeDownloadModal: React.FC<FreeDownloadModalProps> = ({
             </div>
 
             <h3 className="text-xl sm:text-2xl font-black text-white mb-2 font-almodobar">
-              Téléchargement disponible !
+              Téléchargement Prêt !
             </h3>
 
             <p className="text-sm text-zinc-300 mb-6 max-w-sm leading-relaxed">
-              Le fichier officiel <span className="font-bold text-white">{downloadFilename || artbook.title}</span> a été généré et téléchargé sur votre appareil.
+              Le fichier officiel <span className="font-bold text-white">{downloadFilename || artbook.title}</span> a été préparé pour votre appareil.
             </p>
 
             <div className="w-full p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800 mb-6 text-left flex items-center gap-3">
               <FileText className="w-8 h-8 text-emerald-400 shrink-0" />
               <div className="min-w-0 flex-1">
                 <div className="text-xs font-bold text-white truncate">{artbook.title}</div>
-                <div className="text-[11px] text-zinc-400">Par {artbook.artistName} • Format PDF Haute Définition ({artbook.fileSizeFormatted})</div>
+                <div className="text-[11px] text-zinc-400">Par {artbook.artistName} • Format {artbook.fileSizeFormatted}</div>
               </div>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 w-full">
-              <button
-                type="button"
-                onClick={handleRedownload}
-                disabled={isSubmitting}
-                className="flex-1 py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
-              >
-                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                <span>Télécharger à nouveau</span>
-              </button>
+              {(artbook.downloadUrl || artbook.pdfDownloadUrl) ? (
+                <a
+                  href={(artbook.downloadUrl || artbook.pdfDownloadUrl)?.trim()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download
+                  className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-600/20 cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Télécharger le fichier</span>
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleRedownload}
+                  disabled={isSubmitting}
+                  className="flex-1 py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  <span>Télécharger à nouveau</span>
+                </button>
+              )}
 
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm transition-all shadow-md shadow-emerald-600/20 cursor-pointer"
+                className="flex-1 py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs sm:text-sm transition-all cursor-pointer"
               >
                 Terminer
               </button>

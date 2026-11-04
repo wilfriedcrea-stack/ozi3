@@ -7,6 +7,7 @@ import {
   ExternalLink, 
   Instagram, 
   Twitter, 
+  Youtube,
   Palette, 
   Download, 
   CheckCircle2, 
@@ -151,14 +152,27 @@ export const ArtistDetailPage: React.FC = () => {
                   </div>
                 )}
 
+                {currentArtist.socials?.youtube && (
+                  <a 
+                    href={currentArtist.socials.youtube} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition-all shadow-sm group"
+                    title="Chaîne YouTube"
+                  >
+                    <Youtube className="w-3.5 h-3.5 text-red-500 group-hover:scale-110 transition-transform" />
+                    <span>YouTube</span>
+                  </a>
+                )}
+
                 {currentArtist.socials?.instagram && (
                   <a 
                     href={currentArtist.socials.instagram} 
                     target="_blank" 
                     rel="noreferrer"
-                    className="flex items-center gap-1 text-zinc-400 hover:text-white transition-colors"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition-all shadow-sm group"
                   >
-                    <Instagram className="w-3.5 h-3.5 text-pink-400" />
+                    <Instagram className="w-3.5 h-3.5 text-pink-400 group-hover:scale-110 transition-transform" />
                     <span>Instagram</span>
                   </a>
                 )}
@@ -168,10 +182,22 @@ export const ArtistDetailPage: React.FC = () => {
                     href={currentArtist.socials.twitter} 
                     target="_blank" 
                     rel="noreferrer"
-                    className="flex items-center gap-1 text-zinc-400 hover:text-white transition-colors"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition-all shadow-sm group"
                   >
-                    <Twitter className="w-3.5 h-3.5 text-sky-400" />
+                    <Twitter className="w-3.5 h-3.5 text-sky-400 group-hover:scale-110 transition-transform" />
                     <span>X / Twitter</span>
+                  </a>
+                )}
+
+                {currentArtist.socials?.artstation && (
+                  <a 
+                    href={currentArtist.socials.artstation} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition-all shadow-sm group"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform" />
+                    <span>Artstation</span>
                   </a>
                 )}
               </div>

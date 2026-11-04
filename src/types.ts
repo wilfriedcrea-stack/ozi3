@@ -428,6 +428,7 @@ export interface Artist {
     instagram?: string;
     twitter?: string;
     artstation?: string;
+    youtube?: string;
   };
   featuredSeriesTitle?: string;
   createdAt?: string;
@@ -448,10 +449,12 @@ export interface Artbook {
   releaseYear: number;
   tags: string[];
   fileSizeFormatted: string;
+  downloadUrl?: string;
   pdfDownloadUrl?: string;
   downloadsCount: number;
   rating?: number;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ArtbookDownloadRecord {

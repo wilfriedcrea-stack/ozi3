@@ -15,7 +15,8 @@ export const INITIAL_ARTISTS: Artist[] = [
     socials: {
       instagram: 'https://instagram.com/kofi.art.kemet',
       twitter: 'https://twitter.com/kofi_mensah_art',
-      artstation: 'https://artstation.com/kofimensah'
+      artstation: 'https://artstation.com/kofimensah',
+      youtube: 'https://youtube.com/@kofimensah_art'
     },
     createdAt: '2025-01-10T10:00:00Z'
   },
@@ -33,7 +34,8 @@ export const INITIAL_ARTISTS: Artist[] = [
     socials: {
       instagram: 'https://instagram.com/tidiane.cyberabj',
       twitter: 'https://twitter.com/tidiane_cyber',
-      artstation: 'https://artstation.com/tidianetraore'
+      artstation: 'https://artstation.com/tidianetraore',
+      youtube: 'https://youtube.com/@tidiane_cyberpunk'
     },
     createdAt: '2025-02-14T08:00:00Z'
   },
@@ -95,6 +97,7 @@ export const INITIAL_ARTBOOKS: Artbook[] = [
     releaseYear: 2026,
     tags: ['Afro-Fantasy', 'Peinture Digitale', 'Armures Divines', 'Studio Kemet'],
     fileSizeFormatted: '68 Mo',
+    downloadUrl: 'https://raw.githubusercontent.com/mozilla/pdf.js/master/web/compressed.tracemonkey-pldi-09.pdf',
     downloadsCount: 1420,
     rating: 4.95,
     createdAt: '2026-03-15T10:00:00Z'
@@ -120,6 +123,7 @@ export const INITIAL_ARTBOOKS: Artbook[] = [
     releaseYear: 2026,
     tags: ['Gratuit', 'Croquis & Sketchnotes', 'Line-art', 'Work In Progress'],
     fileSizeFormatted: '32 Mo',
+    downloadUrl: 'https://raw.githubusercontent.com/mozilla/pdf.js/master/web/compressed.tracemonkey-pldi-09.pdf',
     downloadsCount: 3890,
     rating: 4.88,
     createdAt: '2026-04-01T12:00:00Z'
@@ -145,6 +149,7 @@ export const INITIAL_ARTBOOKS: Artbook[] = [
     releaseYear: 2026,
     tags: ['Cyberpunk', 'Concept Art', 'Architecture Futuriste', 'Mechas'],
     fileSizeFormatted: '85 Mo',
+    downloadUrl: 'https://raw.githubusercontent.com/mozilla/pdf.js/master/web/compressed.tracemonkey-pldi-09.pdf',
     downloadsCount: 1850,
     rating: 4.97,
     createdAt: '2026-02-20T14:30:00Z'
@@ -170,6 +175,7 @@ export const INITIAL_ARTBOOKS: Artbook[] = [
     releaseYear: 2026,
     tags: ['Gratuit', 'Storyboard', 'Urban Wax', 'Sketches'],
     fileSizeFormatted: '28 Mo',
+    downloadUrl: 'https://raw.githubusercontent.com/mozilla/pdf.js/master/web/compressed.tracemonkey-pldi-09.pdf',
     downloadsCount: 4210,
     rating: 4.91,
     createdAt: '2026-05-10T09:00:00Z'
@@ -195,6 +201,7 @@ export const INITIAL_ARTBOOKS: Artbook[] = [
     releaseYear: 2026,
     tags: ['Amazones', 'Histoire & Mythes', 'Peinture Numérique', 'Or & Ébène'],
     fileSizeFormatted: '54 Mo',
+    downloadUrl: 'https://raw.githubusercontent.com/mozilla/pdf.js/master/web/compressed.tracemonkey-pldi-09.pdf',
     downloadsCount: 1620,
     rating: 4.96,
     createdAt: '2026-03-25T11:00:00Z'
@@ -220,6 +227,7 @@ export const INITIAL_ARTBOOKS: Artbook[] = [
     releaseYear: 2026,
     tags: ['Gratuit', 'Bestiaire', 'Encrage', 'Mythologie Sahélienne'],
     fileSizeFormatted: '38 Mo',
+    downloadUrl: 'https://raw.githubusercontent.com/mozilla/pdf.js/master/web/compressed.tracemonkey-pldi-09.pdf',
     downloadsCount: 3150,
     rating: 4.93,
     createdAt: '2026-04-12T16:00:00Z'
@@ -245,6 +253,7 @@ export const INITIAL_ARTBOOKS: Artbook[] = [
     releaseYear: 2026,
     tags: ['Racing', 'Concept Vehicles', 'Dakar Spirit', 'Vitesse'],
     fileSizeFormatted: '49 Mo',
+    downloadUrl: 'https://raw.githubusercontent.com/mozilla/pdf.js/master/web/compressed.tracemonkey-pldi-09.pdf',
     downloadsCount: 1190,
     rating: 4.89,
     createdAt: '2026-06-05T14:00:00Z'

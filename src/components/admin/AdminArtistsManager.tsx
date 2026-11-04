@@ -22,7 +22,15 @@ import {
   Mail,
   Calendar,
   Layers,
-  Star
+  Star,
+  Link as LinkIcon,
+  Copy,
+  CheckCircle2,
+  AlertCircle,
+  FileText,
+  Youtube,
+  Instagram,
+  Twitter
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Artist, Artbook } from '../../types';
@@ -52,6 +60,8 @@ export const AdminArtistsManager: React.FC = () => {
 
   const [artbookModalOpen, setArtbookModalOpen] = useState(false);
   const [editingArtbook, setEditingArtbook] = useState<Artbook | null>(null);
+  const [artbookModalTab, setArtbookModalTab] = useState<'general' | 'preview' | 'link'>('general');
+  const [copiedArtbookLinkId, setCopiedArtbookLinkId] = useState<string | null>(null);
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteType, setDeleteType] = useState<'artist' | 'artbook' | null>(null);
@@ -69,6 +79,7 @@ export const AdminArtistsManager: React.FC = () => {
     instagram: string;
     twitter: string;
     artstation: string;
+    youtube: string;
   }>({
     name: '',
     photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
@@ -79,7 +90,8 @@ export const AdminArtistsManager: React.FC = () => {
     featuredSeriesTitle: '',
     instagram: '',
     twitter: '',
-    artstation: ''
+    artstation: '',
+    youtube: ''
   });
 
   const [newSpecialtyInput, setNewSpecialtyInput] = useState('');
@@ -98,6 +110,7 @@ export const AdminArtistsManager: React.FC = () => {
     releaseYear: number;
     tags: string[];
     fileSizeFormatted: string;
+    downloadUrl: string;
     rating: number;
   }>({
     artistId: artists[0]?.id || '',
@@ -118,6 +131,7 @@ export const AdminArtistsManager: React.FC = () => {
     releaseYear: new Date().getFullYear(),
     tags: ['Artbook', 'Concept Art'],
     fileSizeFormatted: '45 Mo',
+    downloadUrl: '',
     rating: 4.9
   });
 
@@ -142,7 +156,8 @@ export const AdminArtistsManager: React.FC = () => {
       featuredSeriesTitle: '',
       instagram: '',
       twitter: '',
-      artstation: ''
+      artstation: '',
+      youtube: ''
     });
     setArtistModalOpen(true);
   };
@@ -159,7 +174,8 @@ export const AdminArtistsManager: React.FC = () => {
       featuredSeriesTitle: artist.featuredSeriesTitle || '',
       instagram: artist.socials?.instagram || '',
       twitter: artist.socials?.twitter || '',
-      artstation: artist.socials?.artstation || ''
+      artstation: artist.socials?.artstation || '',
+      youtube: artist.socials?.youtube || ''
     });
     setArtistModalOpen(true);
   };
@@ -180,7 +196,8 @@ export const AdminArtistsManager: React.FC = () => {
         socials: {
           instagram: artistForm.instagram.trim() || undefined,
           twitter: artistForm.twitter.trim() || undefined,
-          artstation: artistForm.artstation.trim() || undefined
+          artstation: artistForm.artstation.trim() || undefined,
+          youtube: artistForm.youtube.trim() || undefined
         }
       });
       setSaveNotice(`Artiste "${artistForm.name}" mis à jour avec succès.`);
@@ -197,7 +214,8 @@ export const AdminArtistsManager: React.FC = () => {
         socials: {
           instagram: artistForm.instagram.trim() || undefined,
           twitter: artistForm.twitter.trim() || undefined,
-          artstation: artistForm.artstation.trim() || undefined
+          artstation: artistForm.artstation.trim() || undefined,
+          youtube: artistForm.youtube.trim() || undefined
         }
       });
       setSaveNotice(`Nouvel artiste "${artistForm.name}" ajouté avec succès.`);
@@ -209,6 +227,7 @@ export const AdminArtistsManager: React.FC = () => {
 
   const handleOpenAddArtbook = () => {
     setEditingArtbook(null);
+    setArtbookModalTab('general');
     const defaultArtist = artists[0];
     setArtbookForm({
       artistId: defaultArtist?.id || '',
@@ -229,13 +248,15 @@ export const AdminArtistsManager: React.FC = () => {
       releaseYear: new Date().getFullYear(),
       tags: ['Artbook', 'Concept Art'],
       fileSizeFormatted: '45 Mo',
+      downloadUrl: '',
       rating: 4.9
     });
     setArtbookModalOpen(true);
   };
 
-  const handleOpenEditArtbook = (artbook: Artbook) => {
+  const handleOpenEditArtbook = (artbook: Artbook, initialTab: 'general' | 'preview' | 'link' = 'general') => {
     setEditingArtbook(artbook);
+    setArtbookModalTab(initialTab);
     setArtbookForm({
       artistId: artbook.artistId,
       artistName: artbook.artistName,
@@ -255,6 +276,7 @@ export const AdminArtistsManager: React.FC = () => {
       releaseYear: artbook.releaseYear,
       tags: artbook.tags || [],
       fileSizeFormatted: artbook.fileSizeFormatted,
+      downloadUrl: artbook.downloadUrl || artbook.pdfDownloadUrl || '',
       rating: artbook.rating || 4.9
     });
     setArtbookModalOpen(true);
@@ -266,6 +288,7 @@ export const AdminArtistsManager: React.FC = () => {
 
     const selectedArtObj = artists.find(a => a.id === artbookForm.artistId);
     const finalArtistName = selectedArtObj?.name || artbookForm.artistName || 'Artiste OZI';
+    const cleanDownloadUrl = artbookForm.downloadUrl.trim();
 
     if (editingArtbook) {
       await updateArtbook(editingArtbook.id, {
@@ -281,6 +304,8 @@ export const AdminArtistsManager: React.FC = () => {
         releaseYear: Number(artbookForm.releaseYear),
         tags: artbookForm.tags,
         fileSizeFormatted: artbookForm.fileSizeFormatted.trim(),
+        downloadUrl: cleanDownloadUrl || undefined,
+        pdfDownloadUrl: cleanDownloadUrl || undefined,
         rating: Number(artbookForm.rating)
       });
       setSaveNotice(`Artbook "${artbookForm.title}" mis à jour.`);
@@ -298,6 +323,8 @@ export const AdminArtistsManager: React.FC = () => {
         releaseYear: Number(artbookForm.releaseYear),
         tags: artbookForm.tags,
         fileSizeFormatted: artbookForm.fileSizeFormatted.trim(),
+        downloadUrl: cleanDownloadUrl || undefined,
+        pdfDownloadUrl: cleanDownloadUrl || undefined,
         rating: Number(artbookForm.rating)
       });
       setSaveNotice(`Nouvel artbook "${artbookForm.title}" publié avec succès.`);
@@ -530,6 +557,56 @@ export const AdminArtistsManager: React.FC = () => {
                       Univers phare : <strong className="text-white">{artist.featuredSeriesTitle}</strong>
                     </div>
                   )}
+
+                  {/* Social links mini strip */}
+                  {(artist.socials?.youtube || artist.socials?.instagram || artist.socials?.twitter || artist.socials?.artstation) && (
+                    <div className="flex items-center gap-1.5 mb-3 pt-1">
+                      {artist.socials?.youtube && (
+                        <a
+                          href={artist.socials.youtube}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-red-500 hover:text-red-400 hover:border-red-500/40 transition-colors"
+                          title="Chaîne YouTube"
+                        >
+                          <Youtube className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                      {artist.socials?.instagram && (
+                        <a
+                          href={artist.socials.instagram}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-pink-400 hover:text-pink-300 hover:border-pink-500/40 transition-colors"
+                          title="Instagram"
+                        >
+                          <Instagram className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                      {artist.socials?.twitter && (
+                        <a
+                          href={artist.socials.twitter}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-sky-400 hover:text-sky-300 hover:border-sky-500/40 transition-colors"
+                          title="X / Twitter"
+                        >
+                          <Twitter className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                      {artist.socials?.artstation && (
+                        <a
+                          href={artist.socials.artstation}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-cyan-400 hover:text-cyan-300 hover:border-cyan-500/40 transition-colors"
+                          title="Artstation"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Actions Footer */}
@@ -632,6 +709,65 @@ export const AdminArtistsManager: React.FC = () => {
                       ))}
                     </div>
                   </div>
+
+                  {/* Download Link Status Strip */}
+                  <div className="mb-4 p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/90 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+                      <LinkIcon className={`w-3.5 h-3.5 shrink-0 ${(artbook.downloadUrl || artbook.pdfDownloadUrl) ? 'text-emerald-400' : 'text-amber-400'}`} />
+                      <div className="truncate">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block leading-tight">Lien Téléchargement</span>
+                        {(artbook.downloadUrl || artbook.pdfDownloadUrl) ? (
+                          <span className="text-emerald-300 font-mono text-[11px] truncate block" title={artbook.downloadUrl || artbook.pdfDownloadUrl}>
+                            {artbook.downloadUrl || artbook.pdfDownloadUrl}
+                          </span>
+                        ) : (
+                          <span className="text-amber-400/90 italic text-[11px] block">
+                            Non configuré (cliquez pour ajouter)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {(artbook.downloadUrl || artbook.pdfDownloadUrl) ? (
+                        <>
+                          <a
+                            href={artbook.downloadUrl || artbook.pdfDownloadUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 hover:text-emerald-300 transition-colors"
+                            title="Tester le lien en direct ↗"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(artbook.downloadUrl || artbook.pdfDownloadUrl || '');
+                              setCopiedArtbookLinkId(artbook.id);
+                              setTimeout(() => setCopiedArtbookLinkId(null), 2000);
+                            }}
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                            title="Copier le lien"
+                          >
+                            {copiedArtbookLinkId === artbook.id ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditArtbook(artbook, 'link')}
+                          className="px-2 py-1 rounded-lg bg-purple-600/30 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/40 text-[10px] font-bold transition-all"
+                        >
+                          + Ajouter
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Actions Footer */}
@@ -647,7 +783,15 @@ export const AdminArtistsManager: React.FC = () => {
 
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => handleOpenEditArtbook(artbook)}
+                      onClick={() => handleOpenEditArtbook(artbook, 'link')}
+                      className="p-2 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 border border-purple-800/40 transition-colors cursor-pointer"
+                      title="Gérer le lien de téléchargement direct"
+                    >
+                      <LinkIcon className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      onClick={() => handleOpenEditArtbook(artbook, 'general')}
                       className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white transition-colors cursor-pointer"
                       title="Modifier l'artbook"
                     >
@@ -901,7 +1045,20 @@ export const AdminArtistsManager: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 mb-1 flex items-center gap-1">
+                    <Youtube className="w-3 h-3 text-red-500" />
+                    <span>YouTube URL</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={artistForm.youtube}
+                    onChange={e => setArtistForm({ ...artistForm, youtube: e.target.value })}
+                    placeholder="https://youtube.com/@..."
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 focus:border-red-500 text-xs text-white"
+                  />
+                </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-400 mb-1">Instagram URL</label>
                   <input
@@ -909,7 +1066,7 @@ export const AdminArtistsManager: React.FC = () => {
                     value={artistForm.instagram}
                     onChange={e => setArtistForm({ ...artistForm, instagram: e.target.value })}
                     placeholder="https://instagram.com/..."
-                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 focus:border-pink-500 text-xs text-white"
                   />
                 </div>
                 <div>
@@ -919,7 +1076,7 @@ export const AdminArtistsManager: React.FC = () => {
                     value={artistForm.twitter}
                     onChange={e => setArtistForm({ ...artistForm, twitter: e.target.value })}
                     placeholder="https://twitter.com/..."
-                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 focus:border-sky-500 text-xs text-white"
                   />
                 </div>
                 <div>
@@ -929,7 +1086,7 @@ export const AdminArtistsManager: React.FC = () => {
                     value={artistForm.artstation}
                     onChange={e => setArtistForm({ ...artistForm, artstation: e.target.value })}
                     placeholder="https://artstation.com/..."
-                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 focus:border-cyan-500 text-xs text-white"
                   />
                 </div>
               </div>
@@ -967,173 +1124,365 @@ export const AdminArtistsManager: React.FC = () => {
               <X className="w-5 h-5" />
             </button>
 
-            <h3 className="text-xl font-black text-white mb-6 font-almodobar flex items-center gap-2">
+            <h3 className="text-xl font-black text-white mb-4 font-almodobar flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-[#ff8679]" />
               <span>{editingArtbook ? 'Modifier l\'Artbook' : 'Publier un Nouvel Artbook'}</span>
             </h3>
 
+            {/* TAB NAVIGATION IN MODAL */}
+            <div className="flex items-center gap-2 border-b border-slate-800 pb-3 mb-5">
+              <button
+                type="button"
+                onClick={() => setArtbookModalTab('general')}
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                  artbookModalTab === 'general'
+                    ? 'bg-[#ff8679] text-white shadow-md'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-900 border border-transparent'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>1. Général & Tarif</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setArtbookModalTab('preview')}
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                  artbookModalTab === 'preview'
+                    ? 'bg-[#ff8679] text-white shadow-md'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-900 border border-transparent'
+                }`}
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>2. Planches d'Aperçu (5)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setArtbookModalTab('link')}
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                  artbookModalTab === 'link'
+                    ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                    : 'text-purple-300 hover:text-white hover:bg-purple-950/40 border border-purple-800/40'
+                }`}
+              >
+                <LinkIcon className="w-3.5 h-3.5" />
+                <span>3. Onglet Lien (Téléchargement)</span>
+                {artbookForm.downloadUrl ? (
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" title="Lien configuré" />
+                ) : (
+                  <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title="Non configuré" />
+                )}
+              </button>
+            </div>
+
             <form onSubmit={handleSaveArtbook} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">
-                    Titre de l'artbook <span className="text-[#ff8679]">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={artbookForm.title}
-                    onChange={e => setArtbookForm({ ...artbookForm, title: e.target.value })}
-                    placeholder="Ex: Chroniques Célestes de Kemet"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-[#ff8679] text-sm text-white focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">
-                    Artiste auteur <span className="text-[#ff8679]">*</span>
-                  </label>
-                  <select
-                    value={artbookForm.artistId}
-                    onChange={e => {
-                      const selected = artists.find(a => a.id === e.target.value);
-                      setArtbookForm({ 
-                        ...artbookForm, 
-                        artistId: e.target.value,
-                        artistName: selected?.name || ''
-                      });
-                    }}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-[#ff8679] text-sm text-white focus:outline-none"
-                  >
-                    {artists.map(a => (
-                      <option key={a.id} value={a.id}>{a.name} ({a.country})</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">
-                  Description & Présentation
-                </label>
-                <textarea
-                  rows={3}
-                  value={artbookForm.description}
-                  onChange={e => setArtbookForm({ ...artbookForm, description: e.target.value })}
-                  placeholder="Détaillez le contenu de ce recueil d'art, planches préparatoires, décors..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-[#ff8679] text-sm text-white focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">
-                  Image de Couverture (URL) <span className="text-[#ff8679]">*</span>
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="text"
-                    required
-                    value={artbookForm.coverUrl}
-                    onChange={e => setArtbookForm({ ...artbookForm, coverUrl: e.target.value })}
-                    placeholder="https://..."
-                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-[#ff8679] text-sm text-white focus:outline-none"
-                  />
-                  {artbookForm.coverUrl && (
-                    <img src={artbookForm.coverUrl} alt="" className="w-10 h-14 object-cover rounded-lg border border-slate-700" />
-                  )}
-                </div>
-              </div>
-
-              {/* 5 Preview Images Inputs */}
-              <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-3">
-                <div className="text-xs font-bold text-white flex items-center justify-between">
-                  <span>Galerie d'Aperçu (Exactement 5 planches obligatoires) :</span>
-                  <span className="text-[11px] text-slate-400">Haute Définition</span>
-                </div>
-
-                <div className="space-y-2">
-                  {[0, 1, 2, 3, 4].map((index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-slate-500 w-6">0{index + 1}</span>
+              
+              {/* TAB 1: GENERAL & PRICING */}
+              {artbookModalTab === 'general' && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        Titre de l'artbook <span className="text-[#ff8679]">*</span>
+                      </label>
                       <input
                         type="text"
                         required
-                        value={artbookForm.previewImages[index]}
-                        onChange={e => {
-                          const updated = [...artbookForm.previewImages] as [string, string, string, string, string];
-                          updated[index] = e.target.value;
-                          setArtbookForm({ ...artbookForm, previewImages: updated });
-                        }}
-                        placeholder={`URL de la planche d'aperçu ${index + 1}...`}
-                        className="flex-1 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white"
+                        value={artbookForm.title}
+                        onChange={e => setArtbookForm({ ...artbookForm, title: e.target.value })}
+                        placeholder="Ex: Chroniques Célestes de Kemet"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-[#ff8679] text-sm text-white focus:outline-none"
                       />
-                      {artbookForm.previewImages[index] && (
-                        <img 
-                          src={artbookForm.previewImages[index]} 
-                          alt="" 
-                          className="w-7 h-7 object-cover rounded border border-slate-700 shrink-0" 
-                        />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        Artiste auteur <span className="text-[#ff8679]">*</span>
+                      </label>
+                      <select
+                        value={artbookForm.artistId}
+                        onChange={e => {
+                          const selected = artists.find(a => a.id === e.target.value);
+                          setArtbookForm({ 
+                            ...artbookForm, 
+                            artistId: e.target.value,
+                            artistName: selected?.name || ''
+                          });
+                        }}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-[#ff8679] text-sm text-white focus:outline-none"
+                      >
+                        {artists.map(a => (
+                          <option key={a.id} value={a.id}>{a.name} ({a.country})</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                      Description & Présentation
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={artbookForm.description}
+                      onChange={e => setArtbookForm({ ...artbookForm, description: e.target.value })}
+                      placeholder="Détaillez le contenu de ce recueil d'art, planches préparatoires, décors..."
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-[#ff8679] text-sm text-white focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                      Image de Couverture (URL) <span className="text-[#ff8679]">*</span>
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="text"
+                        required
+                        value={artbookForm.coverUrl}
+                        onChange={e => setArtbookForm({ ...artbookForm, coverUrl: e.target.value })}
+                        placeholder="https://..."
+                        className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-[#ff8679] text-sm text-white focus:outline-none"
+                      />
+                      {artbookForm.coverUrl && (
+                        <img src={artbookForm.coverUrl} alt="" className="w-10 h-14 object-cover rounded-lg border border-slate-700" />
                       )}
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">
-                    Prix (FCFA) — <span className="text-emerald-400">0 = Gratuit</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="100"
-                    value={artbookForm.price}
-                    onChange={e => setArtbookForm({ ...artbookForm, price: Number(e.target.value), isFree: Number(e.target.value) === 0 })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white font-bold"
-                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        Prix (FCFA) — <span className="text-emerald-400">0 = Gratuit</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="100"
+                        value={artbookForm.price}
+                        onChange={e => setArtbookForm({ ...artbookForm, price: Number(e.target.value), isFree: Number(e.target.value) === 0 })}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        Nombre de pages
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={artbookForm.pageCount}
+                        onChange={e => setArtbookForm({ ...artbookForm, pageCount: Number(e.target.value) })}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        Taille du fichier
+                      </label>
+                      <input
+                        type="text"
+                        value={artbookForm.fileSizeFormatted}
+                        onChange={e => setArtbookForm({ ...artbookForm, fileSizeFormatted: e.target.value })}
+                        placeholder="Ex: 48 Mo"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: PREVIEW IMAGES */}
+              {artbookModalTab === 'preview' && (
+                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-3 animate-in fade-in duration-150">
+                  <div className="text-xs font-bold text-white flex items-center justify-between">
+                    <span>Galerie d'Aperçu (Exactement 5 planches obligatoires) :</span>
+                    <span className="text-[11px] text-slate-400">Haute Définition</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {[0, 1, 2, 3, 4].map((index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <span className="text-xs font-mono font-bold text-slate-500 w-6">0{index + 1}</span>
+                        <input
+                          type="text"
+                          required
+                          value={artbookForm.previewImages[index]}
+                          onChange={e => {
+                            const updated = [...artbookForm.previewImages] as [string, string, string, string, string];
+                            updated[index] = e.target.value;
+                            setArtbookForm({ ...artbookForm, previewImages: updated });
+                          }}
+                          placeholder={`URL de la planche d'aperçu ${index + 1}...`}
+                          className="flex-1 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white"
+                        />
+                        {artbookForm.previewImages[index] && (
+                          <img 
+                            src={artbookForm.previewImages[index]} 
+                            alt="" 
+                            className="w-7 h-7 object-cover rounded border border-slate-700 shrink-0" 
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: DEDICATED ONGLETS LIEN (TÉLÉCHARGEMENT DIRECT) */}
+              {artbookModalTab === 'link' && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  
+                  {/* Explanatory banner */}
+                  <div className="p-4 rounded-2xl bg-purple-950/40 border border-purple-800/60 text-purple-200 text-xs leading-relaxed flex items-start gap-3">
+                    <Sparkles className="w-5 h-5 text-purple-400 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-bold text-white mb-1">Configuration du Lien de Téléchargement Direct</div>
+                      <span>
+                        Ajoutez ici l'URL directe du fichier de l'artbook (PDF haute résolution, lien direct Google Drive, Dropbox, Mega ou hébergement LWS CDN). Lorsque l'utilisateur cliquera sur <strong>« Télécharger »</strong>, il lui sera demandé de remplir son <strong>e-mail et numéro de téléphone</strong>, puis le téléchargement de ce lien sera déclenché automatiquement pour lui.
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Main Link Input */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <LinkIcon className="w-3.5 h-3.5 text-purple-400" />
+                        <span>Lien de l'Artbook (URL de téléchargement direct) :</span>
+                      </label>
+                      {artbookForm.downloadUrl && (
+                        <a
+                          href={artbookForm.downloadUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] font-bold text-purple-400 hover:text-purple-300 flex items-center gap-1 underline"
+                        >
+                          <span>Tester le lien en direct</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="url"
+                        value={artbookForm.downloadUrl}
+                        onChange={e => setArtbookForm({ ...artbookForm, downloadUrl: e.target.value })}
+                        placeholder="https://... (ex: https://monsite.com/mon-artbook.pdf ou lien Google Drive)"
+                        className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-purple-500 text-sm text-white focus:outline-none font-mono"
+                      />
+                      {artbookForm.downloadUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setArtbookForm({ ...artbookForm, downloadUrl: '' })}
+                          className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white"
+                          title="Effacer le lien"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Quick Preset Buttons */}
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-400 block mb-1.5">
+                      Raccourcis & Exemples d'hébergement :
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setArtbookForm({ ...artbookForm, downloadUrl: 'https://raw.githubusercontent.com/mozilla/pdf.js/master/web/compressed.tracemonkey-pldi-09.pdf' })}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 font-medium"
+                      >
+                        📄 Fichier PDF Démo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setArtbookForm({ ...artbookForm, downloadUrl: 'https://drive.google.com/uc?export=download&id=DEMO_ID' })}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 font-medium"
+                      >
+                        📁 Modèle Google Drive Direct
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setArtbookForm({ ...artbookForm, downloadUrl: `https://ozibd.net/artbooks/${(artbookForm.title || 'recueil').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf` })}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 font-medium"
+                      >
+                        🌐 Modèle LWS CDN OZI
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Status Box */}
+                  {artbookForm.downloadUrl ? (
+                    <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-emerald-300 text-xs flex items-center gap-2.5">
+                      <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                      <div>
+                        <span className="font-bold">Lien configuré avec succès !</span> Les utilisateurs recevront ce fichier immédiatement après saisie de leur e-mail et numéro de téléphone.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-800/60 text-amber-300 text-xs flex items-center gap-2.5">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+                      <div>
+                        <span className="font-bold">Aucun lien direct externe n'est renseigné.</span> Le site générera automatiquement un PDF interactif officiel par défaut.
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Google Drive / Cloud tip */}
+                  <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 text-[11px] text-slate-400 space-y-1">
+                    <div className="font-bold text-slate-300">💡 Astuce Google Drive :</div>
+                    <p>
+                      Pour Google Drive, assurez-vous de partager le fichier en « Tous les utilisateurs disposant du lien : Lecteur ». Remplacez ensuite <code className="text-purple-300 font-mono">/file/d/ID/view</code> par <code className="text-emerald-300 font-mono">https://drive.google.com/uc?export=download&id=ID</code> pour que le téléchargement se lance automatiquement sans ouvrir la page Google Drive.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* MODAL FOOTER */}
+              <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {artbookModalTab !== 'general' && (
+                    <button
+                      type="button"
+                      onClick={() => setArtbookModalTab(artbookModalTab === 'link' ? 'preview' : 'general')}
+                      className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-slate-300"
+                    >
+                      ← Étape précédente
+                    </button>
+                  )}
+                  {artbookModalTab !== 'link' && (
+                    <button
+                      type="button"
+                      onClick={() => setArtbookModalTab(artbookModalTab === 'general' ? 'preview' : 'link')}
+                      className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-purple-300"
+                    >
+                      Étape suivante →
+                    </button>
+                  )}
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">
-                    Nombre de pages
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={artbookForm.pageCount}
-                    onChange={e => setArtbookForm({ ...artbookForm, pageCount: Number(e.target.value) })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white"
-                  />
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setArtbookModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 rounded-xl bg-[#ff8679] hover:bg-[#eb6e60] text-white text-xs font-bold shadow-lg shadow-[#ff8679]/20 cursor-pointer"
+                  >
+                    {editingArtbook ? 'Enregistrer les modifications' : 'Publier l\'Artbook'}
+                  </button>
                 </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">
-                    Taille du fichier
-                  </label>
-                  <input
-                    type="text"
-                    value={artbookForm.fileSizeFormatted}
-                    onChange={e => setArtbookForm({ ...artbookForm, fileSizeFormatted: e.target.value })}
-                    placeholder="Ex: 48 Mo"
-                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setArtbookModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-[#ff8679] hover:bg-[#eb6e60] text-white text-xs font-bold shadow-lg shadow-[#ff8679]/20"
-                >
-                  {editingArtbook ? 'Enregistrer les modifications' : 'Publier l\'Artbook'}
-                </button>
               </div>
             </form>
           </div>
