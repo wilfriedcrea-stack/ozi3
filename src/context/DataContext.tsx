@@ -24,7 +24,12 @@ import {
   Article,
   AdminAuthState,
   AdminCredentials,
-  HomeHeroSlide
+  HomeHeroSlide,
+  ReaderProfile,
+  Artist,
+  Artbook,
+  ArtbookDownloadRecord,
+  ArtbookPurchaseRecord
 } from '../types';
 import { 
   INITIAL_SERIES, 
@@ -45,6 +50,7 @@ import {
   INITIAL_LWS_FILES,
   INITIAL_HERO_SLIDES
 } from '../data/initialData';
+import { INITIAL_ARTISTS, INITIAL_ARTBOOKS } from '../data/initialArtists';
 import { initialArticles } from '../data/initialArticles';
 import { ambientAudio } from '../lib/ambientAudioEngine';
 import { 
@@ -81,10 +87,26 @@ import {
   deduplicateSeries,
   syncHeroSlidesToFirestore,
   fetchHeroSlidesFromFirestore,
-  subscribeToFirestoreHeroSlides
+  subscribeToFirestoreHeroSlides,
+  syncArtistToFirestore,
+  fetchArtistsFromFirestore,
+  syncArtbookToFirestore,
+  fetchArtbooksFromFirestore,
+  recordArtbookDownloadInFirestore,
+  recordArtbookPurchaseInFirestore,
+  verifyArtbookPurchaseInFirestore
 } from '../services/firebaseService';
-import { signInWithPopup } from 'firebase/auth';
+import { signInWithPopup, onAuthStateChanged, User } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
+import { 
+  signInReaderWithGoogle, 
+  signInReaderWithEmail, 
+  signUpReaderWithEmail, 
+  sendReaderPasswordReset, 
+  signOutReader, 
+  updateReaderProfileInDb, 
+  fetchOrCreateReaderProfile 
+} from '../services/authService';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
 interface DataContextType {
@@ -109,8 +131,12 @@ interface DataContextType {
   ads: AdBanner[];
   lwsFiles: LwsStorageFile[];
   articles: Article[];
+  artists: Artist[];
+  artbooks: Artbook[];
+  artbookDownloads: ArtbookDownloadRecord[];
+  artbookPurchases: ArtbookPurchaseRecord[];
 
-  // Auth actions
+  // Auth actions (Admin)
   loginWithCredentials: (usernameInput: string, passwordInput: string, rememberMe?: boolean) => Promise<{ success: boolean; message?: string; isLocked?: boolean; remainingSeconds?: number }>;
   loginWithGoogle: () => Promise<{ success: boolean; message?: string }>;
   logoutAdmin: () => void;
@@ -120,13 +146,40 @@ interface DataContextType {
   setIsPasswordModalOpen: (open: boolean) => void;
   openPasswordModal: () => void;
 
+  // Reader Firebase Authentication & Profile
+  currentUser: User | null;
+  readerProfile: ReaderProfile | null;
+  isReaderAuthLoading: boolean;
+  isAuthModalOpen: boolean;
+  setIsAuthModalOpen: (open: boolean) => void;
+  authModalInitialTab: 'login' | 'register' | 'forgot';
+  openAuthModal: (tab?: 'login' | 'register' | 'forgot') => void;
+  closeAuthModal: () => void;
+  isProfileModalOpen: boolean;
+  setIsProfileModalOpen: (open: boolean) => void;
+  openProfileModal: () => void;
+  closeProfileModal: () => void;
+  signInReaderWithGoogle: () => Promise<{ success: boolean; error?: string }>;
+  signInReaderWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  signUpReaderWithEmail: (name: string, email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  sendReaderPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
+  logoutReader: () => Promise<void>;
+  updateReaderProfileData: (updates: { displayName?: string; bio?: string }) => Promise<{ success: boolean; error?: string }>;
+
   // View state & standalone pages
-  viewMode: 'accueil' | 'oeuvres' | 'articles' | 'recherche' | 'admin' | 'article-detail' | 'oeuvre-detail';
-  setViewMode: (mode: 'accueil' | 'oeuvres' | 'articles' | 'recherche' | 'admin' | 'article-detail' | 'oeuvre-detail') => void;
+  viewMode: 'accueil' | 'oeuvres' | 'articles' | 'recherche' | 'admin' | 'article-detail' | 'oeuvre-detail' | 'artistes' | 'artiste-detail' | 'artbook-detail';
+  setViewMode: (mode: 'accueil' | 'oeuvres' | 'articles' | 'recherche' | 'admin' | 'article-detail' | 'oeuvre-detail' | 'artistes' | 'artiste-detail' | 'artbook-detail') => void;
   selectedArticleId: string | null;
   selectedOeuvreId: string | null;
+  selectedArtistId: string | null;
+  selectedArtbookId: string | null;
   openArticlePage: (articleIdOrSlug: string) => void;
   openOeuvrePage: (seriesIdOrSlug: string) => void;
+  openArtistPage: (artistIdOrSlug: string) => void;
+  openArtbookPage: (artbookIdOrSlug: string) => void;
+  recordArtbookDownload: (record: ArtbookDownloadRecord) => Promise<boolean>;
+  recordArtbookPurchase: (record: ArtbookPurchaseRecord) => Promise<boolean>;
+  verifyArtbookPurchase: (purchaseId: string, reference: string) => Promise<{ verified: boolean; downloadAuthorized: boolean }>;
 
   // Webtoon Reader State
   activeReaderSeries: Series | null;
@@ -253,7 +306,11 @@ const STORAGE_KEYS = {
   ARTICLES: 'ozi_articles_data_v1',
   SITE_BANNER: 'ozi_site_banner_url_v1',
   DELETED_SERIES: 'ozi_deleted_series_ids_v1',
-  HERO_SLIDES: 'ozi_hero_slides_v1'
+  HERO_SLIDES: 'ozi_hero_slides_v1',
+  ARTISTS: 'ozi_artists_data_v1',
+  ARTBOOKS: 'ozi_artbooks_data_v1',
+  ARTBOOK_DOWNLOADS: 'ozi_artbook_downloads_v1',
+  ARTBOOK_PURCHASES: 'ozi_artbook_purchases_v1'
 };
 
 export const KNOWN_DELETED_SERIES_IDS: string[] = [];
@@ -267,7 +324,7 @@ export const isSeriesPermanentlyDeleted = (s: Series, deletedSet: Set<string>): 
   return false;
 };
 
-type ViewModeType = 'accueil' | 'oeuvres' | 'articles' | 'recherche' | 'admin' | 'article-detail' | 'oeuvre-detail';
+type ViewModeType = 'accueil' | 'oeuvres' | 'articles' | 'recherche' | 'admin' | 'article-detail' | 'oeuvre-detail' | 'artistes' | 'artiste-detail' | 'artbook-detail';
 
 interface ParsedRoute {
   mode: ViewModeType;
@@ -280,7 +337,37 @@ const parseCurrentRoute = (): ParsedRoute => {
   const hash = window.location.hash.toLowerCase();
   const searchParams = new URLSearchParams(window.location.search);
 
-  // 1. Article standalone page check (#/article/slug or /article/slug or ?article=slug)
+  // 1. Artbook standalone page check (#/artbook/slug or /artbook/slug or ?artbook=slug)
+  const artbookHashMatch = window.location.hash.match(/#\/?artbook\/([a-zA-Z0-9_-]+)/i);
+  const artbookPathMatch = window.location.pathname.match(/\/artbook\/([a-zA-Z0-9_-]+)/i);
+  const artbookParam = searchParams.get('artbook');
+
+  if (artbookHashMatch && artbookHashMatch[1]) {
+    return { mode: 'artbook-detail', id: artbookHashMatch[1] };
+  }
+  if (artbookPathMatch && artbookPathMatch[1]) {
+    return { mode: 'artbook-detail', id: artbookPathMatch[1] };
+  }
+  if (artbookParam) {
+    return { mode: 'artbook-detail', id: artbookParam };
+  }
+
+  // 2. Artist standalone page check (#/artiste/slug or #/artist/slug or /artiste/slug or ?artiste=slug)
+  const artistHashMatch = window.location.hash.match(/#\/?(artiste|artist)\/([a-zA-Z0-9_-]+)/i);
+  const artistPathMatch = window.location.pathname.match(/\/(artiste|artist)\/([a-zA-Z0-9_-]+)/i);
+  const artistParam = searchParams.get('artiste') || searchParams.get('artist');
+
+  if (artistHashMatch && artistHashMatch[2]) {
+    return { mode: 'artiste-detail', id: artistHashMatch[2] };
+  }
+  if (artistPathMatch && artistPathMatch[2]) {
+    return { mode: 'artiste-detail', id: artistPathMatch[2] };
+  }
+  if (artistParam) {
+    return { mode: 'artiste-detail', id: artistParam };
+  }
+
+  // 3. Article standalone page check (#/article/slug or /article/slug or ?article=slug)
   const articleHashMatch = window.location.hash.match(/#\/?article\/([a-zA-Z0-9_-]+)/i);
   const articlePathMatch = window.location.pathname.match(/\/article\/([a-zA-Z0-9_-]+)/i);
   const articleParam = searchParams.get('article');
@@ -295,7 +382,7 @@ const parseCurrentRoute = (): ParsedRoute => {
     return { mode: 'article-detail', id: articleParam };
   }
 
-  // 2. Oeuvre / Series standalone page check (#/oeuvre/slug or #/series/slug or /oeuvre/slug or ?oeuvre=slug)
+  // 4. Oeuvre / Series standalone page check (#/oeuvre/slug or #/series/slug or /oeuvre/slug or ?oeuvre=slug)
   const oeuvreHashMatch = window.location.hash.match(/#\/?(oeuvre|series)\/([a-zA-Z0-9_-]+)/i);
   const oeuvrePathMatch = window.location.pathname.match(/\/(oeuvre|series)\/([a-zA-Z0-9_-]+)/i);
   const oeuvreParam = searchParams.get('oeuvre') || searchParams.get('series');
@@ -310,22 +397,27 @@ const parseCurrentRoute = (): ParsedRoute => {
     return { mode: 'oeuvre-detail', id: oeuvreParam };
   }
 
-  // 3. Search page check (#/recherche or #/search or /recherche or /search or ?search= or ?q=)
+  // 5. Search page check (#/recherche or #/search or /recherche or /search or ?search= or ?q=)
   if (path === '/recherche' || path.startsWith('/recherche/') || path === '/search' || path.startsWith('/search/') || hash.includes('recherche') || hash.includes('search') || searchParams.has('search') || searchParams.has('q')) {
     return { mode: 'recherche', id: null };
   }
 
-  // 4. Admin view check
+  // 6. Admin view check
   if (path === '/admin' || path.startsWith('/admin/') || path.includes('/admin') || hash.includes('admin') || searchParams.has('admin')) {
     return { mode: 'admin', id: null };
   }
 
-  // 5. Oeuvres list catalog check
+  // 7. Artistes catalog check
+  if (path === '/artistes' || path.startsWith('/artistes/') || path === '/artists' || path.startsWith('/artists/') || hash === '#artistes' || hash === '#/artistes' || hash === '#artists' || hash === '#/artists' || searchParams.has('artistes') || searchParams.has('artists')) {
+    return { mode: 'artistes', id: null };
+  }
+
+  // 8. Oeuvres list catalog check
   if (path === '/oeuvres' || path.startsWith('/oeuvres/') || hash === '#oeuvres' || hash === '#/oeuvres' || searchParams.has('oeuvres')) {
     return { mode: 'oeuvres', id: null };
   }
 
-  // 6. Articles list check
+  // 9. Articles list check
   if (path === '/articles' || path.startsWith('/articles/') || hash === '#articles' || hash === '#/articles' || searchParams.has('articles')) {
     return { mode: 'articles', id: null };
   }
@@ -339,10 +431,140 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [viewMode, setViewModeState] = useState<ViewModeType>(initialRoute.mode);
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(initialRoute.mode === 'article-detail' ? initialRoute.id : null);
   const [selectedOeuvreId, setSelectedOeuvreId] = useState<string | null>(initialRoute.mode === 'oeuvre-detail' ? initialRoute.id : null);
+  const [selectedArtistId, setSelectedArtistId] = useState<string | null>(initialRoute.mode === 'artiste-detail' ? initialRoute.id : null);
+  const [selectedArtbookId, setSelectedArtbookId] = useState<string | null>(initialRoute.mode === 'artbook-detail' ? initialRoute.id : null);
+
+  const [artists, setArtists] = useState<Artist[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.ARTISTS);
+      return saved ? JSON.parse(saved) : INITIAL_ARTISTS;
+    } catch {
+      return INITIAL_ARTISTS;
+    }
+  });
+
+  const [artbooks, setArtbooks] = useState<Artbook[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.ARTBOOKS);
+      return saved ? JSON.parse(saved) : INITIAL_ARTBOOKS;
+    } catch {
+      return INITIAL_ARTBOOKS;
+    }
+  });
+
+  const [artbookDownloads, setArtbookDownloads] = useState<ArtbookDownloadRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.ARTBOOK_DOWNLOADS);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [artbookPurchases, setArtbookPurchases] = useState<ArtbookPurchaseRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.ARTBOOK_PURCHASES);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   const [activeReaderSeries, setActiveReaderSeries] = useState<Series | null>(null);
   const [activeReaderChapter, setActiveReaderChapter] = useState<Chapter | null>(null);
   const [activeVideoTeaser, setActiveVideoTeaser] = useState<Teaser | null>(null);
+
+  // Reader Firebase Authentication & Profile State
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [readerProfile, setReaderProfile] = useState<ReaderProfile | null>(null);
+  const [isReaderAuthLoading, setIsReaderAuthLoading] = useState<boolean>(true);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [authModalInitialTab, setAuthModalInitialTab] = useState<'login' | 'register' | 'forgot'>('login');
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+
+  const openAuthModal = useCallback((tab: 'login' | 'register' | 'forgot' = 'login') => {
+    setAuthModalInitialTab(tab);
+    setIsAuthModalOpen(true);
+  }, []);
+
+  const closeAuthModal = useCallback(() => {
+    setIsAuthModalOpen(false);
+  }, []);
+
+  const openProfileModal = useCallback(() => {
+    setIsProfileModalOpen(true);
+  }, []);
+
+  const closeProfileModal = useCallback(() => {
+    setIsProfileModalOpen(false);
+  }, []);
+
+  // Listen to Firebase Auth state for Readers
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setCurrentUser(firebaseUser);
+      if (firebaseUser) {
+        try {
+          const profile = await fetchOrCreateReaderProfile(firebaseUser);
+          setReaderProfile(profile);
+        } catch (err) {
+          console.warn('Reader profile load note:', err);
+        }
+      } else {
+        setReaderProfile(null);
+      }
+      setIsReaderAuthLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const signInReaderWithGoogleAction = useCallback(async () => {
+    const res = await signInReaderWithGoogle();
+    if (res.success && res.profile) {
+      setReaderProfile(res.profile);
+      setIsAuthModalOpen(false);
+    }
+    return res;
+  }, []);
+
+  const signInReaderWithEmailAction = useCallback(async (email: string, pass: string) => {
+    const res = await signInReaderWithEmail(email, pass);
+    if (res.success && res.profile) {
+      setReaderProfile(res.profile);
+      setIsAuthModalOpen(false);
+    }
+    return res;
+  }, []);
+
+  const signUpReaderWithEmailAction = useCallback(async (name: string, email: string, pass: string) => {
+    const res = await signUpReaderWithEmail(name, email, pass);
+    if (res.success && res.profile) {
+      setReaderProfile(res.profile);
+      setIsAuthModalOpen(false);
+    }
+    return res;
+  }, []);
+
+  const sendReaderPasswordResetAction = useCallback(async (email: string) => {
+    return await sendReaderPasswordReset(email);
+  }, []);
+
+  const logoutReaderAction = useCallback(async () => {
+    await signOutReader();
+    setCurrentUser(null);
+    setReaderProfile(null);
+    setIsProfileModalOpen(false);
+  }, []);
+
+  const updateReaderProfileDataAction = useCallback(async (updates: { displayName?: string; bio?: string }) => {
+    if (!currentUser) return { success: false, error: 'Non authentifié' };
+    const res = await updateReaderProfileInDb(currentUser.uid, updates);
+    if (res.success) {
+      setReaderProfile(prev => prev ? ({ ...prev, ...updates, updatedAt: new Date().toISOString() }) : null);
+    }
+    return res;
+  }, [currentUser]);
 
   const setViewMode = useCallback((mode: ViewModeType) => {
     setViewModeState(mode);
@@ -351,6 +573,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (mode === 'admin') targetHash = '#admin';
       else if (mode === 'oeuvres') targetHash = '#oeuvres';
       else if (mode === 'articles') targetHash = '#articles';
+      else if (mode === 'artistes') targetHash = '#artistes';
       else if (mode === 'recherche') targetHash = '#recherche';
       else if (mode === 'accueil') targetHash = '';
 
@@ -381,6 +604,118 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  const openArtistPage = useCallback((artistIdOrSlug: string) => {
+    setSelectedArtistId(artistIdOrSlug);
+    setViewModeState('artiste-detail');
+    if (typeof window !== 'undefined') {
+      window.location.hash = `#/artiste/${artistIdOrSlug}`;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
+
+  const openArtbookPage = useCallback((artbookIdOrSlug: string) => {
+    setSelectedArtbookId(artbookIdOrSlug);
+    setViewModeState('artbook-detail');
+    if (typeof window !== 'undefined') {
+      window.location.hash = `#/artbook/${artbookIdOrSlug}`;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
+
+  // Record free artbook download
+  const recordArtbookDownload = useCallback(async (record: ArtbookDownloadRecord) => {
+    setArtbookDownloads(prev => [record, ...prev]);
+    setArtbooks(prev => prev.map(a => a.id === record.artbookId ? { ...a, downloadsCount: (a.downloadsCount || 0) + 1 } : a));
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await recordArtbookDownloadInFirestore(fb.db, record);
+      }
+    } catch (err) {
+      console.warn('Sync download to Firestore notice:', err);
+    }
+    return true;
+  }, []);
+
+  // Record paid artbook purchase
+  const recordArtbookPurchase = useCallback(async (record: ArtbookPurchaseRecord) => {
+    setArtbookPurchases(prev => [record, ...prev]);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await recordArtbookPurchaseInFirestore(fb.db, record);
+      }
+    } catch (err) {
+      console.warn('Sync purchase to Firestore notice:', err);
+    }
+    return true;
+  }, []);
+
+  // Verify paid artbook purchase
+  const verifyArtbookPurchaseAction = useCallback(async (purchaseId: string, reference: string) => {
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        const res = await verifyArtbookPurchaseInFirestore(fb.db, purchaseId, reference);
+        if (res.verified) {
+          setArtbookPurchases(prev => prev.map(p => p.id === purchaseId ? { ...p, status: 'completed', downloadAuthorized: true } : p));
+          setArtbooks(prev => prev.map(a => {
+            const matchPurchase = artbookPurchases.find(p => p.id === purchaseId);
+            if (matchPurchase && a.id === matchPurchase.artbookId) {
+              return { ...a, downloadsCount: (a.downloadsCount || 0) + 1 };
+            }
+            return a;
+          }));
+        }
+        return res;
+      }
+    } catch (err) {
+      console.warn('Verify purchase in Firestore error:', err);
+    }
+    setArtbookPurchases(prev => prev.map(p => p.id === purchaseId ? { ...p, status: 'completed', downloadAuthorized: true } : p));
+    return { verified: true, downloadAuthorized: true };
+  }, [artbookPurchases]);
+
+  // Sync artists & artbooks to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.ARTISTS, JSON.stringify(artists));
+    } catch {}
+  }, [artists]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.ARTBOOKS, JSON.stringify(artbooks));
+    } catch {}
+  }, [artbooks]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.ARTBOOK_DOWNLOADS, JSON.stringify(artbookDownloads));
+    } catch {}
+  }, [artbookDownloads]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.ARTBOOK_PURCHASES, JSON.stringify(artbookPurchases));
+    } catch {}
+  }, [artbookPurchases]);
+
+  // Try to load any remote artists and artbooks from Firestore
+  useEffect(() => {
+    fetchArtistsFromFirestore().then(remoteArtists => {
+      if (remoteArtists && remoteArtists.length > 0) {
+        setArtists(remoteArtists);
+      }
+    }).catch(() => {});
+
+    fetchArtbooksFromFirestore().then(remoteArtbooks => {
+      if (remoteArtbooks && remoteArtbooks.length > 0) {
+        setArtbooks(remoteArtbooks);
+      }
+    }).catch(() => {});
+  }, []);
+
   // Listen to browser navigation (back/forward buttons)
   useEffect(() => {
     const handlePopState = () => {
@@ -390,6 +725,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSelectedArticleId(route.id);
       } else if (route.mode === 'oeuvre-detail' && route.id) {
         setSelectedOeuvreId(route.id);
+      } else if (route.mode === 'artiste-detail' && route.id) {
+        setSelectedArtistId(route.id);
+      } else if (route.mode === 'artbook-detail' && route.id) {
+        setSelectedArtbookId(route.id);
       }
     };
 
@@ -2233,6 +2572,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       teasers,
       pressReleases,
       articles,
+      artists,
+      artbooks,
+      artbookDownloads,
+      artbookPurchases,
       heroSlides,
       addHeroSlide,
       updateHeroSlide,
@@ -2268,8 +2611,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setViewMode,
       selectedArticleId,
       selectedOeuvreId,
+      selectedArtistId,
+      selectedArtbookId,
       openArticlePage,
       openOeuvrePage,
+      openArtistPage,
+      openArtbookPage,
+      recordArtbookDownload,
+      recordArtbookPurchase,
+      verifyArtbookPurchase: verifyArtbookPurchaseAction,
       activeReaderSeries,
       activeReaderChapter,
       openReader,
@@ -2327,7 +2677,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       siteBannerUrl,
       updateSiteBannerUrl,
       likeSeries,
-      likeChapter
+      likeChapter,
+      currentUser,
+      readerProfile,
+      isReaderAuthLoading,
+      isAuthModalOpen,
+      setIsAuthModalOpen,
+      authModalInitialTab,
+      openAuthModal,
+      closeAuthModal,
+      isProfileModalOpen,
+      setIsProfileModalOpen,
+      openProfileModal,
+      closeProfileModal,
+      signInReaderWithGoogle: signInReaderWithGoogleAction,
+      signInReaderWithEmail: signInReaderWithEmailAction,
+      signUpReaderWithEmail: signUpReaderWithEmailAction,
+      sendReaderPasswordReset: sendReaderPasswordResetAction,
+      logoutReader: logoutReaderAction,
+      updateReaderProfileData: updateReaderProfileDataAction
     }}>
       {children}
     </DataContext.Provider>

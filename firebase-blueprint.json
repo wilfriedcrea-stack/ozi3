@@ -148,9 +148,75 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "title", "imageUrl"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Profil lecteur authentifié OZI",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string" },
+        "bio": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Artist": {
+      "title": "Artist",
+      "description": "Artiste ou illustrateur officiel OZI",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "country": { "type": "string" },
+        "bio": { "type": "string" },
+        "specialties": { "type": "array" }
+      },
+      "required": ["id", "name", "photoUrl"]
+    },
+    "Artbook": {
+      "title": "Artbook",
+      "description": "Recueil d'art, artbook ou carnet de croquis",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "artistId": { "type": "string" },
+        "artistName": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "coverUrl": { "type": "string" },
+        "previewImages": { "type": "array" },
+        "price": { "type": "number" },
+        "isFree": { "type": "boolean" },
+        "pageCount": { "type": "number" }
+      },
+      "required": ["id", "artistName", "title", "coverUrl"]
     }
   },
   "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Profils individuels des lecteurs et utilisateurs"
+    },
+    "/artists/{artistId}": {
+      "schema": "Artist",
+      "description": "Fiches artistes et concept artists"
+    },
+    "/artbooks/{artbookId}": {
+      "schema": "Artbook",
+      "description": "Recueils et artbooks avec prévisualisations"
+    },
+    "/artbook_downloads/{downloadId}": {
+      "description": "Enregistrements des téléchargements d'artbooks gratuits"
+    },
+    "/artbook_purchases/{purchaseId}": {
+      "description": "Commandes et transactions d'artbooks payants"
+    },
     "/hero_slides/{slideId}": {
       "schema": "HomeHeroSlide",
       "description": "Bannières d'accueil visibles sur le site et toutes les plateformes"

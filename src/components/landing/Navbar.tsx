@@ -1,21 +1,53 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Menu, 
   X,
-  Search
+  Search,
+  User,
+  LogOut,
+  Sparkles,
+  ChevronDown,
+  ShieldCheck
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { OziLogo } from '../common/OziLogo';
 
 export const Navbar: React.FC = () => {
-  const { viewMode, setViewMode } = useData();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { 
+    viewMode, 
+    setViewMode, 
+    currentUser, 
+    readerProfile, 
+    isReaderAuthLoading, 
+    openAuthModal, 
+    openProfileModal, 
+    logoutReader 
+  } = useData();
 
-  const navigateTo = (mode: 'accueil' | 'oeuvres' | 'articles' | 'recherche' | 'admin') => {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const navigateTo = (mode: 'accueil' | 'oeuvres' | 'artistes' | 'articles' | 'recherche' | 'admin') => {
     setMobileMenuOpen(false);
+    setUserDropdownOpen(false);
     setViewMode(mode);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setUserDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const readerDisplayName = readerProfile?.displayName || currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Lecteur OZI';
+  const readerPhotoURL = currentUser?.photoURL || readerProfile?.photoURL;
 
   return (
     <header 
@@ -36,10 +68,10 @@ export const Navbar: React.FC = () => {
           </button>
         </div>
 
-        {/* Center: Centered Navigation (Accueil, Œuvres, Articles) */}
+        {/* Center: Centered Navigation (Accueil, Œuvres, Artistes, Articles) */}
         <nav 
           id="desktop-primary-nav"
-          className="hidden md:flex items-center justify-center gap-10 lg:gap-14"
+          className="hidden md:flex items-center justify-center gap-8 lg:gap-11"
         >
           {/* 1. Accueil */}
           <button 
@@ -67,7 +99,20 @@ export const Navbar: React.FC = () => {
             Œuvres
           </button>
 
-          {/* 3. Articles */}
+          {/* 3. Artistes */}
+          <button 
+            id="nav-link-artistes"
+            onClick={() => navigateTo('artistes')}
+            className={`text-base font-semibold tracking-normal transition-colors py-2 focus:outline-none cursor-pointer ${
+              ['artistes', 'artiste-detail', 'artbook-detail'].includes(viewMode)
+                ? 'text-[#ff8679]'
+                : 'text-[#d4d4d8] hover:text-white'
+            }`}
+          >
+            Artistes
+          </button>
+
+          {/* 4. Articles */}
           <button 
             id="nav-link-articles"
             onClick={() => navigateTo('articles')}
@@ -81,13 +126,13 @@ export const Navbar: React.FC = () => {
           </button>
         </nav>
 
-        {/* Right Side: Search Button & Mobile Hamburger */}
+        {/* Right Side: Search Button, Auth State & Mobile Hamburger */}
         <div className="flex items-center justify-end gap-2.5">
           {/* Desktop Search Button */}
           <button
             id="nav-search-btn"
             onClick={() => navigateTo('recherche')}
-            className={`hidden md:flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer border ${
+            className={`hidden md:flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer border ${
               viewMode === 'recherche'
                 ? 'bg-[#ff8679]/15 text-[#ff8679] border-[#ff8679]/50 shadow-sm shadow-[#ff8679]/10'
                 : 'bg-[#1a1b22] hover:bg-[#22232c] text-zinc-300 hover:text-white border-zinc-800 hover:border-zinc-700'
@@ -97,6 +142,91 @@ export const Navbar: React.FC = () => {
             <Search className={`w-4 h-4 ${viewMode === 'recherche' ? 'text-[#ff8679]' : 'text-zinc-400'}`} />
             <span className="font-semibold">Recherche</span>
           </button>
+
+          {/* Desktop Reader Auth Area */}
+          <div className="hidden md:block relative" ref={dropdownRef}>
+            {isReaderAuthLoading ? (
+              <div className="w-28 h-9 rounded-xl bg-zinc-900/60 animate-pulse border border-zinc-800" />
+            ) : currentUser ? (
+              /* User logged in: Avatar & Dropdown */
+              <div>
+                <button
+                  id="nav-user-profile-btn"
+                  onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                  className="flex items-center gap-2 p-1.5 pr-3 rounded-2xl bg-[#1a1b22] hover:bg-[#22232c] border border-zinc-800 hover:border-zinc-700 transition-all cursor-pointer group"
+                  aria-expanded={userDropdownOpen}
+                >
+                  <div className="w-7 h-7 rounded-full overflow-hidden bg-gradient-to-tr from-[#ff8679] to-[#fb923c] p-0.5 shrink-0">
+                    {readerPhotoURL ? (
+                      <img 
+                        src={readerPhotoURL} 
+                        alt="" 
+                        className="w-full h-full object-cover rounded-full bg-zinc-900" 
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-full h-full rounded-full bg-zinc-900 flex items-center justify-center text-xs font-black text-[#ff8679]">
+                        {readerDisplayName.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-xs font-bold text-zinc-200 group-hover:text-white truncate max-w-[110px]">
+                    {readerDisplayName}
+                  </span>
+                  <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${userDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* User Dropdown Menu */}
+                {userDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-60 rounded-2xl bg-[#141418] border border-[#242436] shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                    <div className="px-3 py-2.5 border-b border-zinc-800 mb-1">
+                      <div className="text-xs font-bold text-white truncate">{readerDisplayName}</div>
+                      <div className="text-[11px] text-zinc-400 truncate">{currentUser.email}</div>
+                    </div>
+
+                    <button
+                      onClick={() => { setUserDropdownOpen(false); openProfileModal(); }}
+                      className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-zinc-300 hover:text-white hover:bg-zinc-800/80 flex items-center gap-2.5 transition-colors cursor-pointer"
+                    >
+                      <User className="w-3.5 h-3.5 text-[#ff8679]" />
+                      <span>Mon Profil</span>
+                    </button>
+
+                    <button
+                      onClick={() => { setUserDropdownOpen(false); openProfileModal(); }}
+                      className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-zinc-300 hover:text-white hover:bg-zinc-800/80 flex items-center gap-2.5 transition-colors cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-[#fb923c]" />
+                      <span>Mes Abonnements</span>
+                    </button>
+
+                    <div className="h-px bg-zinc-800 my-1" />
+
+                    <button
+                      onClick={async () => {
+                        setUserDropdownOpen(false);
+                        await logoutReader();
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-950/30 flex items-center gap-2.5 transition-colors cursor-pointer"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Se déconnecter</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* User logged out: "Se connecter" button */
+              <button
+                id="nav-login-btn"
+                onClick={() => openAuthModal('login')}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#ff8679] hover:bg-[#eb6e60] text-white font-bold text-xs sm:text-sm shadow-md shadow-[#ff8679]/20 hover:scale-105 active:scale-95 transition-all cursor-pointer font-sans"
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>Se connecter</span>
+              </button>
+            )}
+          </div>
 
           {/* Mobile Search Button */}
           <button
@@ -109,6 +239,33 @@ export const Navbar: React.FC = () => {
             title="Rechercher"
           >
             <Search className="w-5 h-5" />
+          </button>
+
+          {/* Mobile User Icon Button (direct access to Auth or Profile) */}
+          <button
+            onClick={() => {
+              if (currentUser) {
+                openProfileModal();
+              } else {
+                openAuthModal('login');
+              }
+            }}
+            className="md:hidden p-2 rounded-lg text-zinc-300 hover:text-white focus:outline-none cursor-pointer"
+            aria-label={currentUser ? 'Profil lecteur' : 'Se connecter'}
+          >
+            {currentUser ? (
+              <div className="w-6 h-6 rounded-full overflow-hidden bg-gradient-to-tr from-[#ff8679] to-[#fb923c] p-0.5">
+                {readerPhotoURL ? (
+                  <img src={readerPhotoURL} alt="" className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className="w-full h-full rounded-full bg-zinc-900 flex items-center justify-center text-[10px] font-black text-[#ff8679]">
+                    {readerDisplayName.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <User className="w-5 h-5 text-[#ff8679]" />
+            )}
           </button>
 
           {/* Mobile Menu Trigger */}
@@ -148,6 +305,15 @@ export const Navbar: React.FC = () => {
           </button>
 
           <button
+            onClick={() => navigateTo('artistes')}
+            className={`text-center py-2.5 text-base font-semibold border-b border-zinc-800/60 ${
+              ['artistes', 'artiste-detail', 'artbook-detail'].includes(viewMode) ? 'text-[#ff8679]' : 'text-zinc-200'
+            }`}
+          >
+            Artistes & Artbooks
+          </button>
+
+          <button
             onClick={() => navigateTo('articles')}
             className={`text-center py-2.5 text-base font-semibold border-b border-zinc-800/60 ${
               viewMode === 'articles' ? 'text-[#ff8679]' : 'text-zinc-200'
@@ -158,13 +324,65 @@ export const Navbar: React.FC = () => {
 
           <button
             onClick={() => navigateTo('recherche')}
-            className={`flex items-center justify-center gap-2 text-center py-2.5 text-base font-semibold ${
+            className={`flex items-center justify-center gap-2 text-center py-2.5 text-base font-semibold border-b border-zinc-800/60 ${
               viewMode === 'recherche' ? 'text-[#ff8679]' : 'text-zinc-200'
             }`}
           >
             <Search className="w-4 h-4" />
             <span>Recherche</span>
           </button>
+
+          {/* Mobile Auth Drawer Section */}
+          <div className="pt-2">
+            {currentUser ? (
+              <div className="p-3 rounded-2xl bg-zinc-950 border border-zinc-800/80 flex flex-col gap-2.5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-tr from-[#ff8679] to-[#fb923c] p-0.5 shrink-0">
+                    {readerPhotoURL ? (
+                      <img src={readerPhotoURL} alt="" className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-full h-full rounded-full bg-zinc-900 flex items-center justify-center text-xs font-black text-[#ff8679]">
+                        {readerDisplayName.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold text-white truncate">{readerDisplayName}</div>
+                    <div className="text-[10px] text-zinc-400 truncate">{currentUser.email}</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    onClick={() => { setMobileMenuOpen(false); openProfileModal(); }}
+                    className="py-2 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-white text-center cursor-pointer"
+                  >
+                    Mon Profil
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setMobileMenuOpen(false);
+                      await logoutReader();
+                    }}
+                    className="py-2 px-3 rounded-xl bg-rose-950/40 text-rose-300 hover:bg-rose-950/60 text-xs font-bold text-center cursor-pointer"
+                  >
+                    Déconnexion
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  openAuthModal('login');
+                }}
+                className="w-full py-3 rounded-2xl bg-[#ff8679] hover:bg-[#eb6e60] text-white font-bold text-sm shadow-md shadow-[#ff8679]/20 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <User className="w-4 h-4" />
+                <span>Se connecter / S'inscrire</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
     </header>

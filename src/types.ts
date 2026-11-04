@@ -225,6 +225,17 @@ export interface FirebaseSyncConfig {
 
 export type UserRole = 'reader' | 'creator' | 'moderator' | 'super_admin';
 
+export interface ReaderProfile {
+  uid: string;
+  displayName: string;
+  email: string;
+  photoURL?: string;
+  role: 'reader';
+  createdAt: string;
+  updatedAt: string;
+  bio?: string;
+}
+
 export interface UserAccount {
   id: string;
   email: string;
@@ -402,5 +413,76 @@ export interface HomeHeroSlide {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export interface Artist {
+  id: string;
+  name: string;
+  slug: string;
+  photoUrl: string;
+  country?: string;
+  bio: string;
+  specialties: string[];
+  artbookIds: string[];
+  bannerUrl?: string;
+  socials?: {
+    instagram?: string;
+    twitter?: string;
+    artstation?: string;
+  };
+  featuredSeriesTitle?: string;
+  createdAt?: string;
+}
+
+export interface Artbook {
+  id: string;
+  artistId: string;
+  artistName: string;
+  title: string;
+  slug: string;
+  description: string;
+  coverUrl: string;
+  previewImages: [string, string, string, string, string]; // exactly 5 preview images
+  price: number; // in FCFA (0 if free)
+  isFree: boolean;
+  pageCount: number;
+  releaseYear: number;
+  tags: string[];
+  fileSizeFormatted: string;
+  pdfDownloadUrl?: string;
+  downloadsCount: number;
+  rating?: number;
+  createdAt?: string;
+}
+
+export interface ArtbookDownloadRecord {
+  id: string;
+  artbookId: string;
+  artbookTitle: string;
+  artistName: string;
+  userName: string;
+  userEmail: string;
+  userPhone: string;
+  consentedAt: string;
+  downloadedAt: string;
+  userId?: string;
+}
+
+export interface ArtbookPurchaseRecord {
+  id: string;
+  artbookId: string;
+  artbookTitle: string;
+  artistName: string;
+  priceXof: number;
+  userName: string;
+  userEmail: string;
+  userPhone: string;
+  paymentGateway: string;
+  paymentReference: string;
+  status: 'pending' | 'completed' | 'failed' | 'cancelled';
+  purchasedAt: string;
+  downloadAuthorized: boolean;
+  userId?: string;
+}
+
 
 

@@ -8,6 +8,9 @@ import { ArticlesPage } from './components/landing/ArticlesPage';
 import { SearchPage } from './components/landing/SearchPage';
 import { ArticleDetailPage } from './components/landing/ArticleDetailPage';
 import { OeuvreDetailPage } from './components/landing/OeuvreDetailPage';
+import { ArtistsPage } from './components/artists/ArtistsPage';
+import { ArtistDetailPage } from './components/artists/ArtistDetailPage';
+import { ArtbookDetailPage } from './components/artists/ArtbookDetailPage';
 import { Footer } from './components/landing/Footer';
 import { WebtoonReaderModal } from './components/landing/WebtoonReaderModal';
 import { TeaserVideoModal } from './components/landing/TeaserVideoModal';
@@ -15,6 +18,8 @@ import { AdminStudio } from './components/admin/AdminStudio';
 import { AdminLoginPage } from './components/admin/AdminLoginPage';
 import { PullToRefresh } from './components/landing/PullToRefresh';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { AuthModal } from './components/auth/AuthModal';
+import { UserProfileModal } from './components/auth/UserProfileModal';
 
 const MainLayout: React.FC = () => {
   const { viewMode, adminAuth } = useData();
@@ -40,12 +45,15 @@ const MainLayout: React.FC = () => {
           <main>
             {viewMode === 'accueil' && <AccueilPage />}
             {viewMode === 'oeuvres' && <OeuvresPage />}
+            {viewMode === 'artistes' && <ArtistsPage />}
             {viewMode === 'articles' && <ArticlesPage />}
             {viewMode === 'recherche' && <SearchPage />}
             {viewMode === 'article-detail' && <ArticleDetailPage />}
             {viewMode === 'oeuvre-detail' && <OeuvreDetailPage />}
+            {viewMode === 'artiste-detail' && <ArtistDetailPage />}
+            {viewMode === 'artbook-detail' && <ArtbookDetailPage />}
             {/* Fallback to Accueil if viewMode is unrecognized */}
-            {!['accueil', 'oeuvres', 'articles', 'recherche', 'article-detail', 'oeuvre-detail'].includes(viewMode) && (
+            {!['accueil', 'oeuvres', 'artistes', 'articles', 'recherche', 'article-detail', 'oeuvre-detail', 'artiste-detail', 'artbook-detail'].includes(viewMode) && (
               <AccueilPage />
             )}
           </main>
@@ -57,6 +65,8 @@ const MainLayout: React.FC = () => {
         {/* Global Modals */}
         <WebtoonReaderModal />
         <TeaserVideoModal />
+        <AuthModal />
+        <UserProfileModal />
       </div>
     </PullToRefresh>
   );

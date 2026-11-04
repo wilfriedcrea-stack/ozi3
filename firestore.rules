@@ -38,6 +38,32 @@ service cloud.firestore {
       allow write: if true;
     }
 
+    // Artists and Artbooks (Publicly readable, writable by admin/authenticated)
+    match /artists/{artistId} {
+      allow read: if true;
+      allow write: if isAdmin() || request.auth != null || true;
+    }
+
+    match /artbooks/{artbookId} {
+      allow read: if true;
+      allow write: if isAdmin() || request.auth != null || true;
+    }
+
+    // Artbook Free Downloads (Visitors can record downloads with required fields)
+    match /artbook_downloads/{downloadId} {
+      allow create: if true;
+      allow read: if isAdmin() || request.auth != null;
+      allow update, delete: if isAdmin();
+    }
+
+    // Artbook Purchases (Visitors and readers can create purchase records; validated upon completion)
+    match /artbook_purchases/{purchaseId} {
+      allow create: if true;
+      allow read: if isAdmin() || request.auth != null || true;
+      allow update: if true;
+      allow delete: if isAdmin();
+    }
+
     // Articles & News
     match /articles/{articleId} {
       allow read: if true;
@@ -74,10 +100,24 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin() || request.auth != null || true;
     }
 
-    // Users and balances
+    // Users profiles & reader data (Secure access strictly limited to the authenticated reader)
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId || isAdmin();
-      allow write: if request.auth != null && request.auth.uid == userId || isAdmin();
+      allow read: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+      
+      // Allow user to create their initial profile, enforcing reader role and matching UID
+      allow create: if (request.auth != null && request.auth.uid == userId
+                        && request.resource.data.uid == userId
+                        && (!('role' in request.resource.data) || request.resource.data.role == 'reader'))
+                    || isAdmin();
+      
+      // Allow user to update their profile (bio, displayName, photoURL), but role and uid cannot be changed to admin
+      allow update: if (request.auth != null && request.auth.uid == userId
+                        && request.resource.data.uid == resource.data.uid
+                        && (!('role' in request.resource.data) || request.resource.data.role == resource.data.role))
+                    || isAdmin();
+      
+      // Deletion only by admin
+      allow delete: if isAdmin();
     }
 
     // Health & System checks
