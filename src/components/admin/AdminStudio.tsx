@@ -16,6 +16,7 @@ import { AdminUsersManager } from './AdminUsersManager';
 import { AdminAdsManager } from './AdminAdsManager';
 import { AdminStorageManager } from './AdminStorageManager';
 import { AdminArticlesManager } from './AdminArticlesManager';
+import { AdminArtistsManager } from './AdminArtistsManager';
 import { AdminHeroSlidesManager } from './AdminHeroSlidesManager';
 import { AdminPasswordModal } from './AdminPasswordModal';
 import { useData } from '../../context/DataContext';
@@ -70,6 +71,8 @@ export const AdminStudio: React.FC = () => {
           {activeTab === 'hero-slides' && <AdminHeroSlidesManager />}
 
           {activeTab === 'series' && <AdminSeriesManager />}
+
+          {activeTab === 'artists' && <AdminArtistsManager />}
 
           {activeTab === 'articles' && <AdminArticlesManager />}
 

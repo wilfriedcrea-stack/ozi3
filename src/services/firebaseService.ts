@@ -1022,6 +1022,16 @@ export async function fetchArtistsFromFirestore(databaseInstance: Firestore = db
   return null;
 }
 
+export async function deleteArtistFromFirestore(databaseInstance: Firestore = db, artistId: string): Promise<boolean> {
+  try {
+    await deleteDoc(doc(databaseInstance, 'artists', artistId));
+    return true;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `artists/${artistId}`);
+    return false;
+  }
+}
+
 export async function syncArtbookToFirestore(databaseInstance: Firestore, artbook: Artbook): Promise<boolean> {
   try {
     const ref = doc(databaseInstance, 'artbooks', artbook.id);
@@ -1032,6 +1042,16 @@ export async function syncArtbookToFirestore(databaseInstance: Firestore, artboo
     return true;
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `artbooks/${artbook.id}`);
+    return false;
+  }
+}
+
+export async function deleteArtbookFromFirestore(databaseInstance: Firestore = db, artbookId: string): Promise<boolean> {
+  try {
+    await deleteDoc(doc(databaseInstance, 'artbooks', artbookId));
+    return true;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `artbooks/${artbookId}`);
     return false;
   }
 }

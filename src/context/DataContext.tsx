@@ -90,8 +90,10 @@ import {
   subscribeToFirestoreHeroSlides,
   syncArtistToFirestore,
   fetchArtistsFromFirestore,
+  deleteArtistFromFirestore,
   syncArtbookToFirestore,
   fetchArtbooksFromFirestore,
+  deleteArtbookFromFirestore,
   recordArtbookDownloadInFirestore,
   recordArtbookPurchaseInFirestore,
   verifyArtbookPurchaseInFirestore
@@ -180,6 +182,14 @@ interface DataContextType {
   recordArtbookDownload: (record: ArtbookDownloadRecord) => Promise<boolean>;
   recordArtbookPurchase: (record: ArtbookPurchaseRecord) => Promise<boolean>;
   verifyArtbookPurchase: (purchaseId: string, reference: string) => Promise<{ verified: boolean; downloadAuthorized: boolean }>;
+
+  // Artist & Artbook admin management
+  addArtist: (artist: Omit<Artist, 'id' | 'slug' | 'createdAt'>) => Promise<boolean>;
+  updateArtist: (id: string, updates: Partial<Artist>) => Promise<boolean>;
+  deleteArtist: (id: string) => Promise<boolean>;
+  addArtbook: (artbook: Omit<Artbook, 'id' | 'slug' | 'downloadsCount' | 'createdAt'>) => Promise<boolean>;
+  updateArtbook: (id: string, updates: Partial<Artbook>) => Promise<boolean>;
+  deleteArtbook: (id: string) => Promise<boolean>;
 
   // Webtoon Reader State
   activeReaderSeries: Series | null;
@@ -675,6 +685,137 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setArtbookPurchases(prev => prev.map(p => p.id === purchaseId ? { ...p, status: 'completed', downloadAuthorized: true } : p));
     return { verified: true, downloadAuthorized: true };
   }, [artbookPurchases]);
+
+  const addArtist = useCallback(async (artistData: Omit<Artist, 'id' | 'slug' | 'createdAt'>): Promise<boolean> => {
+    const slug = artistData.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const newArtist: Artist = {
+      ...artistData,
+      id: `artist-${slug}-${Date.now().toString(36)}`,
+      slug: slug || `artist-${Date.now().toString(36)}`,
+      createdAt: new Date().toISOString()
+    };
+    setArtists(prev => [newArtist, ...prev]);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncArtistToFirestore(fb.db, newArtist);
+      }
+    } catch (err) {
+      console.warn('Sync new artist to Firestore warning:', err);
+    }
+    return true;
+  }, []);
+
+  const updateArtist = useCallback(async (id: string, updates: Partial<Artist>): Promise<boolean> => {
+    let updatedArtist: Artist | null = null;
+    setArtists(prev => prev.map(a => {
+      if (a.id === id) {
+        updatedArtist = { ...a, ...updates };
+        return updatedArtist;
+      }
+      return a;
+    }));
+    if (updatedArtist) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncArtistToFirestore(fb.db, updatedArtist);
+        }
+      } catch (err) {
+        console.warn('Sync update artist warning:', err);
+      }
+    }
+    return true;
+  }, []);
+
+  const deleteArtist = useCallback(async (id: string): Promise<boolean> => {
+    setArtists(prev => prev.filter(a => a.id !== id));
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await deleteArtistFromFirestore(fb.db, id);
+      }
+    } catch (err) {
+      console.warn('Delete artist warning:', err);
+    }
+    return true;
+  }, []);
+
+  const addArtbook = useCallback(async (artbookData: Omit<Artbook, 'id' | 'slug' | 'downloadsCount' | 'createdAt'>): Promise<boolean> => {
+    const slug = artbookData.title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const newArtbook: Artbook = {
+      ...artbookData,
+      id: `artbook-${slug}-${Date.now().toString(36)}`,
+      slug: slug || `artbook-${Date.now().toString(36)}`,
+      downloadsCount: 0,
+      createdAt: new Date().toISOString()
+    };
+    setArtbooks(prev => [newArtbook, ...prev]);
+    if (newArtbook.artistId) {
+      setArtists(prev => prev.map(a => {
+        if (a.id === newArtbook.artistId && !a.artbookIds.includes(newArtbook.id)) {
+          const updated = { ...a, artbookIds: [...a.artbookIds, newArtbook.id] };
+          const fb = initializeFirebaseCustom();
+          if (fb.db) syncArtistToFirestore(fb.db, updated).catch(() => {});
+          return updated;
+        }
+        return a;
+      }));
+    }
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncArtbookToFirestore(fb.db, newArtbook);
+      }
+    } catch (err) {
+      console.warn('Sync new artbook to Firestore warning:', err);
+    }
+    return true;
+  }, []);
+
+  const updateArtbook = useCallback(async (id: string, updates: Partial<Artbook>): Promise<boolean> => {
+    let updatedArtbook: Artbook | null = null;
+    setArtbooks(prev => prev.map(a => {
+      if (a.id === id) {
+        updatedArtbook = { ...a, ...updates };
+        return updatedArtbook;
+      }
+      return a;
+    }));
+    if (updatedArtbook) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncArtbookToFirestore(fb.db, updatedArtbook);
+        }
+      } catch (err) {
+        console.warn('Sync update artbook warning:', err);
+      }
+    }
+    return true;
+  }, []);
+
+  const deleteArtbook = useCallback(async (id: string): Promise<boolean> => {
+    setArtbooks(prev => prev.filter(a => a.id !== id));
+    setArtists(prev => prev.map(a => {
+      if (a.artbookIds?.includes(id)) {
+        const updated = { ...a, artbookIds: a.artbookIds.filter(abId => abId !== id) };
+        const fb = initializeFirebaseCustom();
+        if (fb.db) syncArtistToFirestore(fb.db, updated).catch(() => {});
+        return updated;
+      }
+      return a;
+    }));
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await deleteArtbookFromFirestore(fb.db, id);
+      }
+    } catch (err) {
+      console.warn('Delete artbook warning:', err);
+    }
+    return true;
+  }, []);
 
   // Sync artists & artbooks to localStorage
   useEffect(() => {
@@ -2620,6 +2761,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       recordArtbookDownload,
       recordArtbookPurchase,
       verifyArtbookPurchase: verifyArtbookPurchaseAction,
+      addArtist,
+      updateArtist,
+      deleteArtist,
+      addArtbook,
+      updateArtbook,
+      deleteArtbook,
       activeReaderSeries,
       activeReaderChapter,
       openReader,

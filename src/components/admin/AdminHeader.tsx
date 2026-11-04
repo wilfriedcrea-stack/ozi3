@@ -48,6 +48,8 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ activeTab, onNewSeries
       case 'dashboard': return 'Tableau de Bord & Analytics';
       case 'hero-slides': return 'Vitrine & Bannières d\'Accueil';
       case 'series': return 'Gestion des Séries & Éditeur de Chapitres Webtoon';
+      case 'artists': return 'Gestion des Artistes, Illustrateurs & Artbooks';
+      case 'articles': return 'Articles & Carnets de Création';
       case 'monetization': return 'Monétisation, Tarifs Coins & Payouts Mobile Money';
       case 'moderation': return 'Modération des Commentaires & Salubrité';
       case 'teasers': return 'Gestion des Teasers & Vidéos';

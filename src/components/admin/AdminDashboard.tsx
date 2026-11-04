@@ -17,7 +17,8 @@ import {
   Filter,
   CheckCircle2,
   ExternalLink,
-  Edit3
+  Edit3,
+  Palette
 } from 'lucide-react';
 import { Series } from '../../types';
 import { useData } from '../../context/DataContext';
@@ -29,7 +30,7 @@ interface AdminDashboardProps {
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNewSeriesClick, onEditSeries }) => {
-  const { series, heroSlides, appVersion, analytics, submissions, firebaseConfig, openOeuvrePage, openReader } = useData();
+  const { series, artists, heroSlides, appVersion, analytics, submissions, firebaseConfig, openOeuvrePage, openReader } = useData();
 
   const [searchCatalog, setSearchCatalog] = useState('');
   const [filterGenre, setFilterGenre] = useState('Tous');
@@ -94,6 +95,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
           >
             <Sparkles className="w-4 h-4 text-[#ff8679]" />
             <span>Bannières Accueil ({heroSlides?.length || 0})</span>
+          </button>
+
+          <button
+            onClick={() => onNavigate('artists')}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-950/60 hover:bg-purple-600 text-purple-200 hover:text-white border border-purple-800 text-xs font-semibold transition-all shadow-md"
+            title="Gérer les artistes et artbooks"
+          >
+            <Palette className="w-4 h-4 text-purple-400" />
+            <span>Artistes & Artbooks ({artists?.length || 0})</span>
           </button>
 
           <button
