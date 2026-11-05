@@ -1073,6 +1073,92 @@ export async function fetchArtbooksFromFirestore(databaseInstance: Firestore = d
   return null;
 }
 
+export function subscribeToFirestoreArtists(onUpdate: (artists: Artist[]) => void): () => void {
+  try {
+    const colRef = collection(db, 'artists');
+    return onSnapshot(colRef, (snapshot) => {
+      if (!snapshot.empty) {
+        const list: Artist[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as Artist;
+          list.push({ ...data, id: docSnap.id });
+        });
+        onUpdate(list);
+      }
+    }, (err) => {
+      console.warn('Firestore artists real-time subscription error:', err);
+    });
+  } catch {
+    return () => {};
+  }
+}
+
+export function subscribeToFirestoreArtbooks(onUpdate: (artbooks: Artbook[]) => void): () => void {
+  try {
+    const colRef = collection(db, 'artbooks');
+    return onSnapshot(colRef, (snapshot) => {
+      if (!snapshot.empty) {
+        const list: Artbook[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as Artbook;
+          list.push({ ...data, id: docSnap.id });
+        });
+        onUpdate(list);
+      }
+    }, (err) => {
+      console.warn('Firestore artbooks real-time subscription error:', err);
+    });
+  } catch {
+    return () => {};
+  }
+}
+
+export async function syncAllArtistsToFirestore(
+  databaseInstance: Firestore = db,
+  artistsList: Artist[]
+): Promise<{ success: boolean; count: number; error?: unknown }> {
+  try {
+    let count = 0;
+    for (const artist of artistsList) {
+      if (artist && artist.id) {
+        const cleaned = cleanFirestoreObject({
+          ...artist,
+          updatedAt: new Date().toISOString()
+        });
+        await setDoc(doc(databaseInstance, 'artists', artist.id), cleaned, { merge: true });
+        count++;
+      }
+    }
+    return { success: true, count };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, 'artists');
+    return { success: false, count: 0, error: err };
+  }
+}
+
+export async function syncAllArtbooksToFirestore(
+  databaseInstance: Firestore = db,
+  artbooksList: Artbook[]
+): Promise<{ success: boolean; count: number; error?: unknown }> {
+  try {
+    let count = 0;
+    for (const artbook of artbooksList) {
+      if (artbook && artbook.id) {
+        const cleaned = cleanFirestoreObject({
+          ...artbook,
+          updatedAt: new Date().toISOString()
+        });
+        await setDoc(doc(databaseInstance, 'artbooks', artbook.id), cleaned, { merge: true });
+        count++;
+      }
+    }
+    return { success: true, count };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, 'artbooks');
+    return { success: false, count: 0, error: err };
+  }
+}
+
 export async function recordArtbookDownloadInFirestore(databaseInstance: Firestore, record: ArtbookDownloadRecord): Promise<boolean> {
   try {
     const ref = doc(databaseInstance, 'artbook_downloads', record.id);

@@ -95,6 +95,8 @@ export const AdminArtistsManager: React.FC = () => {
   });
 
   const [newSpecialtyInput, setNewSpecialtyInput] = useState('');
+  const [modalHoverActive, setModalHoverActive] = useState(false);
+  const [hoveredCardArtbookId, setHoveredCardArtbookId] = useState<string | null>(null);
 
   // Artbook Form State
   const [artbookForm, setArtbookForm] = useState<{
@@ -103,6 +105,7 @@ export const AdminArtistsManager: React.FC = () => {
     title: string;
     description: string;
     coverUrl: string;
+    alternateCoverUrl: string;
     previewImages: [string, string, string, string, string];
     price: number;
     isFree: boolean;
@@ -118,6 +121,7 @@ export const AdminArtistsManager: React.FC = () => {
     title: '',
     description: '',
     coverUrl: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=900&q=80',
+    alternateCoverUrl: 'https://images.unsplash.com/photo-1603048588665-791ca8aea617?auto=format&fit=crop&w=900&q=80',
     previewImages: [
       'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=1200&q=80',
       'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80',
@@ -228,6 +232,7 @@ export const AdminArtistsManager: React.FC = () => {
   const handleOpenAddArtbook = () => {
     setEditingArtbook(null);
     setArtbookModalTab('general');
+    setModalHoverActive(false);
     const defaultArtist = artists[0];
     setArtbookForm({
       artistId: defaultArtist?.id || '',
@@ -235,6 +240,7 @@ export const AdminArtistsManager: React.FC = () => {
       title: '',
       description: '',
       coverUrl: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=900&q=80',
+      alternateCoverUrl: 'https://images.unsplash.com/photo-1603048588665-791ca8aea617?auto=format&fit=crop&w=900&q=80',
       previewImages: [
         'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=1200&q=80',
         'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80',
@@ -257,12 +263,14 @@ export const AdminArtistsManager: React.FC = () => {
   const handleOpenEditArtbook = (artbook: Artbook, initialTab: 'general' | 'preview' | 'link' = 'general') => {
     setEditingArtbook(artbook);
     setArtbookModalTab(initialTab);
+    setModalHoverActive(false);
     setArtbookForm({
       artistId: artbook.artistId,
       artistName: artbook.artistName,
       title: artbook.title,
       description: artbook.description,
       coverUrl: artbook.coverUrl,
+      alternateCoverUrl: artbook.alternateCoverUrl || '',
       previewImages: [
         artbook.previewImages[0] || '',
         artbook.previewImages[1] || '',
@@ -289,6 +297,7 @@ export const AdminArtistsManager: React.FC = () => {
     const selectedArtObj = artists.find(a => a.id === artbookForm.artistId);
     const finalArtistName = selectedArtObj?.name || artbookForm.artistName || 'Artiste OZI';
     const cleanDownloadUrl = artbookForm.downloadUrl.trim();
+    const cleanAlternateCoverUrl = artbookForm.alternateCoverUrl.trim();
 
     if (editingArtbook) {
       await updateArtbook(editingArtbook.id, {
@@ -297,6 +306,7 @@ export const AdminArtistsManager: React.FC = () => {
         title: artbookForm.title.trim(),
         description: artbookForm.description.trim(),
         coverUrl: artbookForm.coverUrl.trim(),
+        alternateCoverUrl: cleanAlternateCoverUrl || undefined,
         previewImages: artbookForm.previewImages,
         price: Number(artbookForm.price),
         isFree: Number(artbookForm.price) === 0,
@@ -316,6 +326,7 @@ export const AdminArtistsManager: React.FC = () => {
         title: artbookForm.title.trim(),
         description: artbookForm.description.trim(),
         coverUrl: artbookForm.coverUrl.trim(),
+        alternateCoverUrl: cleanAlternateCoverUrl || undefined,
         previewImages: artbookForm.previewImages,
         price: Number(artbookForm.price),
         isFree: Number(artbookForm.price) === 0,
@@ -516,11 +527,11 @@ export const AdminArtistsManager: React.FC = () => {
                 <div>
                   <div className="flex items-start justify-between gap-3 mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-14 h-14 rounded-full overflow-hidden p-0.5 bg-gradient-to-tr from-[#ff8679] to-purple-600 shrink-0">
+                      <div className="w-14 h-14 rounded-full overflow-hidden border border-slate-700 shrink-0 bg-slate-900">
                         <img 
                           src={artist.photoUrl} 
                           alt="" 
-                          className="w-full h-full object-cover rounded-full bg-slate-900" 
+                          className="w-full h-full object-cover rounded-full" 
                         />
                       </div>
                       <div>
@@ -660,11 +671,31 @@ export const AdminArtistsManager: React.FC = () => {
               >
                 <div>
                   <div className="flex items-start gap-4 mb-4">
-                    <img 
-                      src={artbook.coverUrl} 
-                      alt="" 
-                      className="w-20 h-28 object-cover rounded-xl border border-slate-800 shrink-0 shadow-md" 
-                    />
+                    <div 
+                      onMouseEnter={() => setHoveredCardArtbookId(artbook.id)}
+                      onMouseLeave={() => setHoveredCardArtbookId(null)}
+                      className="relative w-20 h-28 rounded-xl overflow-hidden border border-slate-800 shrink-0 shadow-md bg-black group cursor-pointer"
+                      title={artbook.alternateCoverUrl ? "Survolez pour voir l'image 2 alternative" : "Image 1"}
+                    >
+                      <img 
+                        src={
+                          hoveredCardArtbookId === artbook.id && artbook.alternateCoverUrl 
+                            ? artbook.alternateCoverUrl 
+                            : artbook.coverUrl
+                        } 
+                        alt="" 
+                        className="w-full h-full object-cover" 
+                      />
+                      {artbook.alternateCoverUrl && (
+                        <div className={`absolute bottom-0 inset-x-0 py-0.5 text-[8px] font-black uppercase text-center transition-colors ${
+                          hoveredCardArtbookId === artbook.id 
+                            ? 'bg-purple-600 text-white' 
+                            : 'bg-black/75 text-slate-300'
+                        }`}>
+                          {hoveredCardArtbookId === artbook.id ? 'Vue 2' : '2 Vues'}
+                        </div>
+                      )}
+                    </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
@@ -1232,22 +1263,139 @@ export const AdminArtistsManager: React.FC = () => {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
-                      Image de Couverture (URL) <span className="text-[#ff8679]">*</span>
-                    </label>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="text"
-                        required
-                        value={artbookForm.coverUrl}
-                        onChange={e => setArtbookForm({ ...artbookForm, coverUrl: e.target.value })}
-                        placeholder="https://..."
-                        className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-[#ff8679] text-sm text-white focus:outline-none"
-                      />
-                      {artbookForm.coverUrl && (
-                        <img src={artbookForm.coverUrl} alt="" className="w-10 h-14 object-cover rounded-lg border border-slate-700" />
-                      )}
+                  {/* DOUBLE COUVERTURE INTERACTIVE (Effet Survol Instantané) */}
+                  <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-[#ff8679] to-purple-500 animate-pulse" />
+                        <span className="text-xs font-bold text-white uppercase tracking-wider">
+                          Deux Images de Couverture (Effet Survol Boutique & Galerie)
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20">
+                        0ms de latence
+                      </span>
+                    </div>
+
+                    {/* Image 1 : Couverture Principale */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <label className="font-bold text-slate-200 flex items-center gap-1.5">
+                          <span className="w-4 h-4 rounded bg-white/10 text-white font-mono text-[10px] flex items-center justify-center font-bold">1</span>
+                          <span>Image 1 : Couverture Principale (Par défaut) <span className="text-[#ff8679]">*</span></span>
+                        </label>
+                        <span className="text-[11px] text-slate-400">Vue par défaut sur le site</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="text"
+                          required
+                          value={artbookForm.coverUrl}
+                          onChange={e => setArtbookForm({ ...artbookForm, coverUrl: e.target.value })}
+                          placeholder="https://..."
+                          className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-[#ff8679] text-xs text-white focus:outline-none"
+                        />
+                        {artbookForm.coverUrl && (
+                          <div className="relative group shrink-0">
+                            <img src={artbookForm.coverUrl} alt="Couverture 1" className="w-12 h-14 object-cover rounded-lg border border-slate-700 shadow-md" />
+                            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 text-black text-[9px] font-black flex items-center justify-center">1</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Image 2 : Couverture Alternative au survol */}
+                    <div className="space-y-2 pt-2.5 border-t border-slate-800/60">
+                      <div className="flex items-center justify-between text-xs">
+                        <label className="font-bold text-slate-200 flex items-center gap-1.5">
+                          <span className="w-4 h-4 rounded bg-purple-500/20 text-purple-300 font-mono text-[10px] flex items-center justify-center font-bold">2</span>
+                          <span>Image 2 : Couverture Alternative au Survol <span className="text-purple-400 font-normal text-[11px]">(Vinyle, CD, vue ouverte)</span></span>
+                        </label>
+                        <span className="text-[11px] text-purple-400 font-semibold">Affichée immédiatement au survol</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="text"
+                          value={artbookForm.alternateCoverUrl}
+                          onChange={e => setArtbookForm({ ...artbookForm, alternateCoverUrl: e.target.value })}
+                          placeholder="URL de la 2ème vue (ex: vinyle sorti de pochette, CD, vue ouverte)..."
+                          className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-purple-400 text-xs text-white focus:outline-none"
+                        />
+                        {artbookForm.alternateCoverUrl ? (
+                          <div className="relative group shrink-0">
+                            <img src={artbookForm.alternateCoverUrl} alt="Couverture 2" className="w-12 h-14 object-cover rounded-lg border border-purple-500/60 shadow-md" />
+                            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-purple-500 text-white text-[9px] font-black flex items-center justify-center">2</span>
+                          </div>
+                        ) : (
+                          <div className="w-12 h-14 rounded-lg border border-dashed border-slate-700 flex flex-col items-center justify-center text-[9px] text-slate-500 text-center shrink-0">
+                            <span>Optionnel</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Suggestions rapides de visuels alternatifs */}
+                      <div className="pt-1">
+                        <span className="text-[11px] font-semibold text-slate-400 block mb-1.5">Presets rapides pour l'image 2 :</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            { label: '💿 Vinyle Splatter Toffee', url: 'https://images.unsplash.com/photo-1603048588665-791ca8aea617?auto=format&fit=crop&w=900&q=80' },
+                            { label: '🎵 Vinyle Noir 180g', url: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=900&q=80' },
+                            { label: '📀 CD Digipack', url: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=900&q=80' },
+                            { label: '📖 Carnet Ouvert', url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=900&q=80' },
+                          ].map((preset, pIdx) => (
+                            <button
+                              key={pIdx}
+                              type="button"
+                              onClick={() => setArtbookForm({ ...artbookForm, alternateCoverUrl: preset.url })}
+                              className={`text-[10px] px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                                artbookForm.alternateCoverUrl === preset.url
+                                  ? 'bg-purple-600 text-white border-purple-400 font-bold shadow-sm'
+                                  : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700/80 hover:text-white'
+                              }`}
+                            >
+                              {preset.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Test interactif du survol */}
+                      <div className="mt-3 p-3 rounded-xl bg-slate-900/90 border border-slate-800/90 flex items-center justify-between gap-4">
+                        <div className="space-y-0.5">
+                          <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                            <Eye className="w-3.5 h-3.5 text-purple-400" />
+                            <span>Simulateur interactif du survol :</span>
+                          </div>
+                          <p className="text-[11px] text-slate-400">
+                            Passez votre curseur sur la vignette pour prévisualiser l'alternance instantanée.
+                          </p>
+                        </div>
+
+                        {/* Cadre de simulation avec switch 0ms */}
+                        <div
+                          onMouseEnter={() => setModalHoverActive(true)}
+                          onMouseLeave={() => setModalHoverActive(false)}
+                          className="relative w-20 h-24 rounded-lg overflow-hidden border-2 border-purple-500/60 cursor-pointer shadow-lg shrink-0 bg-black group"
+                          title="Survolez avec la souris pour tester le changement immédiat"
+                        >
+                          <img
+                            src={
+                              modalHoverActive && artbookForm.alternateCoverUrl
+                                ? artbookForm.alternateCoverUrl
+                                : (artbookForm.coverUrl || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=900&q=80')
+                            }
+                            alt="Aperçu du survol"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className={`absolute bottom-0 inset-x-0 py-0.5 text-[8px] font-black uppercase text-center tracking-wider transition-colors ${
+                            modalHoverActive && artbookForm.alternateCoverUrl
+                              ? 'bg-purple-600 text-white'
+                              : 'bg-black/80 text-slate-300'
+                          }`}>
+                            {modalHoverActive && artbookForm.alternateCoverUrl ? 'Vue 2 (Survol)' : 'Vue 1 (Défaut)'}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
 

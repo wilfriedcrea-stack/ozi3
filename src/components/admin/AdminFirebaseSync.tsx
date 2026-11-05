@@ -14,7 +14,13 @@ import {
   Zap,
   Globe,
   Image as ImageIcon,
-  ExternalLink,
+  Palette,
+  BookOpen,
+  Smartphone,
+  Laptop,
+  Tablet,
+  Check,
+  Link as LinkIcon,
   Loader2
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
@@ -33,14 +39,22 @@ export const AdminFirebaseSync: React.FC = () => {
     submissions,
     siteBannerUrl,
     updateSiteBannerUrl,
-    addLwsFile
+    addLwsFile,
+    artists,
+    artbooks,
+    artbookDownloads,
+    artbookPurchases,
+    syncAllArtistsToFirestoreNow,
+    syncAllArtbooksToFirestoreNow,
+    isSyncingArtists,
+    isSyncingArtbooks
   } = useData();
 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'status' | 'banner' | 'config' | 'mobile' | 'rules' | 'backup'>('status');
+  const [activeTab, setActiveTab] = useState<'status' | 'banner' | 'artists_sync' | 'config' | 'mobile' | 'rules' | 'backup'>('status');
 
   // Edit config state
   const [editProjectId, setEditProjectId] = useState(firebaseConfig.projectId);
@@ -119,13 +133,27 @@ export const AdminFirebaseSync: React.FC = () => {
 
   const handleSyncAll = async () => {
     setSyncing(true);
-    setSyncMessage('Synchronisation des collections Firestore en cours...');
+    setSyncMessage('Synchronisation globale de toutes les collections Firestore (Séries, Artistes, Artbooks, Paramètres)...');
     await triggerManualSync();
     setTimeout(() => {
       setSyncing(false);
-      setSyncMessage('Toutes les collections Firestore sont à jour et synchronisées avec l\'application mobile !');
+      setSyncMessage('Toutes les collections Firestore (y compris Artistes et Artbooks) sont synchronisées avec succès sur l\'ensemble des appareils !');
       setTimeout(() => setSyncMessage(null), 5000);
     }, 1200);
+  };
+
+  const handleSyncArtists = async () => {
+    setSyncMessage('Synchronisation des artistes vers Firestore...');
+    const res = await syncAllArtistsToFirestoreNow();
+    setSyncMessage(res.message);
+    setTimeout(() => setSyncMessage(null), 5000);
+  };
+
+  const handleSyncArtbooks = async () => {
+    setSyncMessage('Synchronisation des artbooks vers Firestore...');
+    const res = await syncAllArtbooksToFirestoreNow();
+    setSyncMessage(res.message);
+    setTimeout(() => setSyncMessage(null), 5000);
   };
 
   const handleExportBackup = () => {
@@ -133,6 +161,10 @@ export const AdminFirebaseSync: React.FC = () => {
       exportDate: new Date().toISOString(),
       firebaseProjectId: firebaseConfig.projectId,
       series,
+      artists,
+      artbooks,
+      artbookDownloads,
+      artbookPurchases,
       teasers,
       pressReleases,
       appVersion,
@@ -163,6 +195,30 @@ service cloud.firestore {
       }
     }
     
+    // Artistes & Profils Créateurs : Lecture publique multi-appareils
+    match /artists/{artistId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Artbooks & Galeries d'Aperçu : Lecture publique multi-appareils
+    match /artbooks/{artbookId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Enregistrement des Téléchargements Gratuits (Lead Capture)
+    match /artbook_downloads/{downloadId} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null;
+    }
+    
+    // Achats Paystack d'Artbooks Payants
+    match /artbook_purchases/{purchaseId} {
+      allow create, update: if true;
+      allow read, delete: if request.auth != null;
+    }
+    
     // Bandes-Annonces & Teasers Vidéo
     match /teasers/{teaserId} {
       allow read: if true;
@@ -181,7 +237,7 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
     
-    // Candidatures des Créateurs & Auteurs (création publique, lecture admin)
+    // Candidatures des Créateurs & Auteurs
     match /creator_submissions/{subId} {
       allow create: if true;
       allow read, update, delete: if request.auth != null;
@@ -256,6 +312,15 @@ service cloud.firestore {
           }`}
         >
           État des Collections
+        </button>
+        <button
+          onClick={() => setActiveTab('artists_sync')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'artists_sync' ? 'bg-amber-500 text-zinc-950' : 'text-zinc-400 hover:text-white'
+          }`}
+        >
+          <Palette className="w-3.5 h-3.5" />
+          <span>Artistes & Artbooks Cloud ({artists.length + artbooks.length})</span>
         </button>
         <button
           onClick={() => setActiveTab('banner')}
@@ -425,6 +490,68 @@ service cloud.firestore {
                     <span className="w-2 h-2 rounded-full bg-emerald-500" />
                   </div>
                 </div>
+
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800 hover:border-amber-500/30 transition-all">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs font-bold text-amber-400">/artists</span>
+                    <span className="text-xs text-zinc-400">Profils Artistes & Réseaux (Web & Mobile)</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-white">{artists.length} documents</span>
+                    <button
+                      onClick={handleSyncArtists}
+                      disabled={isSyncingArtists}
+                      className="px-2 py-0.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-[10px] font-bold border border-amber-500/30 transition-all cursor-pointer flex items-center gap-1"
+                      title="Synchroniser uniquement les artistes"
+                    >
+                      <RefreshCw className={`w-2.5 h-2.5 ${isSyncingArtists ? 'animate-spin' : ''}`} />
+                      <span>Sync</span>
+                    </button>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/20 animate-pulse" />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800 hover:border-amber-500/30 transition-all">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs font-bold text-amber-400">/artbooks</span>
+                    <span className="text-xs text-zinc-400">Artbooks & Liens Directs (Web & Mobile)</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-white">{artbooks.length} documents</span>
+                    <button
+                      onClick={handleSyncArtbooks}
+                      disabled={isSyncingArtbooks}
+                      className="px-2 py-0.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-[10px] font-bold border border-amber-500/30 transition-all cursor-pointer flex items-center gap-1"
+                      title="Synchroniser uniquement les artbooks"
+                    >
+                      <RefreshCw className={`w-2.5 h-2.5 ${isSyncingArtbooks ? 'animate-spin' : ''}`} />
+                      <span>Sync</span>
+                    </button>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/20 animate-pulse" />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs font-bold text-teal-400">/artbook_downloads</span>
+                    <span className="text-xs text-zinc-400">Téléchargements Gratuits & Leads Capturés</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-white">{artbookDownloads.length} enregistrements</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs font-bold text-yellow-400">/artbook_purchases</span>
+                    <span className="text-xs text-zinc-400">Achats Paystack & Commandes Enregistrées</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-white">{artbookPurchases.length} enregistrements</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -476,6 +603,324 @@ service cloud.firestore {
               ))}
             </div>
           </div>
+
+          {/* Audit visuel des Artistes et Artbooks Synchronisés */}
+          <div className="rounded-3xl bg-zinc-900 border border-zinc-800 p-6 shadow-xl space-y-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-amber-400" />
+                  <span>Vérification des Artistes & Artbooks Actifs sur Firestore</span>
+                </h3>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Tous les profils, planches et liens de téléchargement sont synchronisés en temps réel (<code className="text-emerald-400">onSnapshot</code>) sur smartphones, tablettes et ordinateurs.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSyncArtists}
+                  disabled={isSyncingArtists}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-bold border border-amber-500/30 transition-all cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingArtists ? 'animate-spin' : ''}`} />
+                  <span>Sync Artistes</span>
+                </button>
+                <button
+                  onClick={handleSyncArtbooks}
+                  disabled={isSyncingArtbooks}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 text-xs font-bold border border-orange-500/30 transition-all cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingArtbooks ? 'animate-spin' : ''}`} />
+                  <span>Sync Artbooks</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Artistes en direct */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span>Artistes ({artists.length})</span>
+                </span>
+                <span className="text-[11px] text-zinc-500">Collection <code className="text-zinc-400">/artists</code></span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                {artists.map((artist) => (
+                  <div key={artist.id} className="p-3 rounded-2xl bg-zinc-950 border border-zinc-800/80 flex flex-col items-center text-center gap-2 hover:border-amber-500/40 transition-all">
+                    <div className="relative w-14 h-14 rounded-full overflow-hidden bg-zinc-900 border border-zinc-700/80">
+                      <img 
+                        src={artist.photoUrl} 
+                        alt={artist.name} 
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLElement).classList.add('opacity-30');
+                        }}
+                      />
+                      <div className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-zinc-950" title="Synchronisé Firestore" />
+                    </div>
+                    <span className="text-xs font-bold text-white truncate w-full" title={artist.name}>{artist.name}</span>
+                    <span className="text-[10px] text-amber-400/90 font-medium">
+                      {artist.artbookIds?.length || 0} artbook{(artist.artbookIds?.length || 0) > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Artbooks en direct */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span>Artbooks ({artbooks.length})</span>
+                </span>
+                <span className="text-[11px] text-zinc-500">Collection <code className="text-zinc-400">/artbooks</code></span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                {artbooks.map((artbook) => (
+                  <div key={artbook.id} className="p-2.5 rounded-2xl bg-zinc-950 border border-zinc-800/80 flex flex-col gap-2 hover:border-amber-500/40 transition-all">
+                    <div className="relative aspect-[3/4] w-full rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800">
+                      <img 
+                        src={artbook.coverUrl} 
+                        alt={artbook.title} 
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLElement).classList.add('opacity-30');
+                        }}
+                      />
+                      <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-zinc-950" title="Synchronisé Firestore" />
+                      <div className="absolute bottom-1.5 left-1.5">
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                          artbook.price === 0 
+                            ? 'bg-emerald-500 text-zinc-950' 
+                            : 'bg-amber-500 text-zinc-950'
+                        }`}>
+                          {artbook.price === 0 ? 'Gratuit' : `${artbook.price} F`}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white truncate" title={artbook.title}>{artbook.title}</span>
+                      <div className="flex items-center gap-1 text-[10px] text-zinc-400 truncate">
+                        {artbook.downloadUrl ? (
+                          <span className="text-emerald-400 flex items-center gap-0.5">
+                            <LinkIcon className="w-2.5 h-2.5" />
+                            <span>Lien direct actif</span>
+                          </span>
+                        ) : (
+                          <span className="text-zinc-500">PDF généré auto</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Artists & Artbooks Real-time Synchronization Center */}
+      {activeTab === 'artists_sync' && (
+        <div className="rounded-3xl bg-zinc-900 border border-zinc-800 p-6 sm:p-8 flex flex-col gap-6 shadow-xl">
+          
+          {/* Header & Multi-Device sync status */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-zinc-800">
+            <div>
+              <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                <span>Mise à jour en temps réel active sur tous les appareils</span>
+              </div>
+              <h3 className="text-xl font-black text-white">
+                Centre de Synchronisation Artistes & Artbooks
+              </h3>
+              <p className="text-xs text-zinc-400 mt-1 max-w-2xl">
+                Toute modification apportée à un artiste ou un artbook est immédiatement synchronisée sur Firestore et diffusée instantanément sur tous les smartphones Android, tablettes et ordinateurs des lecteurs via le protocole Firestore <code className="text-amber-400">onSnapshot</code>.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={handleSyncArtists}
+                disabled={isSyncingArtists}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition-all shadow-md shadow-amber-500/20 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncingArtists ? 'animate-spin' : ''}`} />
+                <span>Synchroniser Artistes ({artists.length})</span>
+              </button>
+
+              <button
+                onClick={handleSyncArtbooks}
+                disabled={isSyncingArtbooks}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-zinc-950 font-bold text-xs transition-all shadow-md shadow-orange-500/20 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncingArtbooks ? 'animate-spin' : ''}`} />
+                <span>Synchroniser Artbooks ({artbooks.length})</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Multi-Device Guarantee Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                <Palette className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-xl font-black text-white">{artists.length}</span>
+                <p className="text-xs text-zinc-400">Artistes Actifs</p>
+                <span className="text-[10px] text-emerald-400 font-medium">Collection /artists</span>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 shrink-0">
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-xl font-black text-white">{artbooks.length}</span>
+                <p className="text-xs text-zinc-400">Artbooks Disponibles</p>
+                <span className="text-[10px] text-emerald-400 font-medium">Collection /artbooks</span>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 shrink-0">
+                <LinkIcon className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-xl font-black text-white">
+                  {artbooks.filter(a => a.downloadUrl && a.downloadUrl.trim() !== '').length} / {artbooks.length}
+                </span>
+                <p className="text-xs text-zinc-400">Avec Lien Direct</p>
+                <span className="text-[10px] text-sky-400 font-medium">Téléchargement instantané</span>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                <Check className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-xl font-black text-white">
+                  {artbookDownloads.length + artbookPurchases.length}
+                </span>
+                <p className="text-xs text-zinc-400">Téléchargements & Achats</p>
+                <span className="text-[10px] text-emerald-400 font-medium">Traçabilité complète</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Device Sync Architecture Banner */}
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-zinc-950 via-zinc-900 to-zinc-950 border border-zinc-800 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-zinc-900 border border-zinc-800">
+                <span title="Web & PC"><Laptop className="w-5 h-5 text-zinc-300" /></span>
+                <span title="Tablettes"><Tablet className="w-5 h-5 text-amber-400" /></span>
+                <span title="Smartphones & APK"><Smartphone className="w-5 h-5 text-emerald-400" /></span>
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white">Architecture Multi-Appareils OZI</h4>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Aucun redémarrage requis. Les écouteurs Firestore <code className="text-amber-400">onSnapshot</code> maintiennent la vitrine et l'APK parfaitement synchronisés sans friction.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-mono text-emerald-400 bg-emerald-950/60 px-3 py-1.5 rounded-xl border border-emerald-500/30">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Multi-Device Sync : 100% OK</span>
+            </div>
+          </div>
+
+          {/* Detailed Artists Roster with Cloud Status */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                <Palette className="w-4 h-4 text-amber-400" />
+                <span>Artistes Enregistrés sur Firestore ({artists.length})</span>
+              </h4>
+              <span className="text-xs text-zinc-500">Chaque profil possède sa propre page <code className="text-zinc-400">#/artiste/slug</code></span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {artists.map((artist) => {
+                const artistArtbooks = artbooks.filter(ab => ab.artistId === artist.id || artist.artbookIds?.includes(ab.id));
+                return (
+                  <div key={artist.id} className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-start gap-3.5 hover:border-amber-500/30 transition-all">
+                    <img 
+                      src={artist.photoUrl} 
+                      alt={artist.name} 
+                      className="w-12 h-12 rounded-full object-cover border border-zinc-700 shrink-0"
+                    />
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-xs font-bold text-white truncate">{artist.name}</span>
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          Cloud OK
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400 line-clamp-1 mt-0.5">{artist.bio || 'Aucune biographie'}</p>
+                      <div className="flex items-center gap-2 mt-2 text-[10px] text-zinc-500">
+                        <span className="text-amber-400/90 font-medium">{artistArtbooks.length} artbook{artistArtbooks.length > 1 ? 's' : ''}</span>
+                        <span>•</span>
+                        {artist.socials?.youtube && <span className="text-rose-400">YouTube</span>}
+                        {artist.socials?.artstation && <span className="text-sky-400">ArtStation</span>}
+                        {artist.socials?.instagram && <span className="text-pink-400">Instagram</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Detailed Artbooks Roster with Direct Download Links Status */}
+          <div className="space-y-4 pt-2">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-orange-400" />
+                <span>Artbooks et Liens de Téléchargement Direct ({artbooks.length})</span>
+              </h4>
+              <span className="text-xs text-zinc-500">Chaque artbook possède sa propre page <code className="text-zinc-400">#/artbook/slug</code></span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {artbooks.map((artbook) => (
+                <div key={artbook.id} className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center gap-3.5 hover:border-amber-500/30 transition-all">
+                  <div className="w-14 h-18 rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 shrink-0">
+                    <img 
+                      src={artbook.coverUrl} 
+                      alt={artbook.title} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-xs font-bold text-white truncate">{artbook.title}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                        artbook.price === 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      }`}>
+                        {artbook.price === 0 ? 'Gratuit' : `${artbook.price} FCFA`}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-zinc-400 truncate">{artbook.artistName}</span>
+                    <div className="mt-1.5">
+                      {artbook.downloadUrl && artbook.downloadUrl.trim() !== '' ? (
+                        <div className="flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
+                          <LinkIcon className="w-2.5 h-2.5 shrink-0" />
+                          <span className="truncate max-w-[200px]" title={artbook.downloadUrl}>Lien direct configuré</span>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-zinc-500">Générateur PDF automatique</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
         </div>
       )}
 

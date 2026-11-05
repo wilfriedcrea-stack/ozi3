@@ -94,6 +94,10 @@ import {
   syncArtbookToFirestore,
   fetchArtbooksFromFirestore,
   deleteArtbookFromFirestore,
+  subscribeToFirestoreArtists,
+  subscribeToFirestoreArtbooks,
+  syncAllArtistsToFirestore,
+  syncAllArtbooksToFirestore,
   recordArtbookDownloadInFirestore,
   recordArtbookPurchaseInFirestore,
   verifyArtbookPurchaseInFirestore
@@ -286,6 +290,12 @@ interface DataContextType {
   syncHeroSlidesToFirestoreNow: () => Promise<{ success: boolean; message: string }>;
   isSyncingHeroSlides: boolean;
 
+  // Artists & Artbooks Cloud Synchronization
+  syncAllArtistsToFirestoreNow: () => Promise<{ success: boolean; message: string }>;
+  syncAllArtbooksToFirestoreNow: () => Promise<{ success: boolean; message: string }>;
+  isSyncingArtists: boolean;
+  isSyncingArtbooks: boolean;
+
   // Interactions
   likeSeries: (seriesId: string) => void;
   likeChapter: (seriesId: string, chapterId: string) => void;
@@ -447,7 +457,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [artists, setArtists] = useState<Artist[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.ARTISTS);
-      return saved ? JSON.parse(saved) : INITIAL_ARTISTS;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length >= INITIAL_ARTISTS.length) {
+          return parsed;
+        }
+        const existingIds = new Set(parsed.map((a: any) => a.id));
+        const merged = [...parsed, ...INITIAL_ARTISTS.filter(a => !existingIds.has(a.id))];
+        return merged;
+      }
+      return INITIAL_ARTISTS;
     } catch {
       return INITIAL_ARTISTS;
     }
@@ -842,19 +861,65 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {}
   }, [artbookPurchases]);
 
-  // Try to load any remote artists and artbooks from Firestore
+  // Cross-device real-time synchronization for Artists & Artbooks via Firestore
   useEffect(() => {
-    fetchArtistsFromFirestore().then(remoteArtists => {
-      if (remoteArtists && remoteArtists.length > 0) {
-        setArtists(remoteArtists);
-      }
-    }).catch(() => {});
+    // 1. Initial baseline fetch & auto-seed if cloud database is empty
+    const initRemoteArtistsAndArtbooks = async () => {
+      try {
+        const fb = initializeFirebaseCustom();
+        const [remoteArtists, remoteArtbooks] = await Promise.all([
+          fetchArtistsFromFirestore(),
+          fetchArtbooksFromFirestore()
+        ]);
 
-    fetchArtbooksFromFirestore().then(remoteArtbooks => {
-      if (remoteArtbooks && remoteArtbooks.length > 0) {
-        setArtbooks(remoteArtbooks);
+        if (remoteArtists && remoteArtists.length > 0) {
+          setArtists(remoteArtists);
+          try {
+            localStorage.setItem(STORAGE_KEYS.ARTISTS, JSON.stringify(remoteArtists));
+          } catch {}
+        } else if (fb.db) {
+          // Initialize remote collection with baseline artists
+          syncAllArtistsToFirestore(fb.db, INITIAL_ARTISTS).catch(() => {});
+        }
+
+        if (remoteArtbooks && remoteArtbooks.length > 0) {
+          setArtbooks(remoteArtbooks);
+          try {
+            localStorage.setItem(STORAGE_KEYS.ARTBOOKS, JSON.stringify(remoteArtbooks));
+          } catch {}
+        } else if (fb.db) {
+          // Initialize remote collection with baseline artbooks
+          syncAllArtbooksToFirestore(fb.db, INITIAL_ARTBOOKS).catch(() => {});
+        }
+      } catch (err) {
+        console.warn('Initial artists/artbooks Firestore sync notice:', err);
       }
-    }).catch(() => {});
+    };
+    initRemoteArtistsAndArtbooks();
+
+    // 2. Persistent real-time onSnapshot listener: immediately updates state on ALL devices
+    const unsubscribeArtists = subscribeToFirestoreArtists((liveArtists) => {
+      if (liveArtists && liveArtists.length > 0) {
+        setArtists(liveArtists);
+        try {
+          localStorage.setItem(STORAGE_KEYS.ARTISTS, JSON.stringify(liveArtists));
+        } catch {}
+      }
+    });
+
+    const unsubscribeArtbooks = subscribeToFirestoreArtbooks((liveArtbooks) => {
+      if (liveArtbooks && liveArtbooks.length > 0) {
+        setArtbooks(liveArtbooks);
+        try {
+          localStorage.setItem(STORAGE_KEYS.ARTBOOKS, JSON.stringify(liveArtbooks));
+        } catch {}
+      }
+    });
+
+    return () => {
+      unsubscribeArtists();
+      unsubscribeArtbooks();
+    };
   }, []);
 
   // Listen to browser navigation (back/forward buttons)
@@ -2534,6 +2599,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await syncAppVersionToFirestore(fb.db, appVersion);
         await Promise.allSettled(pressReleases.map(p => syncPressToFirestore(fb.db!, p)));
         await Promise.allSettled(teasers.map(t => syncTeaserToFirestore(fb.db!, t)));
+
+        // Sync Artists & Artbooks directly to Firestore so all mobile/desktop devices are updated
+        await syncAllArtistsToFirestore(fb.db, artists);
+        await syncAllArtbooksToFirestore(fb.db, artbooks);
         
         setFirebaseConfig(prev => ({
           ...prev,
@@ -2545,7 +2614,56 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       setFirebaseConfig(prev => ({ ...prev, syncState: 'error', errorMessage: 'Échec de synchronisation globale' }));
     }
-  }, [firebaseConfig, series, articles, appVersion, pressReleases, teasers, siteBannerUrl]);
+  }, [firebaseConfig, series, articles, appVersion, pressReleases, teasers, siteBannerUrl, artists, artbooks]);
+
+  const [isSyncingArtists, setIsSyncingArtists] = useState(false);
+  const [isSyncingArtbooks, setIsSyncingArtbooks] = useState(false);
+
+  const syncAllArtistsToFirestoreNow = useCallback(async (): Promise<{ success: boolean; message: string }> => {
+    setIsSyncingArtists(true);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (!fb.db) {
+        return { success: false, message: 'Client Firestore indisponible.' };
+      }
+      const res = await syncAllArtistsToFirestore(fb.db, artists);
+      if (res.success) {
+        return {
+          success: true,
+          message: `Synchronisation réussie ! Les ${res.count} artistes sont maintenant à jour et visibles sur tous les appareils.`
+        };
+      } else {
+        return { success: false, message: 'Erreur lors de la synchronisation des artistes.' };
+      }
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Erreur lors de la synchronisation des artistes.' };
+    } finally {
+      setIsSyncingArtists(false);
+    }
+  }, [artists]);
+
+  const syncAllArtbooksToFirestoreNow = useCallback(async (): Promise<{ success: boolean; message: string }> => {
+    setIsSyncingArtbooks(true);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (!fb.db) {
+        return { success: false, message: 'Client Firestore indisponible.' };
+      }
+      const res = await syncAllArtbooksToFirestore(fb.db, artbooks);
+      if (res.success) {
+        return {
+          success: true,
+          message: `Synchronisation réussie ! Les ${res.count} artbooks sont maintenant à jour et accessibles au téléchargement sur tous les appareils.`
+        };
+      } else {
+        return { success: false, message: 'Erreur lors de la synchronisation des artbooks.' };
+      }
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Erreur lors de la synchronisation des artbooks.' };
+    } finally {
+      setIsSyncingArtbooks(false);
+    }
+  }, [artbooks]);
 
   const cleanupDuplicates = useCallback(async (): Promise<{ cleaned: number; message: string }> => {
     let cleanedCount = 0;
@@ -2724,6 +2842,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       reorderHeroSlides,
       syncHeroSlidesToFirestoreNow,
       isSyncingHeroSlides,
+      syncAllArtistsToFirestoreNow,
+      syncAllArtbooksToFirestoreNow,
+      isSyncingArtists,
+      isSyncingArtbooks,
       mediaKit,
       appVersion,
       analytics,

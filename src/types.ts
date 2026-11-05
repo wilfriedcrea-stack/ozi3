@@ -442,6 +442,7 @@ export interface Artbook {
   slug: string;
   description: string;
   coverUrl: string;
+  alternateCoverUrl?: string; // Image alternative affichée instantanément au survol (CD, Vinyle, vue ouverte)
   previewImages: [string, string, string, string, string]; // exactly 5 preview images
   price: number; // in FCFA (0 if free)
   isFree: boolean;
