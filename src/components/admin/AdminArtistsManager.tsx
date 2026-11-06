@@ -30,10 +30,16 @@ import {
   FileText,
   Youtube,
   Instagram,
-  Twitter
+  Twitter,
+  RefreshCw,
+  Laptop,
+  Smartphone,
+  Tablet,
+  Cloud
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Artist, Artbook } from '../../types';
+import { syncArtistToFirestore, initializeFirebaseCustom } from '../../services/firebaseService';
 
 export const AdminArtistsManager: React.FC = () => {
   const { 
@@ -48,7 +54,11 @@ export const AdminArtistsManager: React.FC = () => {
     updateArtbook, 
     deleteArtbook, 
     openArtistPage, 
-    openArtbookPage 
+    openArtbookPage,
+    syncAllArtistsToFirestoreNow,
+    syncAllArtbooksToFirestoreNow,
+    isSyncingArtists,
+    isSyncingArtbooks
   } = useData();
 
   const [activeSubTab, setActiveSubTab] = useState<'artists' | 'artbooks' | 'activity'>('artists');
@@ -60,12 +70,68 @@ export const AdminArtistsManager: React.FC = () => {
 
   const [artbookModalOpen, setArtbookModalOpen] = useState(false);
   const [editingArtbook, setEditingArtbook] = useState<Artbook | null>(null);
-  const [artbookModalTab, setArtbookModalTab] = useState<'general' | 'preview' | 'link'>('general');
+  const [artbookModalTab, setArtbookModalTab] = useState<'general' | 'covers' | 'preview' | 'link'>('general');
   const [copiedArtbookLinkId, setCopiedArtbookLinkId] = useState<string | null>(null);
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteType, setDeleteType] = useState<'artist' | 'artbook' | null>(null);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
+
+  // Global Cross-Device Sync State
+  const [isSyncingGlobal, setIsSyncingGlobal] = useState(false);
+  const [syncStatusNotice, setSyncStatusNotice] = useState<{ success: boolean; message: string; timestamp: string } | null>(null);
+
+  const handleGlobalSyncArtistsAndArtbooks = async () => {
+    setIsSyncingGlobal(true);
+    setSyncStatusNotice(null);
+    try {
+      const [resArtists, resArtbooks] = await Promise.all([
+        syncAllArtistsToFirestoreNow(),
+        syncAllArtbooksToFirestoreNow()
+      ]);
+      const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      if (resArtists.success && resArtbooks.success) {
+        setSyncStatusNotice({
+          success: true,
+          message: `Synchronisation réussie ! ${artists.length} artistes et ${artbooks.length} artbooks (avec doubles couvertures) sont maintenant diffusés en direct sur mobile, tablette et ordinateur.`,
+          timestamp: now
+        });
+      } else {
+        setSyncStatusNotice({
+          success: false,
+          message: resArtists.message || resArtbooks.message || 'Erreur de synchronisation Firestore.',
+          timestamp: now
+        });
+      }
+    } catch (err: any) {
+      setSyncStatusNotice({
+        success: false,
+        message: err?.message || 'Erreur lors de la synchronisation Firestore.',
+        timestamp: new Date().toLocaleTimeString('fr-FR')
+      });
+    } finally {
+      setIsSyncingGlobal(false);
+    }
+  };
+
+  const [syncingSingleArtistId, setSyncingSingleArtistId] = useState<string | null>(null);
+
+  const handleSyncSingleArtist = async (artist: Artist) => {
+    setSyncingSingleArtistId(artist.id);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncArtistToFirestore(fb.db, artist);
+        setSaveNotice(`Artiste "${artist.name}" synchronisé sur tous les appareils !`);
+        setTimeout(() => setSaveNotice(null), 3500);
+      }
+    } catch (err: any) {
+      setSaveNotice(`Erreur de synchronisation pour ${artist.name}`);
+      setTimeout(() => setSaveNotice(null), 3500);
+    } finally {
+      setSyncingSingleArtistId(null);
+    }
+  };
 
   // Artist Form State
   const [artistForm, setArtistForm] = useState<{
@@ -229,9 +295,9 @@ export const AdminArtistsManager: React.FC = () => {
     setTimeout(() => setSaveNotice(null), 3000);
   };
 
-  const handleOpenAddArtbook = () => {
+  const handleOpenAddArtbook = (initialTab: 'general' | 'covers' | 'preview' | 'link' = 'general') => {
     setEditingArtbook(null);
-    setArtbookModalTab('general');
+    setArtbookModalTab(initialTab);
     setModalHoverActive(false);
     const defaultArtist = artists[0];
     setArtbookForm({
@@ -260,7 +326,7 @@ export const AdminArtistsManager: React.FC = () => {
     setArtbookModalOpen(true);
   };
 
-  const handleOpenEditArtbook = (artbook: Artbook, initialTab: 'general' | 'preview' | 'link' = 'general') => {
+  const handleOpenEditArtbook = (artbook: Artbook, initialTab: 'general' | 'covers' | 'preview' | 'link' = 'general') => {
     setEditingArtbook(artbook);
     setArtbookModalTab(initialTab);
     setModalHoverActive(false);
@@ -477,9 +543,9 @@ export const AdminArtistsManager: React.FC = () => {
           </button>
         </div>
 
-        {/* Search & New buttons */}
-        <div className="flex items-center gap-3">
-          <div className="relative min-w-[220px]">
+        {/* Actions Controls (Sync & New buttons) */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <input
               type="text"
@@ -489,6 +555,18 @@ export const AdminArtistsManager: React.FC = () => {
               className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#11121c] border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#ff8679]"
             />
           </div>
+
+          {/* BOUTON SYNCHRONISER LES ARTISTES & ARTBOOKS (TOUS APPAREILS) */}
+          <button
+            type="button"
+            disabled={isSyncingGlobal || isSyncingArtists || isSyncingArtbooks}
+            onClick={handleGlobalSyncArtistsAndArtbooks}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-400 text-white text-xs font-bold transition-all shadow-md shadow-emerald-950/40 cursor-pointer disabled:opacity-50"
+            title="Diffuse instantanément la liste des artistes et artbooks vers Firestore pour mettre à jour tous les téléphones, tablettes et PC"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${(isSyncingGlobal || isSyncingArtists || isSyncingArtbooks) ? 'animate-spin' : ''}`} />
+            <span>{(isSyncingGlobal || isSyncingArtists || isSyncingArtbooks) ? 'Synchronisation en cours...' : 'Synchroniser les Artistes (Tous Appareils)'}</span>
+          </button>
 
           {activeSubTab === 'artists' && (
             <button
@@ -502,7 +580,7 @@ export const AdminArtistsManager: React.FC = () => {
 
           {activeSubTab === 'artbooks' && (
             <button
-              onClick={handleOpenAddArtbook}
+              onClick={() => handleOpenAddArtbook('general')}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#ff8679] hover:bg-[#eb6e60] text-white text-xs font-bold transition-all shadow-md shadow-[#ff8679]/20 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
@@ -512,11 +590,116 @@ export const AdminArtistsManager: React.FC = () => {
         </div>
       </div>
 
+      {/* Real-time Multi-Device Sync Banner */}
+      {syncStatusNotice && (
+        <div className={`p-3 rounded-2xl border flex items-center justify-between text-xs animate-in fade-in slide-in-from-top-2 ${
+          syncStatusNotice.success 
+            ? 'bg-emerald-950/50 border-emerald-800 text-emerald-200' 
+            : 'bg-rose-950/50 border-rose-800 text-rose-200'
+        }`}>
+          <div className="flex items-center gap-2.5">
+            {syncStatusNotice.success ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            )}
+            <div>
+              <span className="font-bold">{syncStatusNotice.message}</span>
+              <span className="text-[10px] text-slate-400 block sm:inline sm:ml-2">
+                (Dernière synchronisation cloud à {syncStatusNotice.timestamp})
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Multi-écrans actif</span>
+            </span>
+            <button
+              onClick={() => setSyncStatusNotice(null)}
+              className="p-1 rounded text-slate-400 hover:text-white"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ======================================================== */}
       {/* 1. ARTISTS LIST VIEW */}
       {/* ======================================================== */}
       {activeSubTab === 'artists' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="space-y-6">
+          {/* Dedicated Artists Sync Banner */}
+          <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-slate-900/95 via-[#121326] to-[#1e1535] border border-purple-700/40 shadow-2xl relative overflow-hidden">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 relative z-10">
+              <div className="space-y-2 max-w-2xl">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                  <span className="text-xs font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
+                    Synchronisation Firestore Active
+                  </span>
+                  <span className="text-[11px] font-mono text-purple-300 bg-purple-500/15 px-2.5 py-0.5 rounded-md border border-purple-500/25">
+                    Projet Cloud : euphoric-sector-gtvkm
+                  </span>
+                </div>
+
+                <h3 className="text-lg sm:text-xl font-black text-white font-almodobar flex items-center gap-2.5">
+                  <Cloud className="w-6 h-6 text-purple-400 shrink-0" />
+                  <span>Synchroniser les Artistes sur tous les appareils</span>
+                </h3>
+
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Ce bouton met à jour en direct la collection <strong className="text-white">« artists »</strong> dans la base de données Firestore. Grâce à l'écoute réactive, tous les appareils (ordinateurs, tablettes, smartphones) reçoivent immédiatement les fiches d'artistes à jour sans rechargement.
+                </p>
+
+                {/* Compatibility Badges */}
+                <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-slate-400 font-medium">
+                  <span className="flex items-center gap-1.5 text-slate-300">
+                    <Laptop className="w-3.5 h-3.5 text-purple-400" />
+                    <span>PC (5 colonnes)</span>
+                  </span>
+                  <span className="text-slate-600">•</span>
+                  <span className="flex items-center gap-1.5 text-slate-300">
+                    <Tablet className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Tablettes (3 colonnes)</span>
+                  </span>
+                  <span className="text-slate-600">•</span>
+                  <span className="flex items-center gap-1.5 text-slate-300">
+                    <Smartphone className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Mobiles (2 colonnes)</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Button */}
+              <div className="flex flex-col sm:flex-row lg:flex-col items-start lg:items-end gap-2.5 shrink-0">
+                <button
+                  type="button"
+                  disabled={isSyncingGlobal || isSyncingArtists}
+                  onClick={handleGlobalSyncArtistsAndArtbooks}
+                  className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm transition-all shadow-xl shadow-emerald-950/60 flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isSyncingGlobal || isSyncingArtists ? 'animate-spin' : ''}`} />
+                  <span>
+                    {isSyncingGlobal || isSyncingArtists 
+                      ? 'Synchronisation des artistes en cours...' 
+                      : `Synchroniser les ${artists.length} Artistes maintenant`}
+                  </span>
+                </button>
+                <span className="text-[10px] text-slate-400 text-right">
+                  {syncStatusNotice?.timestamp 
+                    ? `Dernière synchronisation réussie à ${syncStatusNotice.timestamp}`
+                    : 'Diffusion cloud vers toute la vitrine publique'}
+                </span>
+              </div>
+            </div>
+
+            <div className="absolute top-0 right-0 w-80 h-full bg-purple-500/10 blur-3xl pointer-events-none" />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredArtists.map(artist => {
             const artistArtbooksCount = artbooks.filter(b => b.artistId === artist.id || b.artistName.toLowerCase() === artist.name.toLowerCase()).length;
             return (
@@ -633,6 +816,17 @@ export const AdminArtistsManager: React.FC = () => {
 
                   <div className="flex items-center gap-2">
                     <button
+                      type="button"
+                      disabled={syncingSingleArtistId === artist.id}
+                      onClick={() => handleSyncSingleArtist(artist)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 hover:text-white border border-emerald-700/60 text-[11px] font-bold shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                      title="Diffuser cet artiste immédiatement vers Firestore sur tous les appareils"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${syncingSingleArtistId === artist.id ? 'animate-spin text-emerald-400' : ''}`} />
+                      <span>{syncingSingleArtistId === artist.id ? 'Sync...' : 'Sync Cloud'}</span>
+                    </button>
+
+                    <button
                       onClick={() => handleOpenEditArtist(artist)}
                       className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white transition-colors cursor-pointer"
                       title="Modifier l'artiste"
@@ -655,6 +849,7 @@ export const AdminArtistsManager: React.FC = () => {
               </div>
             );
           })}
+          </div>
         </div>
       )}
 
@@ -813,6 +1008,16 @@ export const AdminArtistsManager: React.FC = () => {
                   </button>
 
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditArtbook(artbook, 'covers')}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-900/60 to-pink-900/60 hover:from-purple-800 hover:to-pink-800 text-purple-200 hover:text-white border border-purple-500/40 text-[11px] font-bold transition-all shadow-sm cursor-pointer"
+                      title="Configurer l'Image 1 (Couverture) et l'Image 2 (Survol)"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                      <span>2 Couvertures</span>
+                    </button>
+
                     <button
                       onClick={() => handleOpenEditArtbook(artbook, 'link')}
                       className="p-2 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 border border-purple-800/40 transition-colors cursor-pointer"
@@ -1160,45 +1365,61 @@ export const AdminArtistsManager: React.FC = () => {
               <span>{editingArtbook ? 'Modifier l\'Artbook' : 'Publier un Nouvel Artbook'}</span>
             </h3>
 
-            {/* TAB NAVIGATION IN MODAL */}
-            <div className="flex items-center gap-2 border-b border-slate-800 pb-3 mb-5">
+            {/* TAB NAVIGATION IN MODAL - 4 EXPLICIT TABS */}
+            <div className="flex items-center gap-2 border-b border-slate-800 pb-3 mb-5 overflow-x-auto">
               <button
                 type="button"
                 onClick={() => setArtbookModalTab('general')}
-                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
                   artbookModalTab === 'general'
                     ? 'bg-[#ff8679] text-white shadow-md'
                     : 'text-slate-400 hover:text-white hover:bg-slate-900 border border-transparent'
                 }`}
               >
                 <BookOpen className="w-3.5 h-3.5" />
-                <span>1. Général & Tarif</span>
+                <span>1. Infos & Prix</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setArtbookModalTab('covers')}
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 border ${
+                  artbookModalTab === 'covers'
+                    ? 'bg-gradient-to-r from-purple-600 via-pink-600 to-purple-600 text-white border-purple-400 shadow-md shadow-purple-600/30'
+                    : 'text-purple-300 hover:text-white hover:bg-purple-950/40 border-purple-800/50 bg-purple-950/20'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                <span>2. 🌟 Deux Couvertures (Survol)</span>
+                <span className="px-1.5 py-0.2 rounded-md bg-white/20 text-[9px] font-black uppercase tracking-wider text-white">
+                  2 Vues
+                </span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setArtbookModalTab('preview')}
-                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
                   artbookModalTab === 'preview'
                     ? 'bg-[#ff8679] text-white shadow-md'
                     : 'text-slate-400 hover:text-white hover:bg-slate-900 border border-transparent'
                 }`}
               >
                 <ImageIcon className="w-3.5 h-3.5" />
-                <span>2. Planches d'Aperçu (5)</span>
+                <span>3. Aperçus HD (5)</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setArtbookModalTab('link')}
-                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 border ${
                   artbookModalTab === 'link'
-                    ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
-                    : 'text-purple-300 hover:text-white hover:bg-purple-950/40 border border-purple-800/40'
+                    ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 border-purple-400'
+                    : 'text-purple-300 hover:text-white hover:bg-purple-950/40 border-purple-800/40'
                 }`}
               >
                 <LinkIcon className="w-3.5 h-3.5" />
-                <span>3. Onglet Lien (Téléchargement)</span>
+                <span>4. Onglet Lien (Téléchargement)</span>
                 {artbookForm.downloadUrl ? (
                   <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" title="Lien configuré" />
                 ) : (
@@ -1264,17 +1485,27 @@ export const AdminArtistsManager: React.FC = () => {
                   </div>
 
                   {/* DOUBLE COUVERTURE INTERACTIVE (Effet Survol Instantané) */}
-                  <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                  <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-950 via-purple-950/20 to-slate-950 border border-purple-500/40 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
                       <div className="flex items-center gap-2">
                         <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-[#ff8679] to-purple-500 animate-pulse" />
                         <span className="text-xs font-bold text-white uppercase tracking-wider">
                           Deux Images de Couverture (Effet Survol Boutique & Galerie)
                         </span>
                       </div>
-                      <span className="text-[10px] font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20">
-                        0ms de latence
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20">
+                          0ms de latence
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setArtbookModalTab('covers')}
+                          className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] transition-all cursor-pointer shadow-sm shadow-purple-600/30 flex items-center gap-1"
+                        >
+                          <Sparkles className="w-3 h-3 text-yellow-300" />
+                          <span>Ouvrir l'Onglet 2 Couvertures →</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* Image 1 : Couverture Principale */}
@@ -1443,7 +1674,169 @@ export const AdminArtistsManager: React.FC = () => {
                 </div>
               )}
 
-              {/* TAB 2: PREVIEW IMAGES */}
+              {/* TAB 2: DEDICATED DEUX COUVERTURES (EFFET SURVOL INSTANTANÉ 0MS) */}
+              {artbookModalTab === 'covers' && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/60 via-slate-900 to-slate-950 border border-purple-500/40 text-purple-200 text-xs leading-relaxed flex items-start gap-3">
+                    <Sparkles className="w-5 h-5 text-yellow-300 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-bold text-white mb-0.5 flex items-center gap-2">
+                        <span>Studio Double Couverture (Effet Survol Instantané)</span>
+                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">0ms de latence</span>
+                      </div>
+                      <p className="text-[11px] text-slate-300">
+                        Chaque artbook dispose de <strong>deux visuels</strong> : l'Image 1 est affichée par défaut, et l'Image 2 (vinyle sorti de pochette, CD collector, carnet ouvert) remplace immédiatement la première dès le survol ou le tap sur mobile.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Image 1: Couverture Principale */}
+                  <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <label className="font-bold text-slate-100 flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-md bg-white/10 text-white font-mono text-[11px] flex items-center justify-center font-bold">1</span>
+                        <span>Image 1 : Couverture Principale (Vue Normale) <span className="text-[#ff8679]">*</span></span>
+                      </label>
+                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                        Vue par défaut
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Cette image s'affiche dans la galerie artistes et la boutique de l'artiste.
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="url"
+                        required
+                        value={artbookForm.coverUrl}
+                        onChange={e => setArtbookForm({ ...artbookForm, coverUrl: e.target.value })}
+                        placeholder="https://..."
+                        className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-[#ff8679] text-xs text-white focus:outline-none"
+                      />
+                      {artbookForm.coverUrl && (
+                        <div className="relative group shrink-0">
+                          <img 
+                            src={artbookForm.coverUrl} 
+                            alt="Couverture 1" 
+                            className="w-14 h-16 object-cover rounded-xl border border-slate-700 shadow-md" 
+                          />
+                          <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-emerald-500 text-black text-[10px] font-black flex items-center justify-center shadow">
+                            1
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Image 2: Couverture Alternative au survol */}
+                  <div className="p-4 rounded-2xl bg-slate-950/80 border border-purple-500/30 space-y-3">
+                    <div className="flex items-center justify-between text-xs">
+                      <label className="font-bold text-slate-100 flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-md bg-purple-500/30 text-purple-300 font-mono text-[11px] flex items-center justify-center font-bold">2</span>
+                        <span>Image 2 : Couverture Alternative (Vinyle, CD, Vue Ouverte)</span>
+                      </label>
+                      <span className="text-[10px] font-bold text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded-full border border-purple-500/30">
+                        Survol Instantané 0ms
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Cette image remplace la première à la milliseconde près lorsque le visiteur passe son curseur sur le produit.
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="url"
+                        value={artbookForm.alternateCoverUrl}
+                        onChange={e => setArtbookForm({ ...artbookForm, alternateCoverUrl: e.target.value })}
+                        placeholder="URL de la 2ème vue (ex: vinyle sorti de pochette, CD, vue éclatée)..."
+                        className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-purple-400 text-xs text-white focus:outline-none"
+                      />
+                      {artbookForm.alternateCoverUrl ? (
+                        <div className="relative group shrink-0">
+                          <img 
+                            src={artbookForm.alternateCoverUrl} 
+                            alt="Couverture 2" 
+                            className="w-14 h-16 object-cover rounded-xl border border-purple-500/60 shadow-md" 
+                          />
+                          <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-purple-500 text-white text-[10px] font-black flex items-center justify-center shadow">
+                            2
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="w-14 h-16 rounded-xl border border-dashed border-slate-700 flex flex-col items-center justify-center text-[9px] text-slate-500 text-center shrink-0">
+                          <span>Optionnel</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Presets rapides en 1 clic */}
+                    <div className="pt-1">
+                      <span className="text-[11px] font-bold text-purple-300 block mb-1.5">
+                        Presets rapides pour l'image 2 :
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          { label: '💿 Vinyle Splatter Toffee', url: 'https://images.unsplash.com/photo-1603048588665-791ca8aea617?auto=format&fit=crop&w=900&q=80' },
+                          { label: '🎵 Vinyle Noir 180g', url: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=900&q=80' },
+                          { label: '📀 CD Digipack', url: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=900&q=80' },
+                          { label: '📖 Carnet Ouvert', url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=900&q=80' },
+                        ].map((preset, pIdx) => (
+                          <button
+                            key={pIdx}
+                            type="button"
+                            onClick={() => setArtbookForm({ ...artbookForm, alternateCoverUrl: preset.url })}
+                            className={`text-[10px] px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer ${
+                              artbookForm.alternateCoverUrl === preset.url
+                                ? 'bg-purple-600 text-white border-purple-400 font-bold shadow-md shadow-purple-600/30'
+                                : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700/80 hover:text-white'
+                            }`}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Simulateur interactif de test direct */}
+                    <div className="mt-3 p-3.5 rounded-xl bg-slate-900/90 border border-purple-500/30 flex items-center justify-between gap-4">
+                      <div className="space-y-0.5">
+                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <Eye className="w-4 h-4 text-purple-400" />
+                          <span>Simulateur interactif du survol en direct :</span>
+                        </div>
+                        <p className="text-[11px] text-slate-300">
+                          Survolez le cadre de droite avec votre souris ou touchez-le pour tester le basculement instantané 0ms.
+                        </p>
+                      </div>
+
+                      <div
+                        onMouseEnter={() => setModalHoverActive(true)}
+                        onMouseLeave={() => setModalHoverActive(false)}
+                        className="relative w-20 h-24 rounded-xl overflow-hidden border-2 border-purple-500/70 cursor-pointer shadow-xl shrink-0 bg-black group"
+                        title="Survolez avec la souris pour tester le changement immédiat"
+                      >
+                        <img
+                          src={
+                            modalHoverActive && artbookForm.alternateCoverUrl
+                              ? artbookForm.alternateCoverUrl
+                              : (artbookForm.coverUrl || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=900&q=80')
+                          }
+                          alt="Aperçu du survol"
+                          className="w-full h-full object-cover transition-none"
+                        />
+                        <div className={`absolute bottom-0 inset-x-0 py-0.5 text-[8px] font-black uppercase text-center tracking-wider transition-colors ${
+                          modalHoverActive && artbookForm.alternateCoverUrl
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-black/80 text-slate-300'
+                        }`}>
+                          {modalHoverActive && artbookForm.alternateCoverUrl ? 'Vue 2 (Survol)' : 'Vue 1 (Défaut)'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: PREVIEW IMAGES */}
               {artbookModalTab === 'preview' && (
                 <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-3 animate-in fade-in duration-150">
                   <div className="text-xs font-bold text-white flex items-center justify-between">
@@ -1480,7 +1873,7 @@ export const AdminArtistsManager: React.FC = () => {
                 </div>
               )}
 
-              {/* TAB 3: DEDICATED ONGLETS LIEN (TÉLÉCHARGEMENT DIRECT) */}
+              {/* TAB 4: DEDICATED ONGLETS LIEN (TÉLÉCHARGEMENT DIRECT) */}
               {artbookModalTab === 'link' && (
                 <div className="space-y-4 animate-in fade-in duration-150">
                   
@@ -1599,8 +1992,12 @@ export const AdminArtistsManager: React.FC = () => {
                   {artbookModalTab !== 'general' && (
                     <button
                       type="button"
-                      onClick={() => setArtbookModalTab(artbookModalTab === 'link' ? 'preview' : 'general')}
-                      className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-slate-300"
+                      onClick={() => {
+                        if (artbookModalTab === 'link') setArtbookModalTab('preview');
+                        else if (artbookModalTab === 'preview') setArtbookModalTab('covers');
+                        else if (artbookModalTab === 'covers') setArtbookModalTab('general');
+                      }}
+                      className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-slate-300 cursor-pointer"
                     >
                       ← Étape précédente
                     </button>
@@ -1608,8 +2005,12 @@ export const AdminArtistsManager: React.FC = () => {
                   {artbookModalTab !== 'link' && (
                     <button
                       type="button"
-                      onClick={() => setArtbookModalTab(artbookModalTab === 'general' ? 'preview' : 'link')}
-                      className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-purple-300"
+                      onClick={() => {
+                        if (artbookModalTab === 'general') setArtbookModalTab('covers');
+                        else if (artbookModalTab === 'covers') setArtbookModalTab('preview');
+                        else if (artbookModalTab === 'preview') setArtbookModalTab('link');
+                      }}
+                      className="px-3 py-2 rounded-xl bg-purple-950/60 hover:bg-purple-900/80 border border-purple-800/50 text-xs font-bold text-purple-200 cursor-pointer"
                     >
                       Étape suivante →
                     </button>

@@ -1,18 +1,22 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ArrowLeft, Check, ShoppingBag } from 'lucide-react';
-import { Artist } from '../../types';
+import { ArrowLeft, Check, ShoppingBag, Download } from 'lucide-react';
+import { Artist, Artbook } from '../../types';
 import { useData } from '../../context/DataContext';
+import { FreeDownloadModal } from './FreeDownloadModal';
+import { PaidPurchaseModal } from './PaidPurchaseModal';
 
 export interface ArtistShopProduct {
   id: string;
   name: string;
   price: string;
   priceNumber: number;
+  isFree: boolean;
   format: 'Vinyle' | 'CD' | 'Artbook' | 'Collector' | string;
   mainImage: string;
   alternateImage: string;
   description: string;
   editionBadge?: string;
+  artbook?: Artbook;
 }
 
 export const ArtistDetailPage: React.FC = () => {
@@ -49,20 +53,24 @@ export const ArtistDetailPage: React.FC = () => {
     // Map each related artbook to a product with its exact 2 cover images chosen in the dashboard
     relatedArtbooks.forEach((ab, idx) => {
       const altUrl = ab.alternateCoverUrl || (idx % 2 === 0 ? defaultAlternate1 : defaultAlternate3);
-      const isFree = ab.isFree;
-      const priceStr = isFree ? 'Gratuit' : `€${(ab.price ? (ab.price / 100).toFixed(2) : '29,99')}`.replace('.', ',');
-      const priceNum = isFree ? 0 : (ab.price ? ab.price / 100 : 29.99);
+      const isFree = Boolean(ab.isFree || !ab.price || ab.price === 0);
+      const priceStr = isFree 
+        ? 'Gratuit' 
+        : (ab.price >= 500 ? `${ab.price.toLocaleString('fr-FR')} FCFA` : `€${(ab.price ? (ab.price / 100).toFixed(2) : '29,99')}`.replace('.', ','));
+      const priceNum = isFree ? 0 : (ab.price || 29.99);
 
       items.push({
         id: ab.id,
         name: `${artistName} - ${ab.title}`,
         price: priceStr,
         priceNumber: priceNum,
+        isFree,
         format: ab.tags?.[0] || 'Artbook & Vinyle',
         mainImage: ab.coverUrl,
         alternateImage: altUrl,
         description: ab.description || `Édition exclusive conçue par ${artistName}. Comprend les illustrations haute définition et planches originales.`,
-        editionBadge: isFree ? 'Téléchargement Libre' : 'Édition Vinyle & Artbook'
+        editionBadge: isFree ? 'Téléchargement Libre' : 'Édition Vinyle & Artbook',
+        artbook: ab
       });
     });
 
@@ -73,6 +81,7 @@ export const ArtistDetailPage: React.FC = () => {
         format: 'Vinyle',
         price: '€29,99',
         priceNumber: 29.99,
+        isFree: false,
         altImg: defaultAlternate1,
         desc: `Édition collector vinyle couleur marbrée (Splatter Toffee) 180g sous pochette gatefold vernie. Comprend les créations visuelles de ${artistName} avec un livret d'art exclusif de 16 pages.`,
         badge: 'Édition Vinyle Marbré'
@@ -82,24 +91,27 @@ export const ArtistDetailPage: React.FC = () => {
         format: 'Vinyle',
         price: '€29,99',
         priceNumber: 29.99,
+        isFree: false,
         altImg: defaultAlternate2,
         desc: `Vinyle noir traditionnel audiophile 180g haute précision. Pochette double cartonnée avec gaufrage doré et gravure réalisée sous la direction artistique de ${artistName}.`,
         badge: 'Vinyle Standard 180g'
       },
       {
-        nameSuffix: '(The Moth Tapes) - CD Deluxe',
-        format: 'CD',
-        price: '€17,99',
-        priceNumber: 17.99,
+        nameSuffix: '(The Moth Tapes) - Recueil Croquis & Carnet',
+        format: 'Artbook',
+        price: 'Gratuit',
+        priceNumber: 0,
+        isFree: true,
         altImg: defaultAlternate3,
-        desc: `Boîtier Digipack deluxe à trois volets avec vernis sélectif. Contient le disque doré sérigraphié et le livret d'illustrations de 24 pages.`,
-        badge: 'CD Digipack Deluxe'
+        desc: `Carnet d'art préparatoire officiel de ${artistName}. Contient les esquisses inédites, études de personnages et notes de production en téléchargement gratuit.`,
+        badge: 'Téléchargement Libre'
       },
       {
         nameSuffix: 'Pt. 2 Deluxe [RSD2026] - Vinyle Édition Limitée',
         format: 'Vinyle',
         price: '€25,99',
         priceNumber: 25.99,
+        isFree: false,
         altImg: defaultAlternate4,
         desc: `Tirage limité pour collectionneurs numéroté à la main avec poster grand format dédicacé par ${artistName}.`,
         badge: 'Tirage Numéroté Limité'
@@ -118,11 +130,13 @@ export const ArtistDetailPage: React.FC = () => {
         name: `${artistName} - ${sourceAb ? sourceAb.title : 'All My Demons Greeting Me As A Friend'} ${template.nameSuffix}`,
         price: template.price,
         priceNumber: template.priceNumber,
+        isFree: template.isFree,
         format: template.format,
         mainImage: mainImg,
         alternateImage: altImg,
         description: template.desc,
-        editionBadge: template.badge
+        editionBadge: template.badge,
+        artbook: sourceAb
       });
       tIdx++;
     }
@@ -133,7 +147,10 @@ export const ArtistDetailPage: React.FC = () => {
   // Active hover/touch product state
   const [activeProductId, setActiveProductId] = useState<string>(() => products[0]?.id || '');
   const [hoveredProductId, setHoveredProductId] = useState<string | null>(null);
-  const [addedToast, setAddedToast] = useState<{ show: boolean; productName: string }>({ show: false, productName: '' });
+
+  // Modals for Free Download and Paid Purchase
+  const [downloadModalArtbook, setDownloadModalArtbook] = useState<Artbook | null>(null);
+  const [purchaseModalArtbook, setPurchaseModalArtbook] = useState<Artbook | null>(null);
 
   // Update active product when artist changes
   useEffect(() => {
@@ -157,12 +174,41 @@ export const ArtistDetailPage: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
   }, [currentArtist?.id]);
 
-  // Handler for adding to cart
-  const handleAddToCart = (product: ArtistShopProduct) => {
-    setAddedToast({ show: true, productName: product.name });
-    setTimeout(() => {
-      setAddedToast({ show: false, productName: '' });
-    }, 3500);
+  // Unified Handler for Product Action: Free Download -> Form, Paid -> Checkout
+  const handleProductAction = (product: ArtistShopProduct) => {
+    const cleanTitle = product.name.replace(`${currentArtist.name} - `, '');
+    const targetArtbook: Artbook = product.artbook || {
+      id: product.id,
+      title: cleanTitle,
+      slug: cleanTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      artistId: currentArtist.id,
+      artistName: currentArtist.name,
+      coverUrl: product.mainImage,
+      alternateCoverUrl: product.alternateImage,
+      description: product.description,
+      price: product.isFree ? 0 : product.priceNumber,
+      isFree: product.isFree,
+      previewImages: [
+        product.mainImage,
+        product.alternateImage,
+        product.mainImage,
+        product.alternateImage,
+        product.mainImage
+      ],
+      downloadUrl: '',
+      downloadsCount: 0,
+      pageCount: 64,
+      releaseYear: new Date().getFullYear(),
+      fileSizeFormatted: '45 Mo',
+      rating: 4.9,
+      tags: [product.format]
+    };
+
+    if (product.isFree) {
+      setDownloadModalArtbook(targetArtbook);
+    } else {
+      setPurchaseModalArtbook(targetArtbook);
+    }
   };
 
   // Find currently featured/spotlighted product
@@ -191,19 +237,6 @@ export const ArtistDetailPage: React.FC = () => {
 
   return (
     <div className="w-full bg-[#000000] text-white">
-
-      {/* Cart Toast Notification */}
-      {addedToast.show && (
-        <div className="fixed bottom-6 right-6 z-50 bg-black text-white px-5 py-3.5 shadow-2xl border border-zinc-700 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4">
-          <div className="w-6 h-6 rounded-full bg-emerald-500 text-black flex items-center justify-center font-bold shrink-0">
-            <Check className="w-3.5 h-3.5 stroke-[3]" />
-          </div>
-          <div className="text-xs">
-            <p className="font-bold">Ajouté au panier !</p>
-            <p className="text-zinc-300 line-clamp-1 max-w-xs">{addedToast.productName}</p>
-          </div>
-        </div>
-      )}
 
       {/* ======================================================== */}
       {/* 1) SECTION BANNIÈRE ARTISTE (Image + Nom + Description)  */}
@@ -314,16 +347,26 @@ export const ArtistDetailPage: React.FC = () => {
                       {product.price}
                     </div>
 
-                    {/* Bouton rectangulaire noir « Ajouter au panier » avec texte blanc */}
+                    {/* Bouton rectangulaire noir « Achetez » (ou « Télécharger » si gratuit) */}
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleAddToCart(product);
+                        handleProductAction(product);
                       }}
-                      className="mt-3.5 px-6 py-2 bg-black hover:bg-zinc-800 active:bg-zinc-900 text-white font-sans text-[12px] font-semibold tracking-normal transition-colors cursor-pointer rounded-none inline-flex items-center justify-center"
+                      className="mt-3.5 px-6 py-2.5 bg-black hover:bg-zinc-800 active:bg-zinc-900 text-white font-sans text-[12px] font-semibold tracking-normal transition-colors cursor-pointer rounded-none inline-flex items-center justify-center gap-1.5"
                     >
-                      Ajouter au panier
+                      {product.isFree ? (
+                        <>
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Télécharger</span>
+                        </>
+                      ) : (
+                        <>
+                          <ShoppingBag className="w-3.5 h-3.5" />
+                          <span>Achetez</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -353,7 +396,7 @@ export const ArtistDetailPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Détails : Titre, Courte description, Prix, Bouton d'achat */}
+                {/* Détails : Titre, Courte description, Prix, Bouton d'achat / téléchargement */}
                 <div className="md:col-span-6 flex flex-col items-center md:items-start text-center md:text-left">
                   {spotlightProduct.editionBadge && (
                     <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-2">
@@ -376,19 +419,20 @@ export const ArtistDetailPage: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-3">
                     <button
                       type="button"
-                      onClick={() => handleAddToCart(spotlightProduct)}
+                      onClick={() => handleProductAction(spotlightProduct)}
                       className="px-8 py-3 bg-black hover:bg-zinc-800 text-white text-xs font-bold uppercase tracking-wider transition-colors rounded-none cursor-pointer flex items-center gap-2"
                     >
-                      <ShoppingBag className="w-3.5 h-3.5" />
-                      <span>Ajouter au panier</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleAddToCart(spotlightProduct)}
-                      className="px-6 py-3 border border-black hover:bg-zinc-100 text-black text-xs font-bold uppercase tracking-wider transition-colors rounded-none cursor-pointer"
-                    >
-                      Acheter maintenant
+                      {spotlightProduct.isFree ? (
+                        <>
+                          <Download className="w-4 h-4" />
+                          <span>Télécharger</span>
+                        </>
+                      ) : (
+                        <>
+                          <ShoppingBag className="w-4 h-4" />
+                          <span>Achetez</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -399,6 +443,24 @@ export const ArtistDetailPage: React.FC = () => {
 
         </div>
       </section>
+
+      {/* Modale de Téléchargement Gratuit (Formulaire Nom, Email, Téléphone -> Téléchargement) */}
+      {downloadModalArtbook && (
+        <FreeDownloadModal
+          artbook={downloadModalArtbook}
+          isOpen={Boolean(downloadModalArtbook)}
+          onClose={() => setDownloadModalArtbook(null)}
+        />
+      )}
+
+      {/* Modale d'Achat Sécurisé (Mobile Money & Carte) */}
+      {purchaseModalArtbook && (
+        <PaidPurchaseModal
+          artbook={purchaseModalArtbook}
+          isOpen={Boolean(purchaseModalArtbook)}
+          onClose={() => setPurchaseModalArtbook(null)}
+        />
+      )}
 
     </div>
   );

@@ -18,7 +18,8 @@ import {
   CheckCircle2,
   ExternalLink,
   Edit3,
-  Palette
+  Palette,
+  RefreshCw
 } from 'lucide-react';
 import { Series } from '../../types';
 import { useData } from '../../context/DataContext';
@@ -30,7 +31,44 @@ interface AdminDashboardProps {
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNewSeriesClick, onEditSeries }) => {
-  const { series, artists, heroSlides, appVersion, analytics, submissions, firebaseConfig, openOeuvrePage, openReader } = useData();
+  const { 
+    series, 
+    artists, 
+    artbooks,
+    heroSlides, 
+    appVersion, 
+    analytics, 
+    submissions, 
+    firebaseConfig, 
+    openOeuvrePage, 
+    openReader,
+    syncAllArtistsToFirestoreNow,
+    syncAllArtbooksToFirestoreNow
+  } = useData();
+
+  const [isSyncingArtistsCloud, setIsSyncingArtistsCloud] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
+
+  const handleQuickSyncArtists = async () => {
+    setIsSyncingArtistsCloud(true);
+    setSyncNotice(null);
+    try {
+      const [resArtists, resArtbooks] = await Promise.all([
+        syncAllArtistsToFirestoreNow(),
+        syncAllArtbooksToFirestoreNow()
+      ]);
+      if (resArtists.success && resArtbooks.success) {
+        setSyncNotice(`Synchronisation réussie ! ${artists.length} artistes et ${artbooks.length} artbooks mis à jour sur tous les appareils.`);
+      } else {
+        setSyncNotice(resArtists.message || resArtbooks.message || 'Synchronisation effectuée.');
+      }
+    } catch (err: any) {
+      setSyncNotice('Erreur lors de la synchronisation des artistes.');
+    } finally {
+      setIsSyncingArtistsCloud(false);
+      setTimeout(() => setSyncNotice(null), 4500);
+    }
+  };
 
   const [searchCatalog, setSearchCatalog] = useState('');
   const [filterGenre, setFilterGenre] = useState('Tous');
@@ -106,6 +144,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
             <span>Artistes & Artbooks ({artists?.length || 0})</span>
           </button>
 
+          {/* BOUTON SYNCHRONISER ARTISTES SUR TOUS LES APPAREILS */}
+          <button
+            type="button"
+            disabled={isSyncingArtistsCloud}
+            onClick={handleQuickSyncArtists}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400/40 text-xs font-bold transition-all shadow-lg shadow-emerald-950/40 cursor-pointer disabled:opacity-50"
+            title="Synchroniser immédiatement tous les artistes sur tous les appareils (PC, Tablettes, Mobiles)"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingArtistsCloud ? 'animate-spin' : ''}`} />
+            <span>{isSyncingArtistsCloud ? 'Sync Artistes...' : 'Sync Artistes Cloud'}</span>
+          </button>
+
           <button
             onClick={() => onNavigate('firebase')}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-semibold transition-colors"
@@ -117,6 +167,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
 
         <div className="absolute top-0 right-0 w-80 h-full bg-amber-500/5 blur-3xl pointer-events-none" />
       </div>
+
+      {/* Sync Status Banner */}
+      {syncNotice && (
+        <div className="p-4 rounded-2xl bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 text-xs sm:text-sm font-bold flex items-center gap-3 shadow-xl animate-in fade-in">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <span>{syncNotice}</span>
+        </div>
+      )}
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
