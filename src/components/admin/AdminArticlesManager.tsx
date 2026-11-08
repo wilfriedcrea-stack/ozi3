@@ -23,16 +23,29 @@ import {
   Italic,
   Sparkles,
   ExternalLink,
-  Layers
+  Layers,
+  RefreshCw,
+  Cloud,
+  AlertCircle
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Article } from '../../types';
 import { uploadToLWS, compressImageToWebP } from '../../services/lwsUploadService';
+import { syncArticleToFirestore, initializeFirebaseCustom } from '../../services/firebaseService';
 import { ArticleContentRenderer } from '../articles/ArticleContentRenderer';
 
 export const AdminArticlesManager: React.FC = () => {
-  const { articles, addArticle, updateArticle, deleteArticle, addLwsFile } = useData();
+  const { 
+    articles, 
+    addArticle, 
+    updateArticle, 
+    deleteArticle, 
+    addLwsFile,
+    syncAllArticlesToFirestoreNow,
+    isSyncingArticlesCloud
+  } = useData();
   const [modalOpen, setModalOpen] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<{ success: boolean; message: string; timestamp: string } | null>(null);
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
 
   const [activeEditorTab, setActiveEditorTab] = useState<'write' | 'preview'>('write');
@@ -252,6 +265,25 @@ export const AdminArticlesManager: React.FC = () => {
     setEditingArticle(null);
   };
 
+  const handleSyncAllArticles = async () => {
+    try {
+      const res = await syncAllArticlesToFirestoreNow();
+      const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setSyncNotice({
+        success: res.success,
+        message: res.message,
+        timestamp: now
+      });
+      setTimeout(() => setSyncNotice(null), 6000);
+    } catch (err: any) {
+      setSyncNotice({
+        success: false,
+        message: err?.message || 'Erreur lors de la synchronisation des articles.',
+        timestamp: new Date().toLocaleTimeString('fr-FR')
+      });
+    }
+  };
+
   return (
     <div className="p-6 sm:p-8 flex flex-col gap-6 max-w-7xl mx-auto w-full">
       {/* Header */}
@@ -265,18 +297,60 @@ export const AdminArticlesManager: React.FC = () => {
             Gestion des Articles ({articles.length})
           </h2>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Les articles créés ou modifiés ici sont immédiatement intégrés dans la page Articles avec disposition dynamique responsive.
+            Les articles créés ou modifiés ici sont immédiatement intégrés dans la page Articles et synchronisés en temps réel sur tous les appareils.
           </p>
         </div>
 
-        <button
-          onClick={handleOpenNew}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-500 hover:to-orange-400 text-white font-bold text-xs shadow-lg shadow-red-500/20 transition-all hover:scale-105 shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Nouvel Article</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            disabled={isSyncingArticlesCloud}
+            onClick={handleSyncAllArticles}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-950/40 transition-all hover:scale-105 shrink-0 cursor-pointer disabled:opacity-50"
+            title="Diffuse immédiatement tous les articles vers Firestore pour qu'ils soient visibles sur tous les appareils"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingArticlesCloud ? 'animate-spin' : ''}`} />
+            <span>{isSyncingArticlesCloud ? 'Mise à jour en cours...' : '⚡ Mettre à jour sur tous les appareils'}</span>
+          </button>
+
+          <button
+            onClick={handleOpenNew}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-500 hover:to-orange-400 text-white font-bold text-xs shadow-lg shadow-red-500/20 transition-all hover:scale-105 shrink-0 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Nouvel Article</span>
+          </button>
+        </div>
       </div>
+
+      {/* Sync Status Notice */}
+      {syncNotice && (
+        <div className={`p-4 rounded-2xl border flex items-center justify-between text-xs animate-in fade-in slide-in-from-top-2 ${
+          syncNotice.success 
+            ? 'bg-emerald-950/50 border-emerald-800 text-emerald-200' 
+            : 'bg-rose-950/50 border-rose-800 text-rose-200'
+        }`}>
+          <div className="flex items-center gap-2.5">
+            {syncNotice.success ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            )}
+            <div>
+              <span className="font-bold">{syncNotice.message}</span>
+              <span className="text-[10px] text-slate-400 block sm:inline sm:ml-2">
+                (Dernière mise à jour à {syncNotice.timestamp})
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => setSyncNotice(null)}
+            className="p-1 rounded text-slate-400 hover:text-white"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Articles Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -351,6 +425,32 @@ export const AdminArticlesManager: React.FC = () => {
                   Par {art.author || 'OZI'}
                 </div>
                 <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={async () => {
+                      try {
+                        const fb = initializeFirebaseCustom();
+                        if (fb.db) {
+                          await syncArticleToFirestore(fb.db, art);
+                          setSyncNotice({
+                            success: true,
+                            message: `Article "${art.title}" synchronisé sur tous les appareils !`,
+                            timestamp: new Date().toLocaleTimeString('fr-FR')
+                          });
+                          setTimeout(() => setSyncNotice(null), 4000);
+                        }
+                      } catch {
+                        setSyncNotice({
+                          success: false,
+                          message: `Erreur lors de la synchronisation de "${art.title}"`,
+                          timestamp: new Date().toLocaleTimeString('fr-FR')
+                        });
+                      }
+                    }}
+                    className="p-1.5 rounded-lg bg-emerald-950/50 hover:bg-emerald-900/70 text-emerald-300 border border-emerald-800/50 transition-colors cursor-pointer"
+                    title="Mettre à jour cet article sur tous les appareils"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </button>
                   <button
                     onClick={() => handleOpenEdit(art)}
                     className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"

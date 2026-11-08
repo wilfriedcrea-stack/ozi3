@@ -47,7 +47,10 @@ export const AdminFirebaseSync: React.FC = () => {
     syncAllArtistsToFirestoreNow,
     syncAllArtbooksToFirestoreNow,
     isSyncingArtists,
-    isSyncingArtbooks
+    isSyncingArtbooks,
+    articles,
+    syncAllArticlesToFirestoreNow,
+    isSyncingArticlesCloud
   } = useData();
 
   const [testing, setTesting] = useState(false);
@@ -156,6 +159,13 @@ export const AdminFirebaseSync: React.FC = () => {
     setTimeout(() => setSyncMessage(null), 5000);
   };
 
+  const handleSyncArticles = async () => {
+    setSyncMessage('Synchronisation des articles vers Firestore...');
+    const res = await syncAllArticlesToFirestoreNow();
+    setSyncMessage(res.message);
+    setTimeout(() => setSyncMessage(null), 5000);
+  };
+
   const handleExportBackup = () => {
     const backupData = {
       exportDate: new Date().toISOString(),
@@ -165,6 +175,7 @@ export const AdminFirebaseSync: React.FC = () => {
       artbooks,
       artbookDownloads,
       artbookPurchases,
+      articles,
       teasers,
       pressReleases,
       appVersion,

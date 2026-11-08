@@ -144,16 +144,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
             <span>Artistes & Artbooks ({artists?.length || 0})</span>
           </button>
 
-          {/* BOUTON SYNCHRONISER ARTISTES SUR TOUS LES APPAREILS */}
+          {/* BOUTON METTRE À JOUR ARTISTES SUR TOUS LES APPAREILS */}
           <button
             type="button"
             disabled={isSyncingArtistsCloud}
             onClick={handleQuickSyncArtists}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400/40 text-xs font-bold transition-all shadow-lg shadow-emerald-950/40 cursor-pointer disabled:opacity-50"
-            title="Synchroniser immédiatement tous les artistes sur tous les appareils (PC, Tablettes, Mobiles)"
+            title="Mettre à jour immédiatement tous les artistes sur tous les appareils (PC, Tablettes, Mobiles)"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSyncingArtistsCloud ? 'animate-spin' : ''}`} />
-            <span>{isSyncingArtistsCloud ? 'Sync Artistes...' : 'Sync Artistes Cloud'}</span>
+            <span>{isSyncingArtistsCloud ? 'Mise à jour...' : '⚡ Mettre à jour Artistes'}</span>
           </button>
 
           <button

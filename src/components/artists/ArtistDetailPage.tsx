@@ -5,6 +5,8 @@ import { useData } from '../../context/DataContext';
 import { FreeDownloadModal } from './FreeDownloadModal';
 import { PaidPurchaseModal } from './PaidPurchaseModal';
 
+import { normalizeImageUrl } from '../../utils/imageUtils';
+
 export interface ArtistShopProduct {
   id: string;
   name: string;
@@ -44,9 +46,7 @@ export const ArtistDetailPage: React.FC = () => {
     );
 
     const defaultAlternate1 = 'https://images.unsplash.com/photo-1603048588665-791ca8aea617?auto=format&fit=crop&w=900&q=80';
-    const defaultAlternate2 = 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=900&q=80';
     const defaultAlternate3 = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=900&q=80';
-    const defaultAlternate4 = 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=900&q=80';
 
     const items: ArtistShopProduct[] = [];
 
@@ -66,80 +66,13 @@ export const ArtistDetailPage: React.FC = () => {
         priceNumber: priceNum,
         isFree,
         format: ab.tags?.[0] || 'Artbook & Vinyle',
-        mainImage: ab.coverUrl,
-        alternateImage: altUrl,
+        mainImage: normalizeImageUrl(ab.coverUrl),
+        alternateImage: normalizeImageUrl(altUrl),
         description: ab.description || `Édition exclusive conçue par ${artistName}. Comprend les illustrations haute définition et planches originales.`,
         editionBadge: isFree ? 'Téléchargement Libre' : 'Édition Vinyle & Artbook',
         artbook: ab
       });
     });
-
-    // Supplement with curated vinyl/CD editions if fewer than 4 to preserve the 4-column boutique grid
-    const fallbackTemplates = [
-      {
-        nameSuffix: '(The Moth Tapes) - Vinyle Splatter Toffee',
-        format: 'Vinyle',
-        price: '€29,99',
-        priceNumber: 29.99,
-        isFree: false,
-        altImg: defaultAlternate1,
-        desc: `Édition collector vinyle couleur marbrée (Splatter Toffee) 180g sous pochette gatefold vernie. Comprend les créations visuelles de ${artistName} avec un livret d'art exclusif de 16 pages.`,
-        badge: 'Édition Vinyle Marbré'
-      },
-      {
-        nameSuffix: '(The Moth Tapes) - Vinyle Standard',
-        format: 'Vinyle',
-        price: '€29,99',
-        priceNumber: 29.99,
-        isFree: false,
-        altImg: defaultAlternate2,
-        desc: `Vinyle noir traditionnel audiophile 180g haute précision. Pochette double cartonnée avec gaufrage doré et gravure réalisée sous la direction artistique de ${artistName}.`,
-        badge: 'Vinyle Standard 180g'
-      },
-      {
-        nameSuffix: '(The Moth Tapes) - Recueil Croquis & Carnet',
-        format: 'Artbook',
-        price: 'Gratuit',
-        priceNumber: 0,
-        isFree: true,
-        altImg: defaultAlternate3,
-        desc: `Carnet d'art préparatoire officiel de ${artistName}. Contient les esquisses inédites, études de personnages et notes de production en téléchargement gratuit.`,
-        badge: 'Téléchargement Libre'
-      },
-      {
-        nameSuffix: 'Pt. 2 Deluxe [RSD2026] - Vinyle Édition Limitée',
-        format: 'Vinyle',
-        price: '€25,99',
-        priceNumber: 25.99,
-        isFree: false,
-        altImg: defaultAlternate4,
-        desc: `Tirage limité pour collectionneurs numéroté à la main avec poster grand format dédicacé par ${artistName}.`,
-        badge: 'Tirage Numéroté Limité'
-      }
-    ];
-
-    let tIdx = 0;
-    while (items.length < 4) {
-      const template = fallbackTemplates[tIdx % fallbackTemplates.length];
-      const sourceAb = relatedArtbooks[tIdx % (relatedArtbooks.length || 1)];
-      const mainImg = sourceAb?.coverUrl || currentArtist.photoUrl || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=900&q=80';
-      const altImg = sourceAb?.alternateCoverUrl || template.altImg;
-
-      items.push({
-        id: `${currentArtist.id}-prod-${items.length + 1}`,
-        name: `${artistName} - ${sourceAb ? sourceAb.title : 'All My Demons Greeting Me As A Friend'} ${template.nameSuffix}`,
-        price: template.price,
-        priceNumber: template.priceNumber,
-        isFree: template.isFree,
-        format: template.format,
-        mainImage: mainImg,
-        alternateImage: altImg,
-        description: template.desc,
-        editionBadge: template.badge,
-        artbook: sourceAb
-      });
-      tIdx++;
-    }
 
     return items;
   }, [currentArtist, artbooks]);
@@ -233,7 +166,7 @@ export const ArtistDetailPage: React.FC = () => {
   }
 
   // Fallback banner image if artist has none
-  const bannerImage = currentArtist.bannerUrl || '/assets/aistudio/B_b43464f2.png';
+  const bannerImage = normalizeImageUrl(currentArtist.bannerUrl, '/assets/aistudio/B_b43464f2.png');
 
   return (
     <div className="w-full bg-[#000000] text-white">
@@ -283,8 +216,14 @@ export const ArtistDetailPage: React.FC = () => {
       <section className="w-full bg-[#FFFFFF] text-[#000000] py-14 sm:py-20 lg:py-24">
         <div className="w-full max-w-[1500px] mx-auto px-4 sm:px-8 lg:px-12">
           
-          {/* Grille de 4 produits par ligne sur ordinateur, 2 sur tablette, 1 sur mobile */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-8 lg:gap-x-10 gap-y-14">
+          {products.length === 0 ? (
+            <div className="py-16 text-center text-zinc-500">
+              <p className="text-base font-medium">Aucune œuvre ou artbook publié pour cet artiste pour le moment.</p>
+              <p className="text-xs text-zinc-400 mt-1">Les nouvelles publications apparaîtront ici dès leur mise en ligne.</p>
+            </div>
+          ) : (
+            /* Grille de 4 produits par ligne sur ordinateur, 2 sur tablette, 1 sur mobile */
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-8 lg:gap-x-10 gap-y-14">
             {products.map((product) => {
               const isHovered = hoveredProductId === product.id;
               const showAlternate = isHovered;
@@ -373,6 +312,7 @@ export const ArtistDetailPage: React.FC = () => {
               );
             })}
           </div>
+        )}
 
           {/* ======================================================== */}
           {/* SECONDE SECTION : PRÉSENTATION SPOTLIGHT DU PRODUIT     */}

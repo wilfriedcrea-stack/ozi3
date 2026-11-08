@@ -70,10 +70,22 @@ import {
   deleteSeriesFromFirestore, 
   syncAppVersionToFirestore, 
   syncPressToFirestore, 
+  deletePressFromFirestore,
+  fetchPressFromFirestore,
+  subscribeToFirestorePress,
   syncTeaserToFirestore, 
+  deleteTeaserFromFirestore,
+  fetchTeasersFromFirestore,
+  subscribeToFirestoreTeasers,
+  syncMonetizationToFirestore,
+  fetchMonetizationFromFirestore,
+  subscribeToFirestoreMonetization,
   syncSubmissionToFirestore,
   syncArticleToFirestore,
   deleteArticleFromFirestore,
+  fetchArticlesFromFirestore,
+  subscribeToFirestoreArticles,
+  syncAllArticlesToFirestore,
   subscribeToFirestoreSeries,
   fetchFirestoreSeriesNow,
   subscribeToFirestoreAppVersion,
@@ -296,6 +308,10 @@ interface DataContextType {
   isSyncingArtists: boolean;
   isSyncingArtbooks: boolean;
 
+  // Articles Cloud Synchronization (Multi-devices)
+  syncAllArticlesToFirestoreNow: () => Promise<{ success: boolean; message: string; count?: number }>;
+  isSyncingArticlesCloud: boolean;
+
   // Interactions
   likeSeries: (seriesId: string) => void;
   likeChapter: (seriesId: string, chapterId: string) => void;
@@ -459,25 +475,53 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const saved = localStorage.getItem(STORAGE_KEYS.ARTISTS);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= INITIAL_ARTISTS.length) {
-          return parsed;
+        if (Array.isArray(parsed)) {
+          const DEMO_IDS = new Set([
+            'artist-kofi-mensah',
+            'artist-tidiane-traore',
+            'artist-nathalie-kouame',
+            'artist-cherif-keita',
+            'artist-fatou-sow',
+            'artist-emeka-okafor',
+            'artist-aissata-diallo',
+            'artist-malick-sidibe-jr',
+            'artist-zainab-al-mansoor',
+            'artist-baba-kante'
+          ]);
+          return parsed.filter((a: any) => a && a.id && !DEMO_IDS.has(a.id));
         }
-        const existingIds = new Set(parsed.map((a: any) => a.id));
-        const merged = [...parsed, ...INITIAL_ARTISTS.filter(a => !existingIds.has(a.id))];
-        return merged;
       }
-      return INITIAL_ARTISTS;
+      return [];
     } catch {
-      return INITIAL_ARTISTS;
+      return [];
     }
   });
 
   const [artbooks, setArtbooks] = useState<Artbook[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.ARTBOOKS);
-      return saved ? JSON.parse(saved) : INITIAL_ARTBOOKS;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const DEMO_AB_IDS = new Set([
+            'artbook-kemet-celeste',
+            'artbook-gardiens-nil',
+            'artbook-neo-abidjan-bible',
+            'artbook-abidjan-neon-sketches',
+            'artbook-reine-ebene-royaume',
+            'artbook-soundiata-chroniques',
+            'artbook-dakar-rouge-artbook',
+            'artbook-lagos-mecha-design',
+            'artbook-mami-wata-art',
+            'artbook-sahel-souvenirs',
+            'artbook-dakar-racers-garage'
+          ]);
+          return parsed.filter((ab: any) => ab && ab.id && !DEMO_AB_IDS.has(ab.id));
+        }
+      }
+      return [];
     } catch {
-      return INITIAL_ARTBOOKS;
+      return [];
     }
   });
 
@@ -863,33 +907,58 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Cross-device real-time synchronization for Artists & Artbooks via Firestore
   useEffect(() => {
-    // 1. Initial baseline fetch & auto-seed if cloud database is empty
+    const DEMO_ARTIST_IDS = new Set([
+      'artist-kofi-mensah',
+      'artist-tidiane-traore',
+      'artist-nathalie-kouame',
+      'artist-cherif-keita',
+      'artist-fatou-sow',
+      'artist-emeka-okafor',
+      'artist-aissata-diallo',
+      'artist-malick-sidibe-jr',
+      'artist-zainab-al-mansoor',
+      'artist-baba-kante'
+    ]);
+    const DEMO_AB_IDS = new Set([
+      'artbook-kemet-celeste',
+      'artbook-gardiens-nil',
+      'artbook-neo-abidjan-bible',
+      'artbook-abidjan-neon-sketches',
+      'artbook-reine-ebene-royaume',
+      'artbook-soundiata-chroniques',
+      'artbook-dakar-rouge-artbook',
+      'artbook-lagos-mecha-design',
+      'artbook-mami-wata-art',
+      'artbook-sahel-souvenirs',
+      'artbook-dakar-racers-garage'
+    ]);
+
+    // 1. Initial baseline fetch from Firestore
     const initRemoteArtistsAndArtbooks = async () => {
       try {
-        const fb = initializeFirebaseCustom();
         const [remoteArtists, remoteArtbooks] = await Promise.all([
           fetchArtistsFromFirestore(),
           fetchArtbooksFromFirestore()
         ]);
 
-        if (remoteArtists && remoteArtists.length > 0) {
-          setArtists(remoteArtists);
-          try {
-            localStorage.setItem(STORAGE_KEYS.ARTISTS, JSON.stringify(remoteArtists));
-          } catch {}
-        } else if (fb.db) {
-          // Initialize remote collection with baseline artists
-          syncAllArtistsToFirestore(fb.db, INITIAL_ARTISTS).catch(() => {});
+        if (remoteArtists) {
+          const userOnly = remoteArtists.filter(a => a && a.id && !DEMO_ARTIST_IDS.has(a.id));
+          if (userOnly.length > 0) {
+            setArtists(userOnly);
+            try {
+              localStorage.setItem(STORAGE_KEYS.ARTISTS, JSON.stringify(userOnly));
+            } catch {}
+          }
         }
 
-        if (remoteArtbooks && remoteArtbooks.length > 0) {
-          setArtbooks(remoteArtbooks);
-          try {
-            localStorage.setItem(STORAGE_KEYS.ARTBOOKS, JSON.stringify(remoteArtbooks));
-          } catch {}
-        } else if (fb.db) {
-          // Initialize remote collection with baseline artbooks
-          syncAllArtbooksToFirestore(fb.db, INITIAL_ARTBOOKS).catch(() => {});
+        if (remoteArtbooks) {
+          const userOnlyAb = remoteArtbooks.filter(ab => ab && ab.id && !DEMO_AB_IDS.has(ab.id));
+          if (userOnlyAb.length > 0) {
+            setArtbooks(userOnlyAb);
+            try {
+              localStorage.setItem(STORAGE_KEYS.ARTBOOKS, JSON.stringify(userOnlyAb));
+            } catch {}
+          }
         }
       } catch (err) {
         console.warn('Initial artists/artbooks Firestore sync notice:', err);
@@ -899,19 +968,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 2. Persistent real-time onSnapshot listener: immediately updates state on ALL devices
     const unsubscribeArtists = subscribeToFirestoreArtists((liveArtists) => {
-      if (liveArtists && liveArtists.length > 0) {
-        setArtists(liveArtists);
+      if (liveArtists) {
+        const userOnly = liveArtists.filter(a => a && a.id && !DEMO_ARTIST_IDS.has(a.id));
+        setArtists(userOnly);
         try {
-          localStorage.setItem(STORAGE_KEYS.ARTISTS, JSON.stringify(liveArtists));
+          localStorage.setItem(STORAGE_KEYS.ARTISTS, JSON.stringify(userOnly));
         } catch {}
       }
     });
 
     const unsubscribeArtbooks = subscribeToFirestoreArtbooks((liveArtbooks) => {
-      if (liveArtbooks && liveArtbooks.length > 0) {
-        setArtbooks(liveArtbooks);
+      if (liveArtbooks) {
+        const userOnlyAb = liveArtbooks.filter(ab => ab && ab.id && !DEMO_AB_IDS.has(ab.id));
+        setArtbooks(userOnlyAb);
         try {
-          localStorage.setItem(STORAGE_KEYS.ARTBOOKS, JSON.stringify(liveArtbooks));
+          localStorage.setItem(STORAGE_KEYS.ARTBOOKS, JSON.stringify(userOnlyAb));
         } catch {}
       }
     });
@@ -1446,6 +1517,37 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
           }
         }
+        const remoteArticles = await fetchArticlesFromFirestore();
+        if (remoteArticles && remoteArticles.length > 0) {
+          setArticles(remoteArticles);
+          try {
+            localStorage.setItem(STORAGE_KEYS.ARTICLES, JSON.stringify(remoteArticles));
+          } catch {}
+        }
+
+        const remoteTeasers = await fetchTeasersFromFirestore();
+        if (remoteTeasers && remoteTeasers.length > 0) {
+          setTeasers(remoteTeasers);
+          try {
+            localStorage.setItem(STORAGE_KEYS.TEASERS, JSON.stringify(remoteTeasers));
+          } catch {}
+        }
+
+        const remotePress = await fetchPressFromFirestore();
+        if (remotePress && remotePress.length > 0) {
+          setPressReleases(remotePress);
+          try {
+            localStorage.setItem(STORAGE_KEYS.PRESS, JSON.stringify(remotePress));
+          } catch {}
+        }
+
+        const remoteMonetization = await fetchMonetizationFromFirestore();
+        if (remoteMonetization) {
+          setMonetization(remoteMonetization);
+          try {
+            localStorage.setItem(STORAGE_KEYS.MONETIZATION, JSON.stringify(remoteMonetization));
+          } catch {}
+        }
       } catch (err) {
         console.warn('Initial Firestore fetch note:', err);
       }
@@ -1453,6 +1555,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchInitial();
 
     // 2. Real-time persistent onSnapshot listener
+    const unsubscribeArticles = subscribeToFirestoreArticles((remoteArticles) => {
+      if (remoteArticles && remoteArticles.length > 0) {
+        setArticles(remoteArticles);
+        try {
+          localStorage.setItem(STORAGE_KEYS.ARTICLES, JSON.stringify(remoteArticles));
+        } catch {}
+      }
+    });
+
     const unsubscribeSeries = subscribeToFirestoreSeries((firestoreSeries) => {
       if (firestoreSeries && firestoreSeries.length > 0) {
         setSeries(() => {
@@ -1498,11 +1609,42 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
+    const unsubscribeTeasers = subscribeToFirestoreTeasers((remoteTeasers) => {
+      if (remoteTeasers && remoteTeasers.length > 0) {
+        setTeasers(remoteTeasers);
+        try {
+          localStorage.setItem(STORAGE_KEYS.TEASERS, JSON.stringify(remoteTeasers));
+        } catch {}
+      }
+    });
+
+    const unsubscribePress = subscribeToFirestorePress((remotePress) => {
+      if (remotePress && remotePress.length > 0) {
+        setPressReleases(remotePress);
+        try {
+          localStorage.setItem(STORAGE_KEYS.PRESS, JSON.stringify(remotePress));
+        } catch {}
+      }
+    });
+
+    const unsubscribeMonetization = subscribeToFirestoreMonetization((remoteMonetization) => {
+      if (remoteMonetization) {
+        setMonetization(remoteMonetization);
+        try {
+          localStorage.setItem(STORAGE_KEYS.MONETIZATION, JSON.stringify(remoteMonetization));
+        } catch {}
+      }
+    });
+
     return () => {
+      unsubscribeArticles();
       unsubscribeSeries();
       unsubscribeVersion();
       unsubscribeBanner();
       unsubscribeHeroSlides();
+      unsubscribeTeasers();
+      unsubscribePress();
+      unsubscribeMonetization();
     };
   }, []);
 
@@ -2072,7 +2214,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // Teasers CRUD
-  const addTeaser = useCallback((teaserData: Omit<Teaser, 'id' | 'viewsCount' | 'releaseDate'>) => {
+  const addTeaser = useCallback(async (teaserData: Omit<Teaser, 'id' | 'viewsCount' | 'releaseDate'>) => {
     const newTeaser: Teaser = {
       ...teaserData,
       id: `teaser-${Date.now()}`,
@@ -2081,36 +2223,52 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setTeasers(prev => [newTeaser, ...prev]);
 
-    if (firebaseConfig.isConnected) {
-      const fb = initializeFirebaseCustom({ projectId: firebaseConfig.projectId, databaseId: firebaseConfig.databaseId });
-      if (fb.success && fb.db) {
-        syncTeaserToFirestore(fb.db, newTeaser);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncTeaserToFirestore(fb.db, newTeaser);
       }
+    } catch (err) {
+      console.warn('Sync teaser to Firestore warning:', err);
     }
-  }, [firebaseConfig]);
+  }, []);
 
-  const updateTeaser = useCallback((id: string, updates: Partial<Teaser>) => {
+  const updateTeaser = useCallback(async (id: string, updates: Partial<Teaser>) => {
+    let updatedTeaser: Teaser | null = null;
     setTeasers(prev => prev.map(t => {
       if (t.id === id) {
-        const updated = { ...t, ...updates };
-        if (firebaseConfig.isConnected) {
-          const fb = initializeFirebaseCustom({ projectId: firebaseConfig.projectId, databaseId: firebaseConfig.databaseId });
-          if (fb.success && fb.db) {
-            syncTeaserToFirestore(fb.db, updated);
-          }
-        }
-        return updated;
+        updatedTeaser = { ...t, ...updates };
+        return updatedTeaser;
       }
       return t;
     }));
-  }, [firebaseConfig]);
 
-  const deleteTeaser = useCallback((id: string) => {
+    if (updatedTeaser) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncTeaserToFirestore(fb.db, updatedTeaser);
+        }
+      } catch (err) {
+        console.warn('Sync update teaser to Firestore warning:', err);
+      }
+    }
+  }, []);
+
+  const deleteTeaser = useCallback(async (id: string) => {
     setTeasers(prev => prev.filter(t => t.id !== id));
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await deleteTeaserFromFirestore(fb.db, id);
+      }
+    } catch (err) {
+      console.warn('Delete teaser from Firestore warning:', err);
+    }
   }, []);
 
   // Press CRUD
-  const addPressRelease = useCallback((pressData: Omit<PressRelease, 'id' | 'slug' | 'date'>) => {
+  const addPressRelease = useCallback(async (pressData: Omit<PressRelease, 'id' | 'slug' | 'date'>) => {
     const slug = pressData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     const newPress: PressRelease = {
       ...pressData,
@@ -2120,36 +2278,52 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setPressReleases(prev => [newPress, ...prev]);
 
-    if (firebaseConfig.isConnected) {
-      const fb = initializeFirebaseCustom({ projectId: firebaseConfig.projectId, databaseId: firebaseConfig.databaseId });
-      if (fb.success && fb.db) {
-        syncPressToFirestore(fb.db, newPress);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncPressToFirestore(fb.db, newPress);
       }
+    } catch (err) {
+      console.warn('Sync press release to Firestore warning:', err);
     }
-  }, [firebaseConfig]);
+  }, []);
 
-  const updatePressRelease = useCallback((id: string, updates: Partial<PressRelease>) => {
+  const updatePressRelease = useCallback(async (id: string, updates: Partial<PressRelease>) => {
+    let updatedPress: PressRelease | null = null;
     setPressReleases(prev => prev.map(p => {
       if (p.id === id) {
-        const updated = { ...p, ...updates };
-        if (firebaseConfig.isConnected) {
-          const fb = initializeFirebaseCustom({ projectId: firebaseConfig.projectId, databaseId: firebaseConfig.databaseId });
-          if (fb.success && fb.db) {
-            syncPressToFirestore(fb.db, updated);
-          }
-        }
-        return updated;
+        updatedPress = { ...p, ...updates };
+        return updatedPress;
       }
       return p;
     }));
-  }, [firebaseConfig]);
 
-  const deletePressRelease = useCallback((id: string) => {
+    if (updatedPress) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncPressToFirestore(fb.db, updatedPress);
+        }
+      } catch (err) {
+        console.warn('Sync update press release to Firestore warning:', err);
+      }
+    }
+  }, []);
+
+  const deletePressRelease = useCallback(async (id: string) => {
     setPressReleases(prev => prev.filter(p => p.id !== id));
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await deletePressFromFirestore(fb.db, id);
+      }
+    } catch (err) {
+      console.warn('Delete press release from Firestore warning:', err);
+    }
   }, []);
 
   // Articles CRUD
-  const addArticle = useCallback((articleData: Omit<Article, 'id' | 'slug'>) => {
+  const addArticle = useCallback(async (articleData: Omit<Article, 'id' | 'slug'>) => {
     const id = `art-${Date.now()}`;
     const slug = articleData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     const newArticle: Article = {
@@ -2161,53 +2335,68 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setArticles(prev => [newArticle, ...prev]);
 
-    if (firebaseConfig.isConnected) {
-      const fb = initializeFirebaseCustom({ projectId: firebaseConfig.projectId, databaseId: firebaseConfig.databaseId });
-      if (fb.success && fb.db) {
-        syncArticleToFirestore(fb.db, newArticle);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncArticleToFirestore(fb.db, newArticle);
       }
+    } catch (err) {
+      console.warn('Sync new article to Firestore error:', err);
     }
-  }, [firebaseConfig]);
+  }, []);
 
-  const updateArticle = useCallback((id: string, updates: Partial<Article>) => {
+  const updateArticle = useCallback(async (id: string, updates: Partial<Article>) => {
+    let updatedArticle: Article | null = null;
     setArticles(prev => prev.map(a => {
       if (a.id === id) {
-        const updated = { ...a, ...updates };
-        if (firebaseConfig.isConnected) {
-          const fb = initializeFirebaseCustom({ projectId: firebaseConfig.projectId, databaseId: firebaseConfig.databaseId });
-          if (fb.success && fb.db) {
-            syncArticleToFirestore(fb.db, updated);
-          }
-        }
-        return updated;
+        updatedArticle = { ...a, ...updates };
+        return updatedArticle;
       }
       return a;
     }));
-  }, [firebaseConfig]);
-
-  const deleteArticle = useCallback((id: string) => {
-    setArticles(prev => prev.filter(a => a.id !== id));
-    if (firebaseConfig.isConnected) {
-      const fb = initializeFirebaseCustom({ projectId: firebaseConfig.projectId, databaseId: firebaseConfig.databaseId });
-      if (fb.success && fb.db) {
-        deleteArticleFromFirestore(fb.db, id);
+    if (updatedArticle) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncArticleToFirestore(fb.db, updatedArticle);
+        }
+      } catch (err) {
+        console.warn('Sync update article error:', err);
       }
     }
-  }, [firebaseConfig]);
+  }, []);
+
+  const deleteArticle = useCallback(async (id: string) => {
+    setArticles(prev => prev.filter(a => a.id !== id));
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await deleteArticleFromFirestore(fb.db, id);
+      }
+    } catch (err) {
+      console.warn('Delete article error:', err);
+    }
+  }, []);
 
   // Version Info
-  const updateAppVersion = useCallback((updates: Partial<AppVersionInfo>) => {
+  const updateAppVersion = useCallback(async (updates: Partial<AppVersionInfo>) => {
+    let targetUpdated: AppVersionInfo | null = null;
     setAppVersion(prev => {
-      const updated = { ...prev, ...updates };
-      if (firebaseConfig.isConnected) {
-        const fb = initializeFirebaseCustom({ projectId: firebaseConfig.projectId, databaseId: firebaseConfig.databaseId });
-        if (fb.success && fb.db) {
-          syncAppVersionToFirestore(fb.db, updated);
-        }
-      }
-      return updated;
+      targetUpdated = { ...prev, ...updates };
+      return targetUpdated;
     });
-  }, [firebaseConfig]);
+
+    if (targetUpdated) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncAppVersionToFirestore(fb.db, targetUpdated);
+        }
+      } catch (err) {
+        console.warn('Sync app version warning:', err);
+      }
+    }
+  }, []);
 
   const recordApkDownload = useCallback(() => {
     setAppVersion(prev => ({ ...prev, downloadsCount: prev.downloadsCount + 1 }));
@@ -2224,14 +2413,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setSubmissions(prev => [newSub, ...prev]);
 
-    if (firebaseConfig.isConnected) {
-      const fb = initializeFirebaseCustom({ projectId: firebaseConfig.projectId, databaseId: firebaseConfig.databaseId });
-      if (fb.success && fb.db) {
-        syncSubmissionToFirestore(fb.db, newSub);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncSubmissionToFirestore(fb.db, newSub);
       }
+    } catch (err) {
+      console.warn('Sync creator submission warning:', err);
     }
     return true;
-  }, [firebaseConfig]);
+  }, []);
 
   const updateSubmissionStatus = useCallback((id: string, status: CreatorSubmission['status'], notes?: string) => {
     setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status, notes: notes !== undefined ? notes : s.notes } : s));
@@ -2294,61 +2485,131 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [addModerationLog, adminUser.email]);
 
   // Monetization Actions
-  const updateMonetizationSettings = useCallback((updates: Partial<MonetizationSettings>) => {
-    setMonetization(prev => ({ ...prev, ...updates }));
+  const updateMonetizationSettings = useCallback(async (updates: Partial<MonetizationSettings>) => {
+    let updatedMonetization: MonetizationSettings | null = null;
+    setMonetization(prev => {
+      updatedMonetization = { ...prev, ...updates };
+      return updatedMonetization;
+    });
     addModerationLog(
       'Mise à jour Paramètres Monétisation',
       'monetization',
       'settings',
       `Modification des taux et paramètres de monétisation par ${adminUser.email}`
     );
+    if (updatedMonetization) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncMonetizationToFirestore(fb.db, updatedMonetization);
+        }
+      } catch (err) {
+        console.warn('Sync monetization settings to Firestore warning:', err);
+      }
+    }
   }, [addModerationLog, adminUser.email]);
 
-  const updateCoinPack = useCallback((packId: string, updates: Partial<CoinPack>) => {
-    setMonetization(prev => ({
-      ...prev,
-      coinPacks: prev.coinPacks.map(p => p.id === packId ? { ...p, ...updates } : p)
-    }));
+  const updateCoinPack = useCallback(async (packId: string, updates: Partial<CoinPack>) => {
+    let updatedMonetization: MonetizationSettings | null = null;
+    setMonetization(prev => {
+      updatedMonetization = {
+        ...prev,
+        coinPacks: prev.coinPacks.map(p => p.id === packId ? { ...p, ...updates } : p)
+      };
+      return updatedMonetization;
+    });
     addModerationLog(
       'Mise à jour Pack de Coins',
       'monetization',
       packId,
       `Ajustement du pack de coins ${packId}`
     );
+    if (updatedMonetization) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncMonetizationToFirestore(fb.db, updatedMonetization);
+        }
+      } catch (err) {
+        console.warn('Sync update coin pack to Firestore warning:', err);
+      }
+    }
   }, [addModerationLog]);
 
-  const addCoinPack = useCallback((pack: Omit<CoinPack, 'id'>) => {
+  const addCoinPack = useCallback(async (pack: Omit<CoinPack, 'id'>) => {
     const newPack: CoinPack = {
       ...pack,
       id: `pack-${Date.now()}`
     };
-    setMonetization(prev => ({
-      ...prev,
-      coinPacks: [...prev.coinPacks, newPack]
-    }));
+    let updatedMonetization: MonetizationSettings | null = null;
+    setMonetization(prev => {
+      updatedMonetization = {
+        ...prev,
+        coinPacks: [...prev.coinPacks, newPack]
+      };
+      return updatedMonetization;
+    });
     addModerationLog(
       'Ajout Pack de Coins',
       'monetization',
       newPack.id,
       `Création du pack ${newPack.name} (${newPack.coins} Coins à ${newPack.priceXof} FCFA)`
     );
+    if (updatedMonetization) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncMonetizationToFirestore(fb.db, updatedMonetization);
+        }
+      } catch (err) {
+        console.warn('Sync add coin pack to Firestore warning:', err);
+      }
+    }
   }, [addModerationLog]);
 
-  const deleteCoinPack = useCallback((packId: string) => {
-    setMonetization(prev => ({
-      ...prev,
-      coinPacks: prev.coinPacks.filter(p => p.id !== packId)
-    }));
+  const deleteCoinPack = useCallback(async (packId: string) => {
+    let updatedMonetization: MonetizationSettings | null = null;
+    setMonetization(prev => {
+      updatedMonetization = {
+        ...prev,
+        coinPacks: prev.coinPacks.filter(p => p.id !== packId)
+      };
+      return updatedMonetization;
+    });
     addModerationLog('Suppression Pack de Coins', 'monetization', packId, `Suppression du pack ${packId}`);
+    if (updatedMonetization) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncMonetizationToFirestore(fb.db, updatedMonetization);
+        }
+      } catch (err) {
+        console.warn('Sync delete coin pack to Firestore warning:', err);
+      }
+    }
   }, [addModerationLog]);
 
-  const togglePaymentGateway = useCallback((gatewayId: string) => {
-    setMonetization(prev => ({
-      ...prev,
-      supportedPaymentGateways: prev.supportedPaymentGateways.map(g => 
-        g.id === gatewayId ? { ...g, isActive: !g.isActive } : g
-      )
-    }));
+  const togglePaymentGateway = useCallback(async (gatewayId: string) => {
+    let updatedMonetization: MonetizationSettings | null = null;
+    setMonetization(prev => {
+      updatedMonetization = {
+        ...prev,
+        supportedPaymentGateways: prev.supportedPaymentGateways.map(g => 
+          g.id === gatewayId ? { ...g, isActive: !g.isActive } : g
+        )
+      };
+      return updatedMonetization;
+    });
+    if (updatedMonetization) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncMonetizationToFirestore(fb.db, updatedMonetization);
+        }
+      } catch (err) {
+        console.warn('Sync payment gateway to Firestore warning:', err);
+      }
+    }
   }, []);
 
   const approvePayout = useCallback((payoutId: string) => {
@@ -2595,7 +2856,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           deletedSeriesIds: currentDeleted
         });
 
-        await Promise.allSettled(articles.map(a => syncArticleToFirestore(fb.db!, a)));
+        await syncAllArticlesToFirestore(fb.db, articles);
         await syncAppVersionToFirestore(fb.db, appVersion);
         await Promise.allSettled(pressReleases.map(p => syncPressToFirestore(fb.db!, p)));
         await Promise.allSettled(teasers.map(t => syncTeaserToFirestore(fb.db!, t)));
@@ -2664,6 +2925,32 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsSyncingArtbooks(false);
     }
   }, [artbooks]);
+
+  const [isSyncingArticlesCloud, setIsSyncingArticlesCloud] = useState(false);
+
+  const syncAllArticlesToFirestoreNow = useCallback(async (): Promise<{ success: boolean; message: string; count?: number }> => {
+    setIsSyncingArticlesCloud(true);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (!fb.db) {
+        return { success: false, message: 'Client Firestore indisponible.' };
+      }
+      const res = await syncAllArticlesToFirestore(fb.db, articles);
+      if (res.success) {
+        return {
+          success: true,
+          count: res.count,
+          message: `Synchronisation réussie ! Les ${res.count} articles sont maintenant à jour et visibles sur tous les appareils.`
+        };
+      } else {
+        return { success: false, message: 'Erreur lors de la synchronisation des articles vers Firestore.' };
+      }
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Erreur lors de la synchronisation des articles.' };
+    } finally {
+      setIsSyncingArticlesCloud(false);
+    }
+  }, [articles]);
 
   const cleanupDuplicates = useCallback(async (): Promise<{ cleaned: number; message: string }> => {
     let cleanedCount = 0;
@@ -2846,6 +3133,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       syncAllArtbooksToFirestoreNow,
       isSyncingArtists,
       isSyncingArtbooks,
+      syncAllArticlesToFirestoreNow,
+      isSyncingArticlesCloud,
       mediaKit,
       appVersion,
       analytics,

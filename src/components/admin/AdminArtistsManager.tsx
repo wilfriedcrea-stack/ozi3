@@ -39,7 +39,12 @@ import {
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Artist, Artbook } from '../../types';
-import { syncArtistToFirestore, initializeFirebaseCustom } from '../../services/firebaseService';
+import { 
+  syncArtistToFirestore, 
+  initializeFirebaseCustom, 
+  deleteArtistFromFirestore, 
+  syncAllArtistsToFirestore 
+} from '../../services/firebaseService';
 
 export const AdminArtistsManager: React.FC = () => {
   const { 
@@ -93,20 +98,20 @@ export const AdminArtistsManager: React.FC = () => {
       if (resArtists.success && resArtbooks.success) {
         setSyncStatusNotice({
           success: true,
-          message: `Synchronisation réussie ! ${artists.length} artistes et ${artbooks.length} artbooks (avec doubles couvertures) sont maintenant diffusés en direct sur mobile, tablette et ordinateur.`,
+          message: `Mise à jour réussie ! ${artists.length} artiste(s) et ${artbooks.length} artbook(s) sont maintenant synchronisés et visibles en direct sur l'ensemble des téléphones, tablettes et ordinateurs.`,
           timestamp: now
         });
       } else {
         setSyncStatusNotice({
           success: false,
-          message: resArtists.message || resArtbooks.message || 'Erreur de synchronisation Firestore.',
+          message: resArtists.message || resArtbooks.message || 'Erreur lors de la mise à jour Firestore.',
           timestamp: now
         });
       }
     } catch (err: any) {
       setSyncStatusNotice({
         success: false,
-        message: err?.message || 'Erreur lors de la synchronisation Firestore.',
+        message: err?.message || 'Erreur lors de la mise à jour Firestore.',
         timestamp: new Date().toLocaleTimeString('fr-FR')
       });
     } finally {
@@ -122,14 +127,58 @@ export const AdminArtistsManager: React.FC = () => {
       const fb = initializeFirebaseCustom();
       if (fb.db) {
         await syncArtistToFirestore(fb.db, artist);
-        setSaveNotice(`Artiste "${artist.name}" synchronisé sur tous les appareils !`);
+        setSaveNotice(`Artiste "${artist.name}" mis à jour avec succès sur tous les appareils !`);
         setTimeout(() => setSaveNotice(null), 3500);
       }
     } catch (err: any) {
-      setSaveNotice(`Erreur de synchronisation pour ${artist.name}`);
+      setSaveNotice(`Erreur de mise à jour pour ${artist.name}`);
       setTimeout(() => setSaveNotice(null), 3500);
     } finally {
       setSyncingSingleArtistId(null);
+    }
+  };
+
+  // Demo models cleanup helper
+  const DEMO_IDS = new Set([
+    'artist-kofi-mensah',
+    'artist-tidiane-traore',
+    'artist-nathalie-kouame',
+    'artist-cherif-keita',
+    'artist-fatou-sow',
+    'artist-emeka-okafor',
+    'artist-aissata-diallo',
+    'artist-malick-sidibe-jr',
+    'artist-zainab-al-mansoor',
+    'artist-baba-kante'
+  ]);
+  const hasDemoArtists = artists.some(a => DEMO_IDS.has(a.id));
+
+  const handlePurgeDemos = async () => {
+    setIsSyncingGlobal(true);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        for (const dId of DEMO_IDS) {
+          try {
+            await deleteArtistFromFirestore(fb.db, dId);
+          } catch {}
+        }
+        const cleaned = artists.filter(a => !DEMO_IDS.has(a.id));
+        await syncAllArtistsToFirestore(fb.db, cleaned);
+      }
+      setSyncStatusNotice({
+        success: true,
+        message: 'Modèles de démonstration nettoyés ! Seuls vos artistes personnels sont conservés.',
+        timestamp: new Date().toLocaleTimeString('fr-FR')
+      });
+    } catch (err: any) {
+      setSyncStatusNotice({
+        success: false,
+        message: err?.message || 'Erreur lors du nettoyage des modèles.',
+        timestamp: new Date().toLocaleTimeString('fr-FR')
+      });
+    } finally {
+      setIsSyncingGlobal(false);
     }
   };
 
@@ -556,17 +605,30 @@ export const AdminArtistsManager: React.FC = () => {
             />
           </div>
 
-          {/* BOUTON SYNCHRONISER LES ARTISTES & ARTBOOKS (TOUS APPAREILS) */}
+          {/* BOUTON METTRE À JOUR LES ARTISTES (TOUS APPAREILS) */}
           <button
             type="button"
             disabled={isSyncingGlobal || isSyncingArtists || isSyncingArtbooks}
             onClick={handleGlobalSyncArtistsAndArtbooks}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-400 text-white text-xs font-bold transition-all shadow-md shadow-emerald-950/40 cursor-pointer disabled:opacity-50"
-            title="Diffuse instantanément la liste des artistes et artbooks vers Firestore pour mettre à jour tous les téléphones, tablettes et PC"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 text-xs font-black transition-all shadow-md shadow-emerald-950/40 cursor-pointer disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98]"
+            title="Met à jour immédiatement les artistes sur Firestore et sur l'ensemble des appareils (mobile, tablette, PC)"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${(isSyncingGlobal || isSyncingArtists || isSyncingArtbooks) ? 'animate-spin' : ''}`} />
-            <span>{(isSyncingGlobal || isSyncingArtists || isSyncingArtbooks) ? 'Synchronisation en cours...' : 'Synchroniser les Artistes (Tous Appareils)'}</span>
+            <span>{(isSyncingGlobal || isSyncingArtists || isSyncingArtbooks) ? 'Mise à jour en cours...' : '⚡ Mettre à jour'}</span>
           </button>
+
+          {hasDemoArtists && (
+            <button
+              type="button"
+              disabled={isSyncingGlobal}
+              onClick={handlePurgeDemos}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-950/50 hover:bg-rose-900/70 border border-rose-800/60 text-rose-300 text-xs font-bold transition-all cursor-pointer"
+              title="Supprime définitivement les modèles d'artistes de démo"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+              <span>Nettoyer les modèles démo</span>
+            </button>
+          )}
 
           {activeSubTab === 'artists' && (
             <button
@@ -684,8 +746,8 @@ export const AdminArtistsManager: React.FC = () => {
                   <RefreshCw className={`w-4 h-4 ${isSyncingGlobal || isSyncingArtists ? 'animate-spin' : ''}`} />
                   <span>
                     {isSyncingGlobal || isSyncingArtists 
-                      ? 'Synchronisation des artistes en cours...' 
-                      : `Synchroniser les ${artists.length} Artistes maintenant`}
+                      ? 'Mise à jour en cours...' 
+                      : `⚡ Mettre à jour les ${artists.length} Artiste(s) sur tous les appareils`}
                   </span>
                 </button>
                 <span className="text-[10px] text-slate-400 text-right">
@@ -823,7 +885,7 @@ export const AdminArtistsManager: React.FC = () => {
                       title="Diffuser cet artiste immédiatement vers Firestore sur tous les appareils"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${syncingSingleArtistId === artist.id ? 'animate-spin text-emerald-400' : ''}`} />
-                      <span>{syncingSingleArtistId === artist.id ? 'Sync...' : 'Sync Cloud'}</span>
+                      <span>{syncingSingleArtistId === artist.id ? 'Mise à jour...' : '⚡ Mettre à jour'}</span>
                     </button>
 
                     <button

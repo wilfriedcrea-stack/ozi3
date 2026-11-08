@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { normalizeImageUrl } from '../../utils/imageUtils';
 
 interface ImageFallbackProps {
   src: string;
@@ -18,11 +19,12 @@ export const ImageFallback: React.FC<ImageFallbackProps> = ({
   const [hasError, setHasError] = useState(false);
 
   const fallbackSrc = 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80';
+  const safeSrc = hasError ? fallbackSrc : normalizeImageUrl(src, fallbackSrc);
 
   return (
     <div className={`relative w-full overflow-hidden bg-[#18181f] ${aspectRatioClass}`}>
       <img
-        src={hasError ? fallbackSrc : src}
+        src={safeSrc}
         alt={alt}
         loading={priority ? 'eager' : 'lazy'}
         decoding="async"

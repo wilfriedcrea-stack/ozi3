@@ -1,6 +1,6 @@
 import { db } from '../lib/firebase';
 import { Firestore, collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, getDocFromServer, getDocs, query, orderBy, serverTimestamp } from 'firebase/firestore';
-import { Series, Teaser, PressRelease, AppVersionInfo, CreatorSubmission, Article, HomeHeroSlide, Artist, Artbook, ArtbookDownloadRecord, ArtbookPurchaseRecord } from '../types';
+import { Series, Teaser, PressRelease, AppVersionInfo, CreatorSubmission, Article, HomeHeroSlide, Artist, Artbook, ArtbookDownloadRecord, ArtbookPurchaseRecord, MonetizationSettings } from '../types';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 import { normalizeImageUrl } from '../utils/imageUtils';
 
@@ -809,6 +809,49 @@ export async function syncPressToFirestore(databaseInstance: Firestore = db, pre
   }
 }
 
+export async function deletePressFromFirestore(databaseInstance: Firestore = db, pressId: string) {
+  try {
+    await deleteDoc(doc(databaseInstance, 'press_releases', pressId));
+    return { success: true };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `press_releases/${pressId}`);
+    return { success: false, error: err };
+  }
+}
+
+export async function fetchPressFromFirestore(databaseInstance: Firestore = db): Promise<PressRelease[] | null> {
+  try {
+    const colRef = collection(databaseInstance, 'press_releases');
+    const snapshot = await getDocs(colRef);
+    if (snapshot.empty) return null;
+    const list: PressRelease[] = [];
+    snapshot.forEach(d => {
+      list.push({ ...d.data(), id: d.id } as PressRelease);
+    });
+    return list;
+  } catch (err) {
+    console.warn('Unable to fetch press releases from Firestore:', err);
+    return null;
+  }
+}
+
+export function subscribeToFirestorePress(onUpdate: (pressList: PressRelease[]) => void): () => void {
+  try {
+    const colRef = collection(db, 'press_releases');
+    return onSnapshot(colRef, (snapshot) => {
+      const list: PressRelease[] = [];
+      snapshot.forEach(docSnap => {
+        list.push({ ...docSnap.data(), id: docSnap.id } as PressRelease);
+      });
+      if (list.length > 0) onUpdate(list);
+    }, (err) => {
+      console.warn('Firestore press releases real-time subscription notice:', err);
+    });
+  } catch {
+    return () => {};
+  }
+}
+
 export async function syncTeaserToFirestore(databaseInstance: Firestore = db, teaser: Teaser) {
   try {
     await setDoc(doc(databaseInstance, 'teasers', teaser.id), teaser, { merge: true });
@@ -816,6 +859,92 @@ export async function syncTeaserToFirestore(databaseInstance: Firestore = db, te
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `teasers/${teaser.id}`);
     return { success: false, error: err };
+  }
+}
+
+export async function deleteTeaserFromFirestore(databaseInstance: Firestore = db, teaserId: string) {
+  try {
+    await deleteDoc(doc(databaseInstance, 'teasers', teaserId));
+    return { success: true };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `teasers/${teaserId}`);
+    return { success: false, error: err };
+  }
+}
+
+export async function fetchTeasersFromFirestore(databaseInstance: Firestore = db): Promise<Teaser[] | null> {
+  try {
+    const colRef = collection(databaseInstance, 'teasers');
+    const snapshot = await getDocs(colRef);
+    if (snapshot.empty) return null;
+    const list: Teaser[] = [];
+    snapshot.forEach(d => {
+      list.push({ ...d.data(), id: d.id } as Teaser);
+    });
+    return list;
+  } catch (err) {
+    console.warn('Unable to fetch teasers from Firestore:', err);
+    return null;
+  }
+}
+
+export function subscribeToFirestoreTeasers(onUpdate: (teasers: Teaser[]) => void): () => void {
+  try {
+    const colRef = collection(db, 'teasers');
+    return onSnapshot(colRef, (snapshot) => {
+      const list: Teaser[] = [];
+      snapshot.forEach(docSnap => {
+        list.push({ ...docSnap.data(), id: docSnap.id } as Teaser);
+      });
+      if (list.length > 0) onUpdate(list);
+    }, (err) => {
+      console.warn('Firestore teasers real-time subscription notice:', err);
+    });
+  } catch {
+    return () => {};
+  }
+}
+
+// Monetization Settings Sync
+export async function syncMonetizationToFirestore(databaseInstance: Firestore = db, monetization: MonetizationSettings) {
+  try {
+    const cleaned = cleanFirestoreObject({
+      ...monetization,
+      updatedAt: new Date().toISOString()
+    });
+    await setDoc(doc(databaseInstance, 'config', 'monetization'), cleaned, { merge: true });
+    return { success: true };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, 'config/monetization');
+    return { success: false, error: err };
+  }
+}
+
+export async function fetchMonetizationFromFirestore(databaseInstance: Firestore = db): Promise<MonetizationSettings | null> {
+  try {
+    const snap = await getDoc(doc(databaseInstance, 'config', 'monetization'));
+    if (snap.exists()) {
+      return snap.data() as MonetizationSettings;
+    }
+    return null;
+  } catch (err) {
+    console.warn('Unable to fetch monetization from Firestore:', err);
+    return null;
+  }
+}
+
+export function subscribeToFirestoreMonetization(onUpdate: (monetization: MonetizationSettings) => void): () => void {
+  try {
+    return onSnapshot(doc(db, 'config', 'monetization'), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data() as MonetizationSettings;
+        if (data) onUpdate(data);
+      }
+    }, (err) => {
+      console.warn('Firestore monetization subscription notice:', err);
+    });
+  } catch {
+    return () => {};
   }
 }
 
@@ -831,7 +960,12 @@ export async function syncSubmissionToFirestore(databaseInstance: Firestore = db
 
 export async function syncArticleToFirestore(databaseInstance: Firestore = db, article: Article) {
   try {
-    await setDoc(doc(databaseInstance, 'articles', article.id), article, { merge: true });
+    const safeArticle: Article = {
+      ...article,
+      image: normalizeImageUrl(article.image),
+      galleryImages: (article.galleryImages || []).map(img => normalizeImageUrl(img))
+    };
+    await setDoc(doc(databaseInstance, 'articles', safeArticle.id), safeArticle, { merge: true });
     return { success: true };
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `articles/${article.id}`);
@@ -846,6 +980,90 @@ export async function deleteArticleFromFirestore(databaseInstance: Firestore = d
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, `articles/${articleId}`);
     return { success: false, error: err };
+  }
+}
+
+export async function fetchArticlesFromFirestore(databaseInstance: Firestore = db): Promise<Article[] | null> {
+  try {
+    const colRef = collection(databaseInstance, 'articles');
+    const snapshot = await getDocs(colRef);
+    if (snapshot.empty) {
+      return [];
+    }
+    const list: Article[] = [];
+    snapshot.forEach(d => {
+      const data = d.data() as Article;
+      list.push({
+        ...data,
+        id: d.id,
+        image: normalizeImageUrl(data.image),
+        galleryImages: (data.galleryImages || []).map(img => normalizeImageUrl(img))
+      });
+    });
+    return list;
+  } catch (err) {
+    console.warn('Unable to fetch articles from Firestore:', err);
+    return null;
+  }
+}
+
+export function subscribeToFirestoreArticles(onUpdate: (articles: Article[]) => void): () => void {
+  try {
+    const colRef = collection(db, 'articles');
+    return onSnapshot(colRef, (snapshot) => {
+      const list: Article[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as Article;
+        list.push({
+          ...data,
+          id: docSnap.id,
+          image: normalizeImageUrl(data.image),
+          galleryImages: (data.galleryImages || []).map(img => normalizeImageUrl(img))
+        });
+      });
+      onUpdate(list);
+    }, (err) => {
+      console.warn('Firestore articles real-time subscription error:', err);
+    });
+  } catch {
+    return () => {};
+  }
+}
+
+export async function syncAllArticlesToFirestore(
+  databaseInstance: Firestore = db,
+  articlesList: Article[]
+): Promise<{ success: boolean; count: number; deletedCount: number; error?: unknown }> {
+  try {
+    let count = 0;
+    let deletedCount = 0;
+
+    // 1. Full mirror pruning: remove any documents in Firestore that are not in articlesList
+    const currentSnap = await getDocs(collection(databaseInstance, 'articles'));
+    const keepIds = new Set(articlesList.map(a => a.id));
+
+    for (const d of currentSnap.docs) {
+      if (!keepIds.has(d.id)) {
+        await deleteDoc(d.ref);
+        deletedCount++;
+      }
+    }
+
+    // 2. Write or update active articles with normalized URLs
+    for (const art of articlesList) {
+      const safeArticle: Article = {
+        ...art,
+        image: normalizeImageUrl(art.image),
+        galleryImages: (art.galleryImages || []).map(img => normalizeImageUrl(img))
+      };
+      await setDoc(doc(databaseInstance, 'articles', safeArticle.id), safeArticle, { merge: true });
+      count++;
+    }
+
+    return { success: true, count, deletedCount };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, 'articles');
+    return { success: false, count: 0, deletedCount: 0, error: err };
   }
 }
 
@@ -1009,17 +1227,21 @@ export async function fetchArtistsFromFirestore(databaseInstance: Firestore = db
   try {
     const ref = collection(databaseInstance, 'artists');
     const snapshot = await getDocs(ref);
-    if (!snapshot.empty) {
-      const list: Artist[] = [];
-      snapshot.forEach(d => {
-        list.push(d.data() as Artist);
+    const list: Artist[] = [];
+    snapshot.forEach(d => {
+      const data = d.data() as Artist;
+      list.push({
+        ...data,
+        id: d.id,
+        photoUrl: normalizeImageUrl(data.photoUrl),
+        bannerUrl: data.bannerUrl ? normalizeImageUrl(data.bannerUrl) : ''
       });
-      return list;
-    }
+    });
+    return list;
   } catch (err) {
     console.warn('Unable to fetch artists from Firestore:', err);
+    return null;
   }
-  return null;
 }
 
 export async function deleteArtistFromFirestore(databaseInstance: Firestore = db, artistId: string): Promise<boolean> {
@@ -1037,6 +1259,8 @@ export async function syncArtbookToFirestore(databaseInstance: Firestore, artboo
     const ref = doc(databaseInstance, 'artbooks', artbook.id);
     await setDoc(ref, {
       ...artbook,
+      coverUrl: normalizeImageUrl(artbook.coverUrl),
+      alternateCoverUrl: artbook.alternateCoverUrl ? normalizeImageUrl(artbook.alternateCoverUrl) : undefined,
       updatedAt: new Date().toISOString()
     }, { merge: true });
     return true;
@@ -1060,31 +1284,38 @@ export async function fetchArtbooksFromFirestore(databaseInstance: Firestore = d
   try {
     const ref = collection(databaseInstance, 'artbooks');
     const snapshot = await getDocs(ref);
-    if (!snapshot.empty) {
-      const list: Artbook[] = [];
-      snapshot.forEach(d => {
-        list.push(d.data() as Artbook);
+    const list: Artbook[] = [];
+    snapshot.forEach(d => {
+      const data = d.data() as Artbook;
+      list.push({
+        ...data,
+        id: d.id,
+        coverUrl: normalizeImageUrl(data.coverUrl),
+        alternateCoverUrl: data.alternateCoverUrl ? normalizeImageUrl(data.alternateCoverUrl) : undefined
       });
-      return list;
-    }
+    });
+    return list;
   } catch (err) {
     console.warn('Unable to fetch artbooks from Firestore:', err);
+    return null;
   }
-  return null;
 }
 
 export function subscribeToFirestoreArtists(onUpdate: (artists: Artist[]) => void): () => void {
   try {
     const colRef = collection(db, 'artists');
     return onSnapshot(colRef, (snapshot) => {
-      if (!snapshot.empty) {
-        const list: Artist[] = [];
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data() as Artist;
-          list.push({ ...data, id: docSnap.id });
+      const list: Artist[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as Artist;
+        list.push({
+          ...data,
+          id: docSnap.id,
+          photoUrl: normalizeImageUrl(data.photoUrl),
+          bannerUrl: data.bannerUrl ? normalizeImageUrl(data.bannerUrl) : ''
         });
-        onUpdate(list);
-      }
+      });
+      onUpdate(list);
     }, (err) => {
       console.warn('Firestore artists real-time subscription error:', err);
     });
@@ -1097,14 +1328,17 @@ export function subscribeToFirestoreArtbooks(onUpdate: (artbooks: Artbook[]) => 
   try {
     const colRef = collection(db, 'artbooks');
     return onSnapshot(colRef, (snapshot) => {
-      if (!snapshot.empty) {
-        const list: Artbook[] = [];
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data() as Artbook;
-          list.push({ ...data, id: docSnap.id });
+      const list: Artbook[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as Artbook;
+        list.push({
+          ...data,
+          id: docSnap.id,
+          coverUrl: normalizeImageUrl(data.coverUrl),
+          alternateCoverUrl: data.alternateCoverUrl ? normalizeImageUrl(data.alternateCoverUrl) : undefined
         });
-        onUpdate(list);
-      }
+      });
+      onUpdate(list);
     }, (err) => {
       console.warn('Firestore artbooks real-time subscription error:', err);
     });
@@ -1116,46 +1350,78 @@ export function subscribeToFirestoreArtbooks(onUpdate: (artbooks: Artbook[]) => 
 export async function syncAllArtistsToFirestore(
   databaseInstance: Firestore = db,
   artistsList: Artist[]
-): Promise<{ success: boolean; count: number; error?: unknown }> {
+): Promise<{ success: boolean; count: number; deletedCount: number; error?: unknown }> {
   try {
     let count = 0;
+    let deletedCount = 0;
+
+    // 1. Full mirror pruning: remove any documents in Firestore that are not in artistsList
+    const currentSnap = await getDocs(collection(databaseInstance, 'artists'));
+    const keepIds = new Set(artistsList.map(a => a.id));
+
+    for (const d of currentSnap.docs) {
+      if (!keepIds.has(d.id)) {
+        await deleteDoc(d.ref);
+        deletedCount++;
+      }
+    }
+
+    // 2. Write or update active artists
     for (const artist of artistsList) {
       if (artist && artist.id) {
         const cleaned = cleanFirestoreObject({
           ...artist,
+          photoUrl: normalizeImageUrl(artist.photoUrl),
+          bannerUrl: artist.bannerUrl ? normalizeImageUrl(artist.bannerUrl) : '',
           updatedAt: new Date().toISOString()
         });
         await setDoc(doc(databaseInstance, 'artists', artist.id), cleaned, { merge: true });
         count++;
       }
     }
-    return { success: true, count };
+    return { success: true, count, deletedCount };
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, 'artists');
-    return { success: false, count: 0, error: err };
+    return { success: false, count: 0, deletedCount: 0, error: err };
   }
 }
 
 export async function syncAllArtbooksToFirestore(
   databaseInstance: Firestore = db,
   artbooksList: Artbook[]
-): Promise<{ success: boolean; count: number; error?: unknown }> {
+): Promise<{ success: boolean; count: number; deletedCount: number; error?: unknown }> {
   try {
     let count = 0;
+    let deletedCount = 0;
+
+    // 1. Full mirror pruning: remove any artbooks in Firestore that are not in artbooksList
+    const currentSnap = await getDocs(collection(databaseInstance, 'artbooks'));
+    const keepIds = new Set(artbooksList.map(a => a.id));
+
+    for (const d of currentSnap.docs) {
+      if (!keepIds.has(d.id)) {
+        await deleteDoc(d.ref);
+        deletedCount++;
+      }
+    }
+
+    // 2. Write or update active artbooks
     for (const artbook of artbooksList) {
       if (artbook && artbook.id) {
         const cleaned = cleanFirestoreObject({
           ...artbook,
+          coverUrl: normalizeImageUrl(artbook.coverUrl),
+          alternateCoverUrl: artbook.alternateCoverUrl ? normalizeImageUrl(artbook.alternateCoverUrl) : undefined,
           updatedAt: new Date().toISOString()
         });
         await setDoc(doc(databaseInstance, 'artbooks', artbook.id), cleaned, { merge: true });
         count++;
       }
     }
-    return { success: true, count };
+    return { success: true, count, deletedCount };
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, 'artbooks');
-    return { success: false, count: 0, error: err };
+    return { success: false, count: 0, deletedCount: 0, error: err };
   }
 }
 

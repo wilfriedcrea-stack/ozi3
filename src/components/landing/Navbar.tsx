@@ -7,7 +7,11 @@ import {
   LogOut,
   Sparkles,
   ChevronDown,
-  ShieldCheck
+  ShieldCheck,
+  Palette,
+  BookOpen,
+  Home,
+  FileText
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { OziLogo } from '../common/OziLogo';
@@ -32,6 +36,11 @@ export const Navbar: React.FC = () => {
     setMobileMenuOpen(false);
     setUserDropdownOpen(false);
     setViewMode(mode);
+    if (mode === 'accueil') {
+      window.location.hash = '';
+    } else {
+      window.location.hash = `#${mode}`;
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -385,6 +394,114 @@ export const Navbar: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Mobile Top Sub-Nav Quick Access Bar */}
+      <div className="md:hidden w-full bg-[#0c0d12] border-t border-b border-zinc-800/80 px-3 py-2 flex items-center justify-between gap-1 overflow-x-auto scrollbar-none">
+        <button
+          onClick={() => navigateTo('accueil')}
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+            viewMode === 'accueil' ? 'bg-[#ff8679] text-white font-bold' : 'text-zinc-300 hover:text-white'
+          }`}
+        >
+          Accueil
+        </button>
+        <button
+          onClick={() => navigateTo('oeuvres')}
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+            viewMode === 'oeuvres' ? 'bg-[#ff8679] text-white font-bold' : 'text-zinc-300 hover:text-white'
+          }`}
+        >
+          Œuvres
+        </button>
+        <button
+          id="mobile-nav-artistes-chip"
+          onClick={() => navigateTo('artistes')}
+          className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+            ['artistes', 'artiste-detail', 'artbook-detail'].includes(viewMode)
+              ? 'bg-[#ff8679] text-white shadow-sm ring-1 ring-white/30'
+              : 'text-zinc-200 hover:text-white bg-zinc-800/90'
+          }`}
+        >
+          <Palette className="w-3.5 h-3.5 text-amber-300" />
+          <span>Artistes</span>
+        </button>
+        <button
+          onClick={() => navigateTo('articles')}
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+            viewMode === 'articles' ? 'bg-[#ff8679] text-white font-bold' : 'text-zinc-300 hover:text-white'
+          }`}
+        >
+          Articles
+        </button>
+        <button
+          onClick={() => navigateTo('recherche')}
+          className={`p-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+            viewMode === 'recherche' ? 'bg-[#ff8679] text-white' : 'text-zinc-400 hover:text-white'
+          }`}
+          title="Rechercher"
+        >
+          <Search className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Mobile Fixed Bottom Navigation Dock (1-tap access on all phones) */}
+      <nav 
+        id="mobile-bottom-dock" 
+        className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#101118]/95 backdrop-blur-xl border-t border-zinc-800/90 px-3 py-2 flex items-center justify-around shadow-2xl safe-area-pb"
+      >
+        <button
+          onClick={() => navigateTo('accueil')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-colors cursor-pointer ${
+            viewMode === 'accueil' ? 'text-[#ff8679]' : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          <Home className="w-4 h-4" />
+          <span className="text-[10px] font-semibold">Accueil</span>
+        </button>
+
+        <button
+          onClick={() => navigateTo('oeuvres')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-colors cursor-pointer ${
+            viewMode === 'oeuvres' ? 'text-[#ff8679]' : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          <BookOpen className="w-4 h-4" />
+          <span className="text-[10px] font-semibold">Œuvres</span>
+        </button>
+
+        <button
+          id="mobile-dock-artistes"
+          onClick={() => navigateTo('artistes')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-all cursor-pointer ${
+            ['artistes', 'artiste-detail', 'artbook-detail'].includes(viewMode)
+              ? 'text-[#ff8679] bg-[#ff8679]/15 font-bold shadow-sm'
+              : 'text-zinc-300 hover:text-white'
+          }`}
+        >
+          <Palette className="w-4 h-4 text-purple-400" />
+          <span className="text-[10px] font-bold">Artistes</span>
+        </button>
+
+        <button
+          onClick={() => navigateTo('articles')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-colors cursor-pointer ${
+            viewMode === 'articles' ? 'text-[#ff8679]' : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          <span className="text-[10px] font-semibold">Articles</span>
+        </button>
+
+        <button
+          onClick={() => navigateTo('recherche')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-colors cursor-pointer ${
+            viewMode === 'recherche' ? 'text-[#ff8679]' : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          <Search className="w-4 h-4" />
+          <span className="text-[10px] font-semibold">Recherche</span>
+        </button>
+      </nav>
     </header>
   );
 };

@@ -73,9 +73,9 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ activeTab, onNewSeries
           <div className="flex items-center gap-2 text-xs text-zinc-400 font-body">
             <span>Studio Grand Écran</span>
             <span>•</span>
-            <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
+            <div className="flex items-center gap-1.5 text-emerald-400 font-bold bg-emerald-950/40 border border-emerald-500/30 px-2 py-0.5 rounded-lg">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Base Firestore connectée : {firebaseConfig.projectId}</span>
+              <span>⚡ Sync automatique Firestore active (Temps réel)</span>
             </div>
           </div>
         </div>
