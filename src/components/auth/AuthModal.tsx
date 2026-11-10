@@ -14,6 +14,7 @@ import {
   KeyRound
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { isValidEmail } from '../../services/authService';
 import { OziLogo } from '../common/OziLogo';
 
 export const AuthModal: React.FC = () => {
@@ -91,6 +92,11 @@ export const AuthModal: React.FC = () => {
     const cleanEmail = email.trim();
     if (!cleanEmail) {
       setErrorMessage('Veuillez renseigner votre adresse e-mail.');
+      return;
+    }
+
+    if (!isValidEmail(cleanEmail)) {
+      setErrorMessage('Format d\'adresse e-mail invalide. Exemple : lecteur@domaine.com');
       return;
     }
 

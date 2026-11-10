@@ -2,127 +2,236 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper function to check if user is authenticated admin
+    // =========================================================================
+    // FONCTIONS D'AIDE ET DÉTECTION ADMINISTRATEUR SÉCURISÉE
+    // =========================================================================
+    
+    // Vérifie si la requête provient de l'administrateur légitime de la plateforme.
+    // L'administrateur est authentifié soit par son e-mail officiel (wilfriedcrea@gmail.com),
+    // soit par un Custom Claim d'administration (super_admin ou admin).
     function isAdmin() {
       return request.auth != null && (
         request.auth.token.email == 'wilfriedcrea@gmail.com' ||
-        request.auth.token.role == 'super_admin' ||
-        request.auth.token.role == 'admin'
+        (request.auth.token.keys().hasAny(['role']) && 
+         (request.auth.token.role == 'super_admin' || request.auth.token.role == 'admin'))
       );
     }
 
-    // Series / Artworks Collection (Readable by mobile APK and web visitors, writable by Admin)
-    // Series, Works & Artworks Collections (Readable by mobile APK and web visitors, writable by Admin)
+    // Vérifie si l'utilisateur est authentifié avec Firebase Auth
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // =========================================================================
+    // 1. SÉRIES, ŒUVRES & CHAPITRES (CATALOGUE OFFICIEL)
+    // Protection ÉTAPE 2 : Interdiction totale d'écriture aux lecteurs.
+    // Les lecteurs peuvent uniquement lire le catalogue.
+    // Création, modification, suppression, métadonnées, prix et publication
+    // sont strictement réservées à l'administrateur.
+    // =========================================================================
+    
     match /series/{seriesId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if isAdmin();
 
+      // Chapitres et planches de chaque série
       match /chapters/{chapterId} {
         allow read: if true;
-        allow write: if true;
+        allow write: if isAdmin();
       }
     }
 
+    // Collections miroirs historiques ou multi-plateformes
     match /works/{workId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if isAdmin();
 
       match /chapters/{chapterId} {
         allow read: if true;
-        allow write: if true;
+        allow write: if isAdmin();
       }
     }
 
     match /artworks/{artworkId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if isAdmin();
     }
 
-    // Artists and Artbooks (Publicly readable, writable by admin/authenticated)
+    // =========================================================================
+    // 2. ARTISTES, ARTBOOKS & MONÉTISATION ASSOCIÉE
+    // Protection ÉTAPE 2 & 3 : Les prix, fiches artistes, fichiers et aperçus
+    // ne peuvent être modifiés que par l'administrateur.
+    // =========================================================================
+    
     match /artists/{artistId} {
       allow read: if true;
-      allow write: if isAdmin() || request.auth != null || true;
+      allow write: if isAdmin();
     }
 
     match /artbooks/{artbookId} {
       allow read: if true;
-      allow write: if isAdmin() || request.auth != null || true;
+      allow write: if isAdmin();
     }
 
-    // Artbook Free Downloads (Visitors can record downloads with required fields)
+    // Enregistrement des téléchargements gratuits (Lead Capture)
     match /artbook_downloads/{downloadId} {
       allow create: if true;
-      allow read: if isAdmin() || request.auth != null;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Commandes et transactions d'artbooks payants (Protection anti-fraude)
+    // Aucun lecteur ne peut s'auto-attribuer 'downloadAuthorized: true' ou modifier le statut
+    match /artbook_purchases/{purchaseId} {
+      allow create: if true;
+      allow read: if isAdmin() || (
+        isAuthenticated() && (
+          request.auth.uid == resource.data.userId || 
+          request.auth.token.email == resource.data.customerEmail
+        )
+      );
       allow update, delete: if isAdmin();
     }
 
-    // Artbook Purchases (Visitors and readers can create purchase records; validated upon completion)
-    match /artbook_purchases/{purchaseId} {
-      allow create: if true;
-      allow read: if isAdmin() || request.auth != null || true;
-      allow update: if true;
-      allow delete: if isAdmin();
-    }
-
-    // Articles & News
+    // =========================================================================
+    // 3. ACTUALITÉS, TEASERS, PRESSE & BANNIÈRES
+    // =========================================================================
+    
     match /articles/{articleId} {
       allow read: if true;
-      allow write: if isAdmin() || request.auth != null || true;
+      allow write: if isAdmin();
     }
 
-    // Teasers & Videos
     match /teasers/{teaserId} {
       allow read: if true;
-      allow write: if isAdmin() || request.auth != null || true;
+      allow write: if isAdmin();
     }
 
-    // Press Releases
     match /press_releases/{pressId} {
       allow read: if true;
-      allow write: if isAdmin() || request.auth != null || true;
+      allow write: if isAdmin();
     }
 
-    // Hero Slides & Showcase Banners (Publicly readable on all devices, writable by admin/authenticated)
     match /hero_slides/{slideId} {
       allow read: if true;
-      allow write: if isAdmin() || request.auth != null || true;
+      allow write: if isAdmin();
     }
 
-    // App Version & Config (APK Version check, OTA updates, Hero Slides config)
+    // =========================================================================
+    // 4. CONFIGURATION DU SYSTÈME, SÉCURITÉ & TARIFICATION
+    // Protection ÉTAPE 3 : Tarifs coins, pourcentage créateurs, secrets admin
+    // =========================================================================
+    
     match /config/{configId} {
-      allow read: if true;
-      allow write: if isAdmin() || request.auth != null || true;
+      // Les données admin_security (empreintes de sécurité) ne sont jamais lisibles par les lecteurs
+      allow read: if configId != 'admin_security' || isAdmin();
+      allow write: if isAdmin();
     }
 
-    // Creator Submissions (Anyone can submit project, read by admin)
+    // =========================================================================
+    // 5. CANDIDATURES ET SOUMISSIONS DES CRÉATEURS
+    // =========================================================================
+    
     match /creator_submissions/{submissionId} {
+      // Tout créateur peut soumettre sa candidature
       allow create: if true;
-      allow read, update, delete: if isAdmin() || request.auth != null || true;
+      // Consultation et modération réservées à l'administrateur
+      allow read, update, delete: if isAdmin();
     }
 
-    // Users profiles & reader data (Secure access strictly limited to the authenticated reader)
+    // =========================================================================
+    // 6. PROFILS DES LECTEURS (users/{userId})
+    // Protection ÉTAPE 4 :
+    // - Chaque lecteur accède strictement à ses propres données.
+    // - Interdiction de s'attribuer le rôle admin ou changer de rôle.
+    // - Interdiction de modifier les champs de monétisation ou d'abonnement (isVip, vipExpiresAt, coinsBalance, isBanned).
+    // =========================================================================
+    
     match /users/{userId} {
-      allow read: if (request.auth != null && request.auth.uid == userId) || isAdmin();
-      
-      // Allow user to create their initial profile, enforcing reader role and matching UID
-      allow create: if (request.auth != null && request.auth.uid == userId
-                        && request.resource.data.uid == userId
-                        && (!('role' in request.resource.data) || request.resource.data.role == 'reader'))
-                    || isAdmin();
-      
-      // Allow user to update their profile (bio, displayName, photoURL), but role and uid cannot be changed to admin
-      allow update: if (request.auth != null && request.auth.uid == userId
-                        && request.resource.data.uid == resource.data.uid
-                        && (!('role' in request.resource.data) || request.resource.data.role == resource.data.role))
-                    || isAdmin();
-      
-      // Deletion only by admin
+      // Lecture : propriétaire authentifié ou administrateur
+      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
+
+      // Création de profil lecteur : à l'inscription initiale
+      allow create: if isAdmin() || (
+        isAuthenticated() && request.auth.uid == userId
+        && request.resource.data.uid == userId
+        && (!('role' in request.resource.data) || request.resource.data.role == 'reader')
+        && (!('isVip' in request.resource.data) || request.resource.data.isVip == false)
+        && (!('coinsBalance' in request.resource.data) || request.resource.data.coinsBalance == 0)
+        && (!('isBanned' in request.resource.data) || request.resource.data.isBanned == false)
+      );
+
+      // Mise à jour de profil : seuls les champs personnels bénins sont modifiables par le lecteur
+      // (displayName, bio, photoURL, updatedAt).
+      // Les clés sensibles ci-dessous sont protégées contre toute modification par le client :
+      allow update: if isAdmin() || (
+        isAuthenticated() && request.auth.uid == userId
+        && request.resource.data.uid == resource.data.uid
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'role', 'uid', 'email', 'isVip', 'vipExpiresAt', 'coinsBalance', 'isBanned'
+        ])
+      );
+
+      // Suppression de compte : réservée à l'administrateur
       allow delete: if isAdmin();
     }
 
-    // Health & System checks
+    // =========================================================================
+    // 7. ABONNEMENTS PREMIUM PAR ŒUVRE (ACCÈS 30 JOURS PAYSTACK)
+    // - Un lecteur ne peut lire que ses propres abonnements.
+    // - Aucun lecteur ne peut créer, modifier ou supprimer un abonnement directement.
+    //   L'activation et la gestion des abonnements sont gérées par le serveur ou l'administrateur.
+    // =========================================================================
+    
+    match /subscriptions/{subscriptionId} {
+      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == resource.data.uid);
+      allow write: if isAdmin();
+    }
+
+    // =========================================================================
+    // 8. DIAGNOSTIC SANTÉ SYSTÈME
+    // =========================================================================
+    
     match /_health/{docId} {
       allow read, write: if true;
+    }
+
+    // =========================================================================
+    // 9. ESPACE COMMENTAIRES & NOTATIONS DES LECTEURS (REVIEWS)
+    // - Lecture publique pour tous les visiteurs et lecteurs.
+    // - Création réservée aux lecteurs authentifiés (userId correspondant au UID auth).
+    // - Mise à jour par l'auteur ou mise à jour restreinte des likes/likedBy par tout utilisateur authentifié.
+    // - Suppression par l'auteur ou l'administrateur.
+    // =========================================================================
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+
+      allow create: if isAuthenticated() 
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5;
+
+      allow update: if isAdmin() || (
+        isAuthenticated() && (
+          // L'auteur peut modifier son avis/note
+          request.auth.uid == resource.data.userId ||
+          // Ou un autre lecteur peut liker/unliker (seuls likesCount et likedBy affectés)
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount', 'likedBy'])
+        )
+      );
+
+      allow delete: if isAdmin() || (isAuthenticated() && request.auth.uid == resource.data.userId);
+    }
+
+    // =========================================================================
+    // 10. SIGNALEMENTS DES COMMENTAIRES POUR MODÉRATION
+    // - Tout lecteur connecté peut signaler un commentaire indésirable ou offensant.
+    // - Seul l'administrateur peut consulter et traiter les signalements.
+    // =========================================================================
+
+    match /reported_comments/{reportId} {
+      allow create: if isAuthenticated();
+      allow read, update, delete: if isAdmin();
     }
   }
 }

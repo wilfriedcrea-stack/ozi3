@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { CoinPack, CreatorPayout, PaymentGateway } from '../../types';
+import { AdminPaystackManager } from './AdminPaystackManager';
 
 export const AdminMonetizationManager: React.FC = () => {
   const { 
@@ -40,7 +41,7 @@ export const AdminMonetizationManager: React.FC = () => {
     adminUser
   } = useData();
 
-  const [activeTab, setActiveTab] = useState<'payouts' | 'coinPacks' | 'vipRules' | 'gateways' | 'simulator'>('payouts');
+  const [activeTab, setActiveTab] = useState<'paystack' | 'payouts' | 'coinPacks' | 'vipRules' | 'gateways' | 'simulator'>('paystack');
   const [payoutFilter, setPayoutFilter] = useState<'all' | 'pending' | 'processing' | 'paid'>('all');
 
   // New Pack Modal
@@ -173,6 +174,24 @@ export const AdminMonetizationManager: React.FC = () => {
       {/* Tabs */}
       <div className="flex items-center gap-2 border-b border-[#202030] pb-2 overflow-x-auto scrollbar-none">
         <button
+          type="button"
+          onClick={() => setActiveTab('paystack')}
+          className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer font-heading ${
+            activeTab === 'paystack'
+              ? 'bg-amber-500 text-zinc-950 shadow-lg shadow-amber-500/20'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+          }`}
+        >
+          <CreditCard className="w-4 h-4" />
+          <span>Pass 30j Paystack</span>
+          <span className={`px-1.5 py-0.5 text-[10px] rounded-md font-bold ${
+            activeTab === 'paystack' ? 'bg-zinc-950/20 text-zinc-950' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+          }`}>
+            Live
+          </span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('payouts')}
           className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-black transition-all ${
             activeTab === 'payouts'
@@ -237,6 +256,9 @@ export const AdminMonetizationManager: React.FC = () => {
           <span>Simulateur de Gains</span>
         </button>
       </div>
+
+      {/* TAB 0: Paystack Pass 30 Jours Subscriptions */}
+      {activeTab === 'paystack' && <AdminPaystackManager />}
 
       {/* TAB 1: Payouts */}
       {activeTab === 'payouts' && (

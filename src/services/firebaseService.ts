@@ -1,6 +1,6 @@
 import { db } from '../lib/firebase';
 import { Firestore, collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, getDocFromServer, getDocs, query, orderBy, serverTimestamp } from 'firebase/firestore';
-import { Series, Teaser, PressRelease, AppVersionInfo, CreatorSubmission, Article, HomeHeroSlide, Artist, Artbook, ArtbookDownloadRecord, ArtbookPurchaseRecord, MonetizationSettings } from '../types';
+import { Series, Teaser, PressRelease, AppVersionInfo, CreatorSubmission, Article, HomeHeroSlide, Artist, Artbook, ArtbookDownloadRecord, ArtbookPurchaseRecord, MonetizationSettings, UserAccount } from '../types';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 import { normalizeImageUrl } from '../utils/imageUtils';
 
@@ -1478,6 +1478,40 @@ export async function verifyArtbookPurchaseInFirestore(
     console.warn('Verify purchase notice:', err);
     // Return verified for graceful client fallback if network is constrained
     return { verified: true, downloadAuthorized: true };
+  }
+}
+
+export async function fetchUsersFromFirestore(databaseInstance: Firestore = db): Promise<UserAccount[]> {
+  try {
+    const usersCol = collection(databaseInstance, 'users');
+    const snapshot = await getDocs(usersCol);
+    const users: UserAccount[] = [];
+    
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      // Ensure passwords or private credentials are never exposed
+      users.push({
+        id: docSnap.id,
+        email: data.email || '',
+        name: data.displayName || data.name || 'Lecteur Ozi',
+        avatarUrl: data.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${docSnap.id}`,
+        role: (data.role as any) === 'super_admin' ? 'super_admin' : 'reader',
+        coinsBalance: typeof data.coinsBalance === 'number' ? data.coinsBalance : 0,
+        isVip: Boolean(data.isVip),
+        vipExpiresAt: data.vipExpiresAt,
+        isBanned: Boolean(data.isBanned),
+        country: data.country || 'Côte d\'Ivoire',
+        joinedAt: data.createdAt || new Date().toISOString(),
+        lastActiveAt: data.updatedAt || data.createdAt || new Date().toISOString(),
+        readChaptersCount: typeof data.readChaptersCount === 'number' ? data.readChaptersCount : 0,
+        unlockedSeriesCount: typeof data.unlockedSeriesCount === 'number' ? data.unlockedSeriesCount : 0
+      });
+    });
+
+    return users;
+  } catch (err) {
+    console.warn('Notice fetching users from Firestore:', err);
+    return [];
   }
 }
 

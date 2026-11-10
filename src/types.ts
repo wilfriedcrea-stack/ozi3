@@ -488,5 +488,59 @@ export interface ArtbookPurchaseRecord {
   userId?: string;
 }
 
+// ============================================================================
+// SYSTEME PREMIUM PAR ŒUVRE (ACCÈS 30 JOURS PAYSTACK)
+// ============================================================================
 
+export type SubscriptionStatus = 'active' | 'expired' | 'pending' | 'failed';
+
+export interface SubscriptionRecord {
+  subscriptionId: string;
+  uid: string;
+  workId: string;
+  startDate: string;
+  expirationDate: string;
+  status: SubscriptionStatus;
+  paystackReference: string;
+  amount: number;
+  currency: string;
+  customerEmail?: string;
+  workTitle?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaystackInitResponse {
+  success: boolean;
+  authorizationUrl?: string;
+  accessCode?: string;
+  reference?: string;
+  message?: string;
+}
+
+export interface PremiumAccessCheckResult {
+  hasAccess: boolean;
+  subscription?: SubscriptionRecord;
+  reason?: 'active' | 'no_subscription' | 'subscription_expired' | 'subscription_inactive' | 'invalid_params';
+  remainingDays?: number;
+  serverTime: string;
+}
+
+export interface ChapterReview {
+  id: string;
+  seriesId: string;
+  seriesTitle?: string;
+  chapterId?: string;
+  chapterNumber?: number;
+  uid: string;
+  userName: string;
+  userAvatar?: string;
+  userEmail?: string;
+  rating: number; // 1 to 5
+  commentText: string;
+  likesCount: number;
+  likedBy?: string[];
+  createdAt: string;
+  status: 'approved' | 'pending' | 'hidden';
+}
 

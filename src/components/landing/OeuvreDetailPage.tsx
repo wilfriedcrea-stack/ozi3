@@ -25,6 +25,8 @@ import { useData } from '../../context/DataContext';
 import { ChapterSection } from './chapters/ChapterSection';
 import { WorkBanner } from './banner/WorkBanner';
 import { AuthorAndShopSection } from './author-shop/AuthorAndShopSection';
+import { WorkPremiumModal } from '../premium/WorkPremiumModal';
+import { WorkReviewsSection } from '../comments/WorkReviewsSection';
 
 export const OeuvreDetailPage: React.FC = () => {
   const { 
@@ -40,6 +42,7 @@ export const OeuvreDetailPage: React.FC = () => {
 
   const [copiedLink, setCopiedLink] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
+  const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
 
   // Find target series
   const currentSeries = useMemo(() => {
@@ -275,6 +278,14 @@ export const OeuvreDetailPage: React.FC = () => {
                 {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
                 <span>{copiedLink ? 'Copié' : 'Partager'}</span>
               </button>
+
+              <button
+                onClick={() => setIsPremiumModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-gradient-to-r from-[#ff8679]/20 to-amber-500/20 hover:from-[#ff8679]/30 hover:to-amber-500/30 text-amber-300 font-bold text-xs border border-amber-500/40 transition-all cursor-pointer shadow-sm shadow-orange-500/10"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Pass 30 Jours (Paystack)</span>
+              </button>
             </div>
           </div>
         </section>
@@ -284,6 +295,11 @@ export const OeuvreDetailPage: React.FC = () => {
 
         {/* Author & Shop Sections (L'Auteur et Boutique) - Placé en bas des chapitres */}
         <AuthorAndShopSection series={currentSeries} />
+
+        {/* Espace Avis & Notations des Lecteurs (Étape 5) */}
+        <section className="pt-8">
+          <WorkReviewsSection seriesId={currentSeries.id} seriesTitle={currentSeries.title} />
+        </section>
 
         {/* Related Series Recommendations */}
         {relatedSeries.length > 0 && (
@@ -349,6 +365,13 @@ export const OeuvreDetailPage: React.FC = () => {
         </div>
 
       </div>
+
+      {/* 30-Day Premium Paystack Modal */}
+      <WorkPremiumModal 
+        series={currentSeries} 
+        isOpen={isPremiumModalOpen} 
+        onClose={() => setIsPremiumModalOpen(false)} 
+      />
     </article>
   );
 };

@@ -196,6 +196,50 @@
         "pageCount": { "type": "number" }
       },
       "required": ["id", "artistName", "title", "coverUrl"]
+    },
+    "Subscription": {
+      "title": "Subscription",
+      "description": "Abonnement Premium individuel par œuvre (accès 30 jours via Paystack)",
+      "type": "object",
+      "properties": {
+        "subscriptionId": { "type": "string" },
+        "uid": { "type": "string" },
+        "workId": { "type": "string" },
+        "startDate": { "type": "string" },
+        "expirationDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "expired", "pending", "failed"] },
+        "paystackReference": { "type": "string" },
+        "amount": { "type": "number" },
+        "currency": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["subscriptionId", "uid", "workId", "startDate", "expirationDate", "status"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Avis, note et commentaire de lecteur sur une oeuvre ou un chapitre",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "seriesId": { "type": "string" },
+        "chapterId": { "type": "string" },
+        "chapterNumber": { "type": "number" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhotoURL": { "type": "string" },
+        "userRole": { "type": "string" },
+        "rating": { "type": "number" },
+        "commentText": { "type": "string" },
+        "likesCount": { "type": "number" },
+        "likedBy": { "type": "array" },
+        "isSpoiler": { "type": "boolean" },
+        "hasSubscribed": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "seriesId", "userId", "userName", "rating", "commentText"]
     }
   },
   "firestore": {
@@ -248,6 +292,17 @@
     "/creator_submissions/{submissionId}": {
       "schema": "CreatorSubmission",
       "description": "Projets soumis par les auteurs et dessinateurs"
+    },
+    "/subscriptions/{subscriptionId}": {
+      "schema": "Subscription",
+      "description": "Abonnements Premium individuels par œuvre (accès 30 jours)"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Avis, commentaires et notations des lecteurs"
+    },
+    "/reported_comments/{reportId}": {
+      "description": "Signalements de commentaires par les lecteurs pour modération"
     }
   }
 }

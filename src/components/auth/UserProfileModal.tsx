@@ -14,6 +14,8 @@ import {
   BookOpen
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { fetchUserSubscriptions } from '../../services/paystackClientService';
+import { SubscriptionRecord } from '../../types';
 
 export const UserProfileModal: React.FC = () => {
   const { 
@@ -30,6 +32,18 @@ export const UserProfileModal: React.FC = () => {
   const [editedName, setEditedName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [subscriptions, setSubscriptions] = useState<SubscriptionRecord[]>([]);
+  const [isLoadingSubs, setIsLoadingSubs] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'subscriptions' && currentUser?.uid) {
+      setIsLoadingSubs(true);
+      fetchUserSubscriptions(currentUser.uid)
+        .then(subs => setSubscriptions(subs))
+        .catch(() => {})
+        .finally(() => setIsLoadingSubs(false));
+    }
+  }, [activeTab, currentUser?.uid]);
 
   useEffect(() => {
     if (readerProfile?.displayName) {
@@ -233,21 +247,74 @@ export const UserProfileModal: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 2: Subscriptions (Reserved Space for Paystack) */}
+        {/* TAB 2: Subscriptions (Paystack 30 jours par œuvre) */}
         {activeTab === 'subscriptions' && (
-          <div className="p-5 rounded-2xl bg-zinc-950/80 border border-zinc-800/80 mb-6 text-center space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-[#ff8679]/10 border border-[#ff8679]/20 flex items-center justify-center text-[#ff8679] mx-auto">
-              <Sparkles className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-white">Abonnements Premium par Œuvre</h4>
-              <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                Emplacement réservé — Le système de paiement Paystack (2 000 FCFA / 30 jours par œuvre) sera activé prochainement.
-              </p>
-            </div>
-            <div className="text-[11px] text-zinc-500 bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-800/60">
-              Aucun abonnement en cours pour le moment.
-            </div>
+          <div className="mb-6 space-y-3">
+            {isLoadingSubs ? (
+              <div className="p-8 rounded-2xl bg-zinc-950/80 border border-zinc-800/80 text-center text-zinc-400 text-xs flex flex-col items-center justify-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin text-[#ff8679]" />
+                <span>Vérification de vos abonnements auprès du serveur...</span>
+              </div>
+            ) : subscriptions.length > 0 ? (
+              <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                {subscriptions.map((sub) => {
+                  const isExpired = sub.status === 'expired' || new Date(sub.expirationDate).getTime() <= Date.now();
+                  const remainingDays = Math.max(0, Math.ceil((new Date(sub.expirationDate).getTime() - Date.now()) / (24 * 3600 * 1000)));
+
+                  return (
+                    <div 
+                      key={sub.subscriptionId} 
+                      className={`p-3.5 rounded-2xl border text-left flex items-center justify-between gap-3 ${
+                        isExpired 
+                          ? 'bg-zinc-950/50 border-zinc-800/60 opacity-60' 
+                          : 'bg-zinc-950 border-[#ff8679]/30 shadow-sm'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-white truncate">
+                            {sub.workTitle || sub.workId}
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            isExpired 
+                              ? 'bg-zinc-800 text-zinc-400' 
+                              : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                          }`}>
+                            {isExpired ? 'Expiré' : 'Actif • 30 Jours'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-zinc-400 mt-1">
+                          {isExpired 
+                            ? `A expiré le ${new Date(sub.expirationDate).toLocaleDateString('fr-FR')}` 
+                            : `Reste ${remainingDays} jour${remainingDays > 1 ? 's' : ''} (jusqu'au ${new Date(sub.expirationDate).toLocaleDateString('fr-FR')})`}
+                        </p>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="text-xs font-mono font-bold text-zinc-200">
+                          {sub.amount?.toLocaleString('fr-FR')} {sub.currency || 'FCFA'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-6 rounded-2xl bg-zinc-950/80 border border-zinc-800/80 text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-[#ff8679]/10 border border-[#ff8679]/20 flex items-center justify-center text-[#ff8679] mx-auto">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">Pass Premium par Œuvre</h4>
+                  <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                    Débloquez l'accès illimité pendant 30 jours à n'importe quelle œuvre du catalogue via Paystack (2 000 FCFA).
+                  </p>
+                </div>
+                <div className="text-[11px] text-zinc-500 bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-800/60">
+                  Aucun abonnement actif pour le moment.
+                </div>
+              </div>
+            )}
           </div>
         )}
 

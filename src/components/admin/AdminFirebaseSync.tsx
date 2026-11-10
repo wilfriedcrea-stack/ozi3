@@ -195,63 +195,91 @@ export const AdminFirebaseSync: React.FC = () => {
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Séries & Chapitres : Lecture publique pour l'App Mobile & la Vitrine Web
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.email == 'wilfriedcrea@gmail.com' ||
+        (request.auth.token.keys().hasAny(['role']) && 
+         (request.auth.token.role == 'super_admin' || request.auth.token.role == 'admin'))
+      );
+    }
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Séries & Chapitres : Lecture publique, écriture réservée à l'administrateur
     match /series/{seriesId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
       
       match /chapters/{chapterId} {
         allow read: if true;
-        allow write: if request.auth != null;
+        allow write: if isAdmin();
       }
     }
     
-    // Artistes & Profils Créateurs : Lecture publique multi-appareils
+    // Artistes & Artbooks : Modifications réservées à l'administrateur
     match /artists/{artistId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
     
-    // Artbooks & Galeries d'Aperçu : Lecture publique multi-appareils
     match /artbooks/{artbookId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
     
-    // Enregistrement des Téléchargements Gratuits (Lead Capture)
+    // Téléchargements gratuits & Achats vérifiés
     match /artbook_downloads/{downloadId} {
       allow create: if true;
-      allow read, update, delete: if request.auth != null;
+      allow read, update, delete: if isAdmin();
     }
     
-    // Achats Paystack d'Artbooks Payants
     match /artbook_purchases/{purchaseId} {
-      allow create, update: if true;
-      allow read, delete: if request.auth != null;
+      allow create: if true;
+      allow read: if isAdmin() || (isAuthenticated() && (request.auth.uid == resource.data.userId || request.auth.token.email == resource.data.customerEmail));
+      allow update, delete: if isAdmin();
     }
     
-    // Bandes-Annonces & Teasers Vidéo
+    // Actualités, Teasers, Presse & Bannières
+    match /articles/{articleId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
     match /teasers/{teaserId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
     
-    // Espace Presse & Communiqués Officiels
     match /press_releases/{pressId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
-    
-    // Distribution de la version APK Android
-    match /app_version/{versionId} {
+
+    match /hero_slides/{slideId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
     
-    // Candidatures des Créateurs & Auteurs
+    // Configuration & Monétisation
+    match /config/{configId} {
+      allow read: if configId != 'admin_security' || isAdmin();
+      allow write: if isAdmin();
+    }
+    
+    // Candidatures des Créateurs
     match /creator_submissions/{subId} {
       allow create: if true;
-      allow read, update, delete: if request.auth != null;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Profils Lecteurs : Protection stricte contre l'usurpation et modifications de privilèges
+    match /users/{userId} {
+      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
+      allow create: if isAdmin() || (isAuthenticated() && request.auth.uid == userId && request.resource.data.uid == userId && (!('role' in request.resource.data) || request.resource.data.role == 'reader') && (!('isVip' in request.resource.data) || request.resource.data.isVip == false));
+      allow update: if isAdmin() || (isAuthenticated() && request.auth.uid == userId && request.resource.data.uid == resource.data.uid && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'uid', 'email', 'isVip', 'vipExpiresAt', 'coinsBalance', 'isBanned']));
+      allow delete: if isAdmin();
     }
   }
 }`;

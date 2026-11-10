@@ -1,5 +1,7 @@
 import React from 'react';
+import { Lock, Sparkles } from 'lucide-react';
 import { Chapter } from '../../../types';
+import { useData } from '../../../context/DataContext';
 import { ChapterThumbnail } from './ChapterThumbnail';
 import { ChapterFavoriteButton } from './ChapterFavoriteButton';
 
@@ -64,10 +66,14 @@ export const ChapterRow: React.FC<ChapterRowProps> = ({
   seriesSlugOrId,
   onSelectChapter
 }) => {
+  const { hasWorkAccess } = useData();
   const chapterNumber = chapter.chapterNumber ?? 1;
   const displayTitle = formatChapterTitle(chapterNumber, chapter.title);
   const formattedDate = formatChapterDate(chapter.publishedAt || chapter.releaseDate);
   const thumbnailSrc = chapter.thumbnailUrl || (chapter as any).thumbnail || (chapter.pages && chapter.pages.length > 0 ? chapter.pages[0] : undefined);
+
+  const isChapterFree = chapter.isFree ?? true;
+  const hasAccess = isChapterFree || hasWorkAccess(chapter.seriesId || seriesSlugOrId);
 
   const handleClick = () => {
     onSelectChapter(chapter.id);
@@ -101,11 +107,22 @@ export const ChapterRow: React.FC<ChapterRowProps> = ({
           className="w-[106px] h-[102px]"
         />
 
-        {/* 2. Titre du chapitre */}
-        <div className="px-6 py-2 min-w-0 flex items-center">
+        {/* 2. Titre du chapitre + Badge exclusif */}
+        <div className="px-6 py-2 min-w-0 flex items-center gap-2.5">
           <span className="text-base font-semibold text-[#ffffff] group-hover:text-zinc-200 transition-colors line-clamp-2 leading-snug">
             {displayTitle}
           </span>
+          {!isChapterFree && (
+            hasAccess ? (
+              <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                <Sparkles className="w-2.5 h-2.5" /> Pass Actif
+              </span>
+            ) : (
+              <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                <Lock className="w-2.5 h-2.5" /> Pass 30j
+              </span>
+            )
+          )}
         </div>
 
         {/* 3. Date de publication (160px stable zone) */}
@@ -146,10 +163,23 @@ export const ChapterRow: React.FC<ChapterRowProps> = ({
         {/* Contenu textuel à droite */}
         <div className="min-w-0 flex flex-col justify-between py-1 pr-9 gap-2">
           
-          {/* Ligne 1: Titre réel (max 2 lignes) */}
-          <h3 className="text-sm font-semibold text-[#ffffff] leading-snug line-clamp-2">
-            {displayTitle}
-          </h3>
+          {/* Ligne 1: Titre réel (max 2 lignes) + Badge */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <h3 className="text-sm font-semibold text-[#ffffff] leading-snug line-clamp-2">
+              {displayTitle}
+            </h3>
+            {!isChapterFree && (
+              hasAccess ? (
+                <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <Sparkles className="w-2 h-2" /> Actif
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  <Lock className="w-2 h-2" /> Pass 30j
+                </span>
+              )
+            )}
+          </div>
 
           {/* Ligne 2: Date réelle & Favoris */}
           <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-1">

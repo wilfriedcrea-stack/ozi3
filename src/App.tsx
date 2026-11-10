@@ -20,6 +20,8 @@ import { PullToRefresh } from './components/landing/PullToRefresh';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { AuthModal } from './components/auth/AuthModal';
 import { UserProfileModal } from './components/auth/UserProfileModal';
+import { PaystackToast } from './components/premium/PaystackToast';
+import { OfflineIndicator } from './components/common/OfflineIndicator';
 
 const MainLayout: React.FC = () => {
   const { viewMode, adminAuth } = useData();
@@ -62,7 +64,9 @@ const MainLayout: React.FC = () => {
         {/* Footer */}
         <Footer />
 
-        {/* Global Modals */}
+        {/* Global Modals & Notifications */}
+        <OfflineIndicator />
+        <PaystackToast />
         <WebtoonReaderModal />
         <TeaserVideoModal />
         <AuthModal />

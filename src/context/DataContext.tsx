@@ -29,7 +29,8 @@ import {
   Artist,
   Artbook,
   ArtbookDownloadRecord,
-  ArtbookPurchaseRecord
+  ArtbookPurchaseRecord,
+  SubscriptionRecord
 } from '../types';
 import { 
   INITIAL_SERIES, 
@@ -112,9 +113,10 @@ import {
   syncAllArtbooksToFirestore,
   recordArtbookDownloadInFirestore,
   recordArtbookPurchaseInFirestore,
-  verifyArtbookPurchaseInFirestore
+  verifyArtbookPurchaseInFirestore,
+  fetchUsersFromFirestore
 } from '../services/firebaseService';
-import { signInWithPopup, onAuthStateChanged, User } from 'firebase/auth';
+import { signInWithPopup, onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
 import { 
   signInReaderWithGoogle, 
@@ -125,6 +127,7 @@ import {
   updateReaderProfileInDb, 
   fetchOrCreateReaderProfile 
 } from '../services/authService';
+import { fetchUserSubscriptions, verifyPaystackPayment } from '../services/paystackClientService';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
 interface DataContextType {
@@ -315,6 +318,13 @@ interface DataContextType {
   // Interactions
   likeSeries: (seriesId: string) => void;
   likeChapter: (seriesId: string, chapterId: string) => void;
+
+  // Premium Subscriptions & Paystack Access
+  userSubscriptions: SubscriptionRecord[];
+  hasWorkAccess: (workId: string) => boolean;
+  refreshUserSubscriptions: () => Promise<void>;
+  paystackToast: { visible: boolean; message: string; type: 'success' | 'error' | 'info'; workTitle?: string } | null;
+  setPaystackToast: (toast: { visible: boolean; message: string; type: 'success' | 'error' | 'info'; workTitle?: string } | null) => void;
 }
 
 
@@ -580,6 +590,36 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           const profile = await fetchOrCreateReaderProfile(firebaseUser);
           setReaderProfile(profile);
+          if (profile) {
+            setUsers((prev) => {
+              const alreadyExists = prev.some(u => u.id === profile.uid || (u.email && u.email.toLowerCase() === profile.email.toLowerCase()));
+              if (alreadyExists) {
+                return prev.map(u => (u.id === profile.uid || (u.email && u.email.toLowerCase() === profile.email.toLowerCase())) ? {
+                  ...u,
+                  id: profile.uid,
+                  name: profile.displayName || u.name,
+                  email: profile.email || u.email,
+                  avatarUrl: profile.photoURL || u.avatarUrl
+                } : u);
+              }
+              const newUser: UserAccount = {
+                id: profile.uid,
+                email: profile.email,
+                name: profile.displayName || 'Lecteur Ozi',
+                avatarUrl: profile.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${profile.uid}`,
+                role: 'reader',
+                coinsBalance: 0,
+                isVip: false,
+                isBanned: false,
+                country: 'Côte d\'Ivoire',
+                joinedAt: profile.createdAt || new Date().toISOString(),
+                lastActiveAt: profile.updatedAt || new Date().toISOString(),
+                readChaptersCount: 0,
+                unlockedSeriesCount: 0
+              };
+              return [...prev, newUser];
+            });
+          }
         } catch (err) {
           console.warn('Reader profile load note:', err);
         }
@@ -638,6 +678,76 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     return res;
   }, [currentUser]);
+
+  // Premium Subscriptions State
+  const [userSubscriptions, setUserSubscriptions] = useState<SubscriptionRecord[]>([]);
+  const [paystackToast, setPaystackToast] = useState<{
+    visible: boolean;
+    message: string;
+    type: 'success' | 'error' | 'info';
+    workTitle?: string;
+  } | null>(null);
+
+  const refreshUserSubscriptions = useCallback(async () => {
+    if (currentUser?.uid) {
+      const subs = await fetchUserSubscriptions(currentUser.uid);
+      setUserSubscriptions(subs);
+    }
+  }, [currentUser]);
+
+  // Load subscriptions on user change
+  useEffect(() => {
+    if (currentUser?.uid) {
+      fetchUserSubscriptions(currentUser.uid).then(setUserSubscriptions);
+    } else {
+      setUserSubscriptions([]);
+    }
+  }, [currentUser]);
+
+  // Automatic detection of Paystack redirect callback parameters (?reference=... or ?trxref=...)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const searchParams = new URLSearchParams(window.location.search);
+    const hash = window.location.hash || '';
+    let reference = searchParams.get('reference') || searchParams.get('trxref') || searchParams.get('ref');
+
+    if (!reference && hash.includes('ref=')) {
+      const match = hash.match(/ref=([a-zA-Z0-9_-]+)/);
+      if (match) reference = match[1];
+    }
+
+    if (reference) {
+      (async () => {
+        try {
+          const res = await verifyPaystackPayment(
+            reference!,
+            currentUser?.uid,
+            selectedOeuvreId || undefined
+          );
+
+          if (res.success && res.verified) {
+            setPaystackToast({
+              visible: true,
+              type: 'success',
+              message: '🎉 Félicitations ! Votre Pass 30 Jours a été activé avec succès.',
+              workTitle: res.subscription?.workTitle,
+            });
+            if (currentUser?.uid) {
+              const updated = await fetchUserSubscriptions(currentUser.uid);
+              setUserSubscriptions(updated);
+            }
+          }
+
+          // Clean URL params cleanly without reloading
+          const cleanPath = window.location.pathname + (hash ? hash.split('?')[0] : '');
+          window.history.replaceState({}, document.title, cleanPath);
+        } catch (err) {
+          console.error('[DataContext] Error processing Paystack callback:', err);
+        }
+      })();
+    }
+  }, [currentUser, selectedOeuvreId]);
 
   const setViewMode = useCallback((mode: ViewModeType) => {
     setViewModeState(mode);
@@ -1337,6 +1447,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     lastLoginAt: adminUser.lastLogin
   };
 
+  // Check if current user has active 30-day Pass for this work
+  const hasWorkAccess = useCallback((workId: string): boolean => {
+    if (!workId) return false;
+    // Admins always have full access
+    if (adminAuth.isAuthenticated) return true;
+
+    const now = Date.now();
+    return userSubscriptions.some(
+      sub => sub.workId === workId && sub.status === 'active' && new Date(sub.expirationDate).getTime() > now
+    );
+  }, [adminAuth.isAuthenticated, userSubscriptions]);
+
   const [monetization, setMonetization] = useState<MonetizationSettings>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.MONETIZATION);
@@ -1376,7 +1498,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [users, setUsers] = useState<UserAccount[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.USERS);
-      return saved ? JSON.parse(saved) : INITIAL_USERS;
+      if (saved) {
+        const parsed: UserAccount[] = JSON.parse(saved);
+        const mockIds = new Set(['usr-002', 'usr-003', 'usr-004', 'usr-005', 'usr-006']);
+        const cleaned = parsed.filter(u => !mockIds.has(u.id));
+        const hasAdmin = cleaned.some(u => u.role === 'super_admin' || u.email.toLowerCase() === 'wilfriedcrea@gmail.com');
+        return hasAdmin ? cleaned : [INITIAL_USERS[0], ...cleaned];
+      }
+      return INITIAL_USERS;
     } catch {
       return INITIAL_USERS;
     }
@@ -1547,6 +1676,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           try {
             localStorage.setItem(STORAGE_KEYS.MONETIZATION, JSON.stringify(remoteMonetization));
           } catch {}
+        }
+
+        try {
+          const remoteUsers = await fetchUsersFromFirestore(fb.db);
+          if (remoteUsers && remoteUsers.length > 0) {
+            setUsers((prev) => {
+              const adminUser = prev.find(u => u.role === 'super_admin' || u.email.toLowerCase() === 'wilfriedcrea@gmail.com') || INITIAL_USERS[0];
+              const otherUsers = remoteUsers.filter(u => u.email.toLowerCase() !== 'wilfriedcrea@gmail.com');
+              const merged = [adminUser, ...otherUsers];
+              try {
+                localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(merged));
+              } catch {}
+              return merged;
+            });
+          }
+        } catch (usersErr) {
+          console.warn('Initial users fetch note:', usersErr);
         }
       } catch (err) {
         console.warn('Initial Firestore fetch note:', err);
@@ -1814,6 +1960,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
     }
 
+    // Bridge Firebase Auth session for wilfriedcrea@gmail.com so Firestore rules recognize admin
+    if (!auth.currentUser || auth.currentUser.email?.toLowerCase() !== 'wilfriedcrea@gmail.com') {
+      try {
+        await signInWithEmailAndPassword(auth, 'wilfriedcrea@gmail.com', cleanPass);
+      } catch (fbErr: any) {
+        if (fbErr?.code === 'auth/user-not-found' || fbErr?.code === 'auth/invalid-credential') {
+          try {
+            await createUserWithEmailAndPassword(auth, 'wilfriedcrea@gmail.com', cleanPass);
+          } catch {}
+        }
+      }
+    }
+
     // Audit log
     setModerationLogs(prev => [
       {
@@ -1871,11 +2030,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [adminCredentials, adminUser]);
 
-  const logoutAdmin = useCallback(() => {
+  const logoutAdmin = useCallback(async () => {
     setIsAuthenticated(false);
     try {
       sessionStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
       localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
+      if (auth.currentUser && auth.currentUser.email?.toLowerCase() === 'wilfriedcrea@gmail.com') {
+        await signOut(auth);
+      }
     } catch {}
     setViewMode('accueil');
   }, [setViewMode]);
@@ -3253,7 +3415,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signUpReaderWithEmail: signUpReaderWithEmailAction,
       sendReaderPasswordReset: sendReaderPasswordResetAction,
       logoutReader: logoutReaderAction,
-      updateReaderProfileData: updateReaderProfileDataAction
+      updateReaderProfileData: updateReaderProfileDataAction,
+      userSubscriptions,
+      hasWorkAccess,
+      refreshUserSubscriptions,
+      paystackToast,
+      setPaystackToast
     }}>
       {children}
     </DataContext.Provider>

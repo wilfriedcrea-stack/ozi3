@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Eye, 
   Users, 
@@ -11,7 +11,7 @@ import {
   ArrowUpRight, 
   Plus, 
   ShieldCheck, 
-  Sparkles,
+  Sparkles, 
   Smartphone,
   Search,
   Filter,
@@ -19,10 +19,12 @@ import {
   ExternalLink,
   Edit3,
   Palette,
-  RefreshCw
+  RefreshCw,
+  CreditCard
 } from 'lucide-react';
 import { Series } from '../../types';
 import { useData } from '../../context/DataContext';
+import { fetchAdminSubscriptionStats, AdminStatsData } from '../../services/paystackClientService';
 
 interface AdminDashboardProps {
   onNavigate: (tab: string) => void;
@@ -48,6 +50,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
 
   const [isSyncingArtistsCloud, setIsSyncingArtistsCloud] = useState(false);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
+  const [paystackStats, setPaystackStats] = useState<AdminStatsData | null>(null);
+
+  useEffect(() => {
+    fetchAdminSubscriptionStats().then(setPaystackStats);
+  }, []);
 
   const handleQuickSyncArtists = async () => {
     setIsSyncingArtistsCloud(true);
@@ -157,6 +164,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
           </button>
 
           <button
+            type="button"
+            onClick={() => onNavigate('monetization')}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-950/60 hover:bg-amber-600 text-amber-200 hover:text-zinc-950 border border-amber-800 text-xs font-semibold transition-all shadow-md cursor-pointer"
+            title="Consulter les revenus Paystack et abonnements"
+          >
+            <CreditCard className="w-4 h-4 text-amber-400" />
+            <span>Pass Paystack ({(paystackStats?.totalRevenueXof || 0).toLocaleString('fr-FR')} F)</span>
+          </button>
+
+          <button
             onClick={() => onNavigate('firebase')}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-semibold transition-colors"
           >
@@ -177,7 +194,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
       )}
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         
         {/* Total Reads */}
         <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col justify-between shadow-md">
@@ -230,6 +247,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
             </div>
             <div className="text-[11px] text-zinc-400 font-medium mt-1">
               70% reversés directement aux auteurs
+            </div>
+          </div>
+        </div>
+
+        {/* Paystack Pass 30j Revenue */}
+        <div 
+          role="button"
+          tabIndex={0}
+          onClick={() => onNavigate('monetization')}
+          className="p-5 rounded-2xl bg-gradient-to-br from-[#17130a] to-zinc-900 border border-amber-500/30 hover:border-amber-500/60 transition-all flex flex-col justify-between shadow-md cursor-pointer group"
+        >
+          <div className="flex items-center justify-between text-zinc-400 mb-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-amber-400 font-heading">Ventes Paystack</span>
+            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 group-hover:scale-110 transition-transform">
+              <CreditCard className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <div className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight font-heading">
+              {((paystackStats?.totalRevenueXof || 0)).toLocaleString('fr-FR')} F
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium mt-1">
+              <span className="text-emerald-400 font-bold">{paystackStats?.activeCount || 0} Pass actifs</span>
+              <span className="text-zinc-500 group-hover:text-amber-400 transition-colors">Détails →</span>
             </div>
           </div>
         </div>
