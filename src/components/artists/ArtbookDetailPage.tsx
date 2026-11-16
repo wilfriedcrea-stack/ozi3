@@ -16,12 +16,15 @@ import {
   Check, 
   ShieldCheck,
   Star,
-  BookOpen
+  BookOpen,
+  CheckCircle2
 } from 'lucide-react';
 import { Artbook, Artist } from '../../types';
 import { useData } from '../../context/DataContext';
 import { FreeDownloadModal } from './FreeDownloadModal';
 import { PaidPurchaseModal } from './PaidPurchaseModal';
+import { checkArtbookAccess } from '../../services/paystackClientService';
+import { generateAndDownloadArtbookPdf } from '../../utils/pdfGenerator';
 
 export const ArtbookDetailPage: React.FC = () => {
   const { 
@@ -30,7 +33,8 @@ export const ArtbookDetailPage: React.FC = () => {
     selectedArtbookId, 
     openArtistPage, 
     openArtbookPage,
-    setViewMode 
+    setViewMode,
+    currentUser 
   } = useData();
 
   // Find target artbook
@@ -57,10 +61,25 @@ export const ArtbookDetailPage: React.FC = () => {
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
 
+  const [hasPurchasedAccess, setHasPurchasedAccess] = useState(false);
+
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setActiveImageIndex(0);
   }, [currentArtbook?.id]);
+
+  // Vérifier si le lecteur connecté a déjà acheté cet Artbook via Paystack
+  useEffect(() => {
+    if (!currentArtbook || currentArtbook.isFree || !currentUser?.uid) {
+      setHasPurchasedAccess(false);
+      return;
+    }
+    checkArtbookAccess(currentUser.uid, currentArtbook.id).then(res => {
+      if (res.hasAccess) {
+        setHasPurchasedAccess(true);
+      }
+    });
+  }, [currentArtbook?.id, currentUser?.uid]);
 
   if (!currentArtbook) {
     return (
@@ -404,7 +423,34 @@ export const ArtbookDetailPage: React.FC = () => {
           {/* SECTION C: BOUTON D'ACTION PRINCIPAL SOUS LA GALERIE */}
           <div className="mt-8 pt-8 border-t border-zinc-800/80 flex flex-col items-center justify-center text-center">
             <div className="max-w-md w-full">
-              {currentArtbook.isFree ? (
+              {hasPurchasedAccess ? (
+                /* ALREADY PURCHASED PAYSTACK ACCESS */
+                <div className="w-full p-4 rounded-2xl bg-emerald-950/40 border-2 border-emerald-500/40 text-center">
+                  <div className="flex items-center justify-center gap-2 text-emerald-400 font-bold text-sm mb-3 font-heading">
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span>Artbook Débloqué • Accès Paystack Validé</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const directUrl = (currentArtbook.downloadUrl || currentArtbook.pdfDownloadUrl || '').trim();
+                      if (directUrl) {
+                        window.open(directUrl, '_blank');
+                      } else {
+                        generateAndDownloadArtbookPdf({
+                          artbook: currentArtbook,
+                          userName: currentUser?.displayName || 'Lecteur OZI',
+                          userEmail: currentUser?.email || '',
+                          isPaid: true
+                        });
+                      }
+                    }}
+                    className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-extrabold text-base shadow-xl shadow-emerald-600/25 flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer font-almodobar"
+                  >
+                    <Download className="w-5 h-5" />
+                    <span>Télécharger à nouveau mon Artbook (PDF)</span>
+                  </button>
+                </div>
+              ) : currentArtbook.isFree ? (
                 /* FREE ARTBOOK ACTION BUTTON */
                 <button
                   id="btn-download-free-artbook"

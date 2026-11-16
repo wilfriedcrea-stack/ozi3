@@ -1,4 +1,4 @@
-import { SubscriptionRecord, SubscriptionStatus, PremiumAccessCheckResult } from '../../src/types';
+import { SubscriptionRecord, SubscriptionStatus, PremiumAccessCheckResult, ArtbookPurchaseRecord } from '../../src/types';
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json' with { type: 'json' };
@@ -227,6 +227,253 @@ export async function hasValidAccess(uid: string, workId: string): Promise<Premi
   };
 }
 
+// In-memory store for Artbook Purchases
+const memoryArtbookPurchases: Map<string, ArtbookPurchaseRecord> = new Map();
+
+/**
+ * Activates an Artbook purchase upon verified charge.success from Paystack
+ */
+export async function activateArtbookPurchase(params: {
+  paystackReference: string;
+  uid: string;
+  artbookId: string;
+  artbookTitle?: string;
+  artistName?: string;
+  amount: number;
+  currency?: string;
+  customerEmail?: string;
+  userName?: string;
+  phone?: string;
+}): Promise<ArtbookPurchaseRecord> {
+  const serverNow = new Date();
+  const purchaseId = `art_pur_${params.artbookId}_${params.uid}_${Date.now()}`;
+  const compositeKey = `${params.uid.trim()}:${params.artbookId.trim()}`;
+
+  const record: ArtbookPurchaseRecord = {
+    id: purchaseId,
+    artbookId: params.artbookId.trim(),
+    artbookTitle: params.artbookTitle || 'Artbook OZI',
+    artistName: params.artistName || 'Artiste OZI',
+    priceXof: params.amount,
+    userName: params.userName || 'Lecteur OZI',
+    userEmail: (params.customerEmail || '').trim().toLowerCase(),
+    userPhone: params.phone || '',
+    paymentGateway: 'paystack',
+    paymentReference: params.paystackReference,
+    status: 'completed',
+    purchasedAt: serverNow.toISOString(),
+    downloadAuthorized: true,
+    userId: params.uid.trim()
+  };
+
+  memoryArtbookPurchases.set(purchaseId, record);
+  memoryArtbookPurchases.set(compositeKey, record);
+
+  if (serverDb) {
+    try {
+      await setDoc(doc(serverDb, 'artbook_purchases', purchaseId), record, { merge: true });
+    } catch (err) {
+      console.warn('[SubscriptionService] Error persisting artbook purchase to Firestore:', err);
+    }
+  }
+
+  console.log(`[SubscriptionService] 🎨 Achat Artbook débloqué avec succès ! Lecteur: ${record.userId} | Artbook: ${record.artbookId} | Réf: ${record.paymentReference}`);
+  return record;
+}
+
+/**
+ * Server-side Access Control: hasArtbookAccess(uid, artbookId, email?)
+ */
+export async function hasArtbookAccess(uid: string, artbookId: string, email?: string): Promise<{
+  hasAccess: boolean;
+  purchase?: ArtbookPurchaseRecord;
+  serverTime: string;
+}> {
+  const serverTime = new Date().toISOString();
+  if (!uid || !artbookId) {
+    return { hasAccess: false, serverTime };
+  }
+
+  const cleanUid = uid.trim();
+  const cleanArtbookId = artbookId.trim();
+  const compositeKey = `${cleanUid}:${cleanArtbookId}`;
+
+  // 1. Check memory cache
+  let purchase = memoryArtbookPurchases.get(compositeKey);
+
+  // 2. Query Firestore if available
+  if (!purchase && serverDb) {
+    try {
+      const colRef = collection(serverDb, 'artbook_purchases');
+      const q = query(
+        colRef,
+        where('artbookId', '==', cleanArtbookId),
+        where('userId', '==', cleanUid)
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const found = snap.docs.map(d => d.data() as ArtbookPurchaseRecord).find(p => p.status === 'completed' && p.downloadAuthorized);
+        if (found) {
+          purchase = found;
+          memoryArtbookPurchases.set(compositeKey, purchase);
+          memoryArtbookPurchases.set(purchase.id, purchase);
+        }
+      }
+    } catch (err) {
+      console.warn('[SubscriptionService] Notice querying Firestore for artbook purchase:', err);
+    }
+  }
+
+  if (purchase && purchase.status === 'completed' && purchase.downloadAuthorized) {
+    return { hasAccess: true, purchase, serverTime };
+  }
+
+  return { hasAccess: false, serverTime };
+}
+
+/**
+ * Returns all purchased artbooks for a specific user
+ */
+export async function getUserArtbookPurchases(uid: string): Promise<ArtbookPurchaseRecord[]> {
+  const cleanUid = uid.trim();
+  const list: ArtbookPurchaseRecord[] = [];
+
+  for (const pur of memoryArtbookPurchases.values()) {
+    if (pur.userId === cleanUid && pur.downloadAuthorized && !list.some(p => p.id === pur.id)) {
+      list.push(pur);
+    }
+  }
+
+  if (serverDb) {
+    try {
+      const colRef = collection(serverDb, 'artbook_purchases');
+      const q = query(colRef, where('userId', '==', cleanUid));
+      const snap = await getDocs(q);
+      snap.forEach(d => {
+        const data = d.data() as ArtbookPurchaseRecord;
+        if (data.downloadAuthorized && !list.some(p => p.id === data.id)) {
+          list.push(data);
+        }
+      });
+    } catch (err) {
+      console.warn('[SubscriptionService] Notice fetching user artbook purchases:', err);
+    }
+  }
+
+  list.sort((a, b) => new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime());
+  return list;
+}
+
+/**
+ * Returns all artbook purchases across all readers for reporting
+ */
+export async function getAllArtbookPurchases(): Promise<ArtbookPurchaseRecord[]> {
+  const mapById = new Map<string, ArtbookPurchaseRecord>();
+
+  for (const pur of memoryArtbookPurchases.values()) {
+    if (pur.id) mapById.set(pur.id, pur);
+  }
+
+  if (serverDb) {
+    try {
+      const colRef = collection(serverDb, 'artbook_purchases');
+      const snap = await getDocs(colRef);
+      snap.forEach(d => {
+        const data = d.data() as ArtbookPurchaseRecord;
+        if (data.id) mapById.set(data.id, data);
+      });
+    } catch (err) {
+      console.warn('[SubscriptionService] Notice fetching all artbook purchases:', err);
+    }
+  }
+
+  return Array.from(mapById.values());
+}
+
+// In-memory store for Coin Transactions
+const memoryCoinTransactions: Map<string, any> = new Map();
+
+/**
+ * Activates Coin Pack purchase upon verified charge.success from Paystack
+ */
+export async function activateCoinPackPurchase(params: {
+  paystackReference: string;
+  uid: string;
+  packId: string;
+  packName?: string;
+  coinsAmount: number;
+  amount: number;
+  currency?: string;
+  customerEmail?: string;
+}): Promise<any> {
+  const serverNow = new Date();
+  const txId = `coin_tx_${params.packId}_${params.uid}_${Date.now()}`;
+
+  const record = {
+    id: txId,
+    uid: params.uid.trim(),
+    packId: params.packId,
+    packName: params.packName || 'Pack de Coins',
+    coinsAmount: params.coinsAmount,
+    amountXof: params.amount,
+    currency: params.currency || 'XOF',
+    paystackReference: params.paystackReference,
+    customerEmail: params.customerEmail || '',
+    status: 'completed',
+    createdAt: serverNow.toISOString(),
+  };
+
+  memoryCoinTransactions.set(txId, record);
+
+  if (serverDb) {
+    try {
+      // 1. Record transaction
+      await setDoc(doc(serverDb, 'coin_transactions', txId), record, { merge: true });
+
+      // 2. Atomically increment reader's coins balance
+      const userRef = doc(serverDb, 'users', params.uid.trim());
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        const currentBalance = userSnap.data()?.coinsBalance || 0;
+        await updateDoc(userRef, {
+          coinsBalance: currentBalance + params.coinsAmount,
+          updatedAt: serverNow.toISOString()
+        });
+      }
+    } catch (err) {
+      console.warn('[SubscriptionService] Notice recording coin pack purchase in Firestore:', err);
+    }
+  }
+
+  console.log(`[SubscriptionService] 🪙 Pack de ${params.coinsAmount} Coins crédité avec succès pour le lecteur ${params.uid} ! Réf: ${params.paystackReference}`);
+  return record;
+}
+
+/**
+ * Returns all coin transactions for admin reporting
+ */
+export async function getAllCoinTransactions(): Promise<any[]> {
+  const mapById = new Map<string, any>();
+  for (const tx of memoryCoinTransactions.values()) {
+    if (tx.id) mapById.set(tx.id, tx);
+  }
+
+  if (serverDb) {
+    try {
+      const colRef = collection(serverDb, 'coin_transactions');
+      const snap = await getDocs(colRef);
+      snap.forEach(d => {
+        const data = d.data();
+        if (data.id) mapById.set(data.id, data);
+      });
+    } catch (err) {
+      console.warn('[SubscriptionService] Notice fetching all coin transactions:', err);
+    }
+  }
+
+  return Array.from(mapById.values());
+}
+
 /**
  * Returns all subscriptions for a specific reader (active & past)
  */
@@ -273,12 +520,18 @@ export async function getUserSubscriptions(uid: string): Promise<SubscriptionRec
 
 export interface PaystackAdminStats {
   totalRevenueXof: number;
+  workPassRevenueXof: number;
+  artbooksRevenueXof: number;
+  coinsRevenueXof: number;
   activeCount: number;
   expiredCount: number;
   pendingCount: number;
+  artbooksSalesCount: number;
+  coinsSalesCount: number;
   totalTransactionsCount: number;
   byWork: Array<{ workId: string; workTitle: string; count: number; revenueXof: number }>;
   byMonth: Array<{ month: string; count: number; revenueXof: number }>;
+  byType: Array<{ type: string; label: string; count: number; revenueXof: number }>;
 }
 
 /**
@@ -325,12 +578,19 @@ export async function getAllSubscriptions(): Promise<SubscriptionRecord[]> {
 }
 
 /**
- * Computes aggregated financial & subscription statistics for the Admin Dashboard
+ * Computes aggregated financial & subscription statistics across ALL Paystack purchases:
+ * (Pass Œuvres 30 jours + Artbooks Payants + Packs de Coins)
  */
 export async function getSubscriptionStats(): Promise<PaystackAdminStats> {
-  const subscriptions = await getAllSubscriptions();
+  const [subscriptions, artbookPurchases, coinTransactions] = await Promise.all([
+    getAllSubscriptions(),
+    getAllArtbookPurchases(),
+    getAllCoinTransactions()
+  ]);
 
-  let totalRevenueXof = 0;
+  let workPassRevenueXof = 0;
+  let artbooksRevenueXof = 0;
+  let coinsRevenueXof = 0;
   let activeCount = 0;
   let expiredCount = 0;
   let pendingCount = 0;
@@ -338,18 +598,18 @@ export async function getSubscriptionStats(): Promise<PaystackAdminStats> {
   const workMap = new Map<string, { workTitle: string; count: number; revenueXof: number }>();
   const monthMap = new Map<string, { count: number; revenueXof: number }>();
 
+  // 1. Process Work Subscriptions
   for (const sub of subscriptions) {
     if (sub.status === 'active') {
       activeCount++;
-      totalRevenueXof += (sub.amount || 2000);
+      workPassRevenueXof += (sub.amount || 2000);
     } else if (sub.status === 'expired') {
       expiredCount++;
-      totalRevenueXof += (sub.amount || 2000);
+      workPassRevenueXof += (sub.amount || 2000);
     } else if (sub.status === 'pending') {
       pendingCount++;
     }
 
-    // Work breakdown (for paid transactions)
     if (sub.status === 'active' || sub.status === 'expired') {
       const workId = sub.workId || 'inconnu';
       const existing = workMap.get(workId) || {
@@ -361,15 +621,49 @@ export async function getSubscriptionStats(): Promise<PaystackAdminStats> {
       existing.revenueXof += (sub.amount || 2000);
       workMap.set(workId, existing);
 
-      // Month breakdown
       const dateStr = sub.startDate || sub.createdAt || new Date().toISOString();
-      const month = dateStr.slice(0, 7); // 'YYYY-MM'
+      const month = dateStr.slice(0, 7);
       const existingMonth = monthMap.get(month) || { count: 0, revenueXof: 0 };
       existingMonth.count++;
       existingMonth.revenueXof += (sub.amount || 2000);
       monthMap.set(month, existingMonth);
     }
   }
+
+  // 2. Process Artbook Purchases
+  let artbooksSalesCount = 0;
+  for (const art of artbookPurchases) {
+    if (art.status === 'completed' || art.downloadAuthorized) {
+      artbooksSalesCount++;
+      artbooksRevenueXof += (art.priceXof || 3500);
+
+      const dateStr = art.purchasedAt || new Date().toISOString();
+      const month = dateStr.slice(0, 7);
+      const existingMonth = monthMap.get(month) || { count: 0, revenueXof: 0 };
+      existingMonth.count++;
+      existingMonth.revenueXof += (art.priceXof || 3500);
+      monthMap.set(month, existingMonth);
+    }
+  }
+
+  // 3. Process Coin Transactions
+  let coinsSalesCount = 0;
+  for (const coin of coinTransactions) {
+    if (coin.status === 'completed') {
+      coinsSalesCount++;
+      coinsRevenueXof += (coin.amountXof || 1000);
+
+      const dateStr = coin.createdAt || new Date().toISOString();
+      const month = dateStr.slice(0, 7);
+      const existingMonth = monthMap.get(month) || { count: 0, revenueXof: 0 };
+      existingMonth.count++;
+      existingMonth.revenueXof += (coin.amountXof || 1000);
+      monthMap.set(month, existingMonth);
+    }
+  }
+
+  const totalRevenueXof = workPassRevenueXof + artbooksRevenueXof + coinsRevenueXof;
+  const totalTransactionsCount = subscriptions.length + artbookPurchases.length + coinTransactions.length;
 
   const byWork = Array.from(workMap.entries()).map(([workId, val]) => ({
     workId,
@@ -384,14 +678,26 @@ export async function getSubscriptionStats(): Promise<PaystackAdminStats> {
     revenueXof: val.revenueXof,
   })).sort((a, b) => b.month.localeCompare(a.month));
 
+  const byType = [
+    { type: 'work_pass', label: 'Pass Œuvres 30 Jours', count: activeCount + expiredCount, revenueXof: workPassRevenueXof },
+    { type: 'artbook_purchase', label: 'Artbooks Payants', count: artbooksSalesCount, revenueXof: artbooksRevenueXof },
+    { type: 'coin_pack', label: 'Packs de Coins', count: coinsSalesCount, revenueXof: coinsRevenueXof },
+  ];
+
   return {
     totalRevenueXof,
+    workPassRevenueXof,
+    artbooksRevenueXof,
+    coinsRevenueXof,
     activeCount,
     expiredCount,
     pendingCount,
-    totalTransactionsCount: subscriptions.length,
+    artbooksSalesCount,
+    coinsSalesCount,
+    totalTransactionsCount,
     byWork,
     byMonth,
+    byType
   };
 }
 

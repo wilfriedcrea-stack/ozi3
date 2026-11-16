@@ -53,7 +53,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
   const [paystackStats, setPaystackStats] = useState<AdminStatsData | null>(null);
 
   useEffect(() => {
-    fetchAdminSubscriptionStats().then(setPaystackStats);
+    let isMounted = true;
+    const loadStats = () => {
+      fetchAdminSubscriptionStats().then(data => {
+        if (isMounted && data) {
+          setPaystackStats(data);
+        }
+      });
+    };
+    loadStats();
+    const interval = setInterval(loadStats, 20000);
+    window.addEventListener('focus', loadStats);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      window.removeEventListener('focus', loadStats);
+    };
   }, []);
 
   const handleQuickSyncArtists = async () => {
@@ -166,11 +181,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
           <button
             type="button"
             onClick={() => onNavigate('monetization')}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-950/60 hover:bg-amber-600 text-amber-200 hover:text-zinc-950 border border-amber-800 text-xs font-semibold transition-all shadow-md cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-950/80 via-amber-900/60 to-amber-950/80 hover:from-amber-500 hover:to-orange-500 text-amber-200 hover:text-zinc-950 border border-amber-600/50 hover:border-amber-400 text-xs font-bold transition-all shadow-lg shadow-amber-950/40 cursor-pointer group"
             title="Consulter les revenus Paystack et abonnements"
           >
-            <CreditCard className="w-4 h-4 text-amber-400" />
-            <span>Pass Paystack ({(paystackStats?.totalRevenueXof || 0).toLocaleString('fr-FR')} F)</span>
+            <CreditCard className="w-4 h-4 text-amber-400 group-hover:text-zinc-950 transition-colors" />
+            <span>Pass Paystack ({(paystackStats?.totalRevenueXof || 0).toLocaleString('fr-FR')} FCFA)</span>
           </button>
 
           <button
@@ -251,31 +266,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
           </div>
         </div>
 
-        {/* Paystack Pass 30j Revenue */}
-        <div 
-          role="button"
-          tabIndex={0}
-          onClick={() => onNavigate('monetization')}
-          className="p-5 rounded-2xl bg-gradient-to-br from-[#17130a] to-zinc-900 border border-amber-500/30 hover:border-amber-500/60 transition-all flex flex-col justify-between shadow-md cursor-pointer group"
-        >
-          <div className="flex items-center justify-between text-zinc-400 mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-amber-400 font-heading">Ventes Paystack</span>
-            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 group-hover:scale-110 transition-transform">
-              <CreditCard className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight font-heading">
-              {((paystackStats?.totalRevenueXof || 0)).toLocaleString('fr-FR')} F
-            </div>
-            <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium mt-1">
-              <span className="text-emerald-400 font-bold">{paystackStats?.activeCount || 0} Pass actifs</span>
-              <span className="text-zinc-500 group-hover:text-amber-400 transition-colors">Détails →</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Series Count & Likes */}
+        {/* 4. Catalogue Actif */}
         <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col justify-between shadow-md">
           <div className="flex items-center justify-between text-zinc-400 mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider">Catalogue Actif</span>
@@ -289,6 +280,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
             </div>
             <div className="flex items-center gap-1 text-[11px] text-zinc-400 font-medium mt-1">
               <span>{totalLikes.toLocaleString()} mentions J'aime</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 5. Ventes Paystack & Abonnés Actifs (Accès Direct Espace Financier) */}
+        <div 
+          role="button"
+          tabIndex={0}
+          onClick={() => onNavigate('monetization')}
+          className="p-5 rounded-2xl bg-gradient-to-br from-[#1a1409] via-zinc-900 to-zinc-900 border-2 border-amber-500/40 hover:border-amber-400 transition-all flex flex-col justify-between shadow-lg shadow-amber-500/5 hover:shadow-amber-500/15 cursor-pointer group relative overflow-hidden"
+          title="Cliquez pour accéder directement à l'espace financier et gérer les abonnements Paystack"
+        >
+          <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-xl pointer-events-none group-hover:bg-amber-500/20 transition-colors" />
+
+          <div className="flex items-center justify-between text-zinc-400 mb-3 relative z-10">
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-400 font-heading">
+              Ventes Paystack
+            </span>
+            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 group-hover:scale-110 transition-transform shadow-inner">
+              <CreditCard className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="relative z-10">
+            <div className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight font-heading">
+              {((paystackStats?.totalRevenueXof || 0)).toLocaleString('fr-FR')} FCFA
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium mt-2 pt-2 border-t border-amber-500/20">
+              <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>{paystackStats?.activeCount || 0} abonnés actifs</span>
+              </span>
+              <span className="text-amber-400 font-bold flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                <span>Espace financier</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </span>
             </div>
           </div>
         </div>

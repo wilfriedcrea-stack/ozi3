@@ -623,6 +623,36 @@ export const WebtoonReaderModal: React.FC = () => {
             </section>
           )}
 
+          {/* Espace Commentaires & Notations au bas des planches (Étape 5) */}
+          <div id="reader-comments-section" className="w-full mt-12 mb-8 border-t border-zinc-800/80 pt-8">
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <span className="text-xs uppercase tracking-wider font-bold text-orange-400 font-heading">
+                  Fin du Chapitre {activeReaderChapter.chapterNumber}
+                </span>
+                <h3 className="text-lg sm:text-xl font-black text-white font-heading mt-0.5">
+                  Avis & Réactions des Lecteurs
+                </h3>
+              </div>
+              {nextChapter && (
+                <button
+                  onClick={() => openReader(activeReaderSeries.id, nextChapter.id)}
+                  className="px-3.5 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold font-heading flex items-center gap-1.5 cursor-pointer shadow-lg shadow-orange-500/20"
+                >
+                  <span>Ch. {nextChapter.chapterNumber}</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            <WorkReviewsSection
+              seriesId={activeReaderSeries.id}
+              seriesTitle={activeReaderSeries.title}
+              chapterId={activeReaderChapter.id}
+              chapterNumber={activeReaderChapter.chapterNumber}
+            />
+          </div>
+
         </div>
       </main>
 
@@ -637,9 +667,17 @@ export const WebtoonReaderModal: React.FC = () => {
           <span>Précédent</span>
         </button>
 
-        <span className="text-xs font-black text-orange-400 font-heading">
-          Ch. {activeReaderChapter.chapterNumber} / {chapters.length}
-        </span>
+        <button
+          type="button"
+          onClick={() => {
+            const el = document.getElementById('reader-comments-section');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c2b] text-xs font-bold text-orange-400 font-heading cursor-pointer"
+        >
+          <MessageSquare className="w-3.5 h-3.5" />
+          <span>Avis (Ch. {activeReaderChapter.chapterNumber})</span>
+        </button>
 
         <button
           disabled={!nextChapter}

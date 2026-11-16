@@ -8,13 +8,21 @@ export interface PaystackInitializeOptions {
   amount: number; // e.g. 2000 (FCFA)
   currency?: string; // e.g. 'XOF'
   uid: string;
-  workId: string;
+  paymentType?: 'work_pass' | 'artbook_purchase' | 'coin_pack';
+  targetId?: string; // workId, artbookId, or packId
+  title?: string;
+  workId?: string;
   workTitle?: string;
+  artbookId?: string;
+  artbookTitle?: string;
+  artistName?: string;
+  packId?: string;
+  coinsAmount?: number;
   callbackUrl?: string;
 }
 
 /**
- * Initializes a transaction with Paystack API
+ * Initializes a transaction with Paystack API for any paid item (Pass 30j, Artbooks, Coins)
  */
 export async function initializePaystackTransaction(
   options: PaystackInitializeOptions
@@ -24,7 +32,12 @@ export async function initializePaystackTransaction(
   // Paystack requires amount in smallest currency unit (multiply by 100 for XOF/NGN/USD)
   const amountInSubunits = Math.round(options.amount * 100);
 
-  const reference = `ozi_sub_${options.workId}_${options.uid.slice(0, 8)}_${Date.now()}`;
+  const paymentType = options.paymentType || (options.artbookId ? 'artbook_purchase' : (options.packId ? 'coin_pack' : 'work_pass'));
+  const targetId = options.targetId || options.workId || options.artbookId || options.packId || 'item';
+  const title = options.title || options.workTitle || options.artbookTitle || 'Produit OZI';
+
+  const prefix = paymentType === 'artbook_purchase' ? 'art' : (paymentType === 'coin_pack' ? 'coin' : 'sub');
+  const reference = `ozi_${prefix}_${targetId}_${options.uid.slice(0, 8)}_${Date.now()}`;
 
   // If secret key is provided and not a placeholder, call real Paystack API
   if (secretKey && !secretKey.includes('placeholder') && !secretKey.includes('xxx')) {
@@ -40,22 +53,35 @@ export async function initializePaystackTransaction(
           amount: amountInSubunits,
           currency,
           reference,
-          callback_url: options.callbackUrl || `${process.env.APP_URL || 'http://localhost:3000'}/#/oeuvre/${options.workId}?status=success&ref=${reference}`,
+          callback_url: options.callbackUrl || `${process.env.APP_URL || 'http://localhost:3000'}/#/paystack/callback?ref=${reference}&type=${paymentType}&target=${targetId}`,
           metadata: {
             uid: options.uid,
-            workId: options.workId,
-            workTitle: options.workTitle || 'Œuvre OZI',
-            subscriptionType: 'work_30_days',
+            paymentType,
+            targetId,
+            title,
+            workId: options.workId || (paymentType === 'work_pass' ? targetId : ''),
+            workTitle: options.workTitle || (paymentType === 'work_pass' ? title : ''),
+            artbookId: options.artbookId || (paymentType === 'artbook_purchase' ? targetId : ''),
+            artbookTitle: options.artbookTitle || (paymentType === 'artbook_purchase' ? title : ''),
+            artistName: options.artistName || '',
+            packId: options.packId || (paymentType === 'coin_pack' ? targetId : ''),
+            coinsAmount: options.coinsAmount || 0,
+            email: options.email,
             custom_fields: [
+              {
+                display_name: 'Type de Paiement',
+                variable_name: 'paymentType',
+                value: paymentType,
+              },
               {
                 display_name: 'Identifiant Lecteur',
                 variable_name: 'uid',
                 value: options.uid,
               },
               {
-                display_name: 'Oeuvre OZI',
-                variable_name: 'workId',
-                value: options.workId,
+                display_name: 'Article OZI',
+                variable_name: 'targetId',
+                value: targetId,
               },
             ],
           },
@@ -89,7 +115,11 @@ export async function initializePaystackTransaction(
   }
 
   // Fallback: Sandbox / Development Mode when secret key is not configured in environment
-  const mockAuthUrl = `${process.env.APP_URL || 'http://localhost:3000'}/#/oeuvre/${options.workId}?paystack_simulated=1&ref=${reference}&uid=${encodeURIComponent(options.uid)}&workId=${encodeURIComponent(options.workId)}`;
+  let mockCallbackRoute = `#/oeuvre/${targetId}`;
+  if (paymentType === 'artbook_purchase') {
+    mockCallbackRoute = `#/artistes`;
+  }
+  const mockAuthUrl = `${process.env.APP_URL || 'http://localhost:3000'}/${mockCallbackRoute}?paystack_simulated=1&ref=${reference}&uid=${encodeURIComponent(options.uid)}&type=${paymentType}&target=${encodeURIComponent(targetId)}`;
 
   return {
     success: true,
@@ -144,8 +174,15 @@ export async function verifyPaystackTransaction(reference: string): Promise<{
   amount?: number;
   currency?: string;
   uid?: string;
+  paymentType?: 'work_pass' | 'artbook_purchase' | 'coin_pack';
+  targetId?: string;
   workId?: string;
   workTitle?: string;
+  artbookId?: string;
+  artbookTitle?: string;
+  artistName?: string;
+  packId?: string;
+  coinsAmount?: number;
   customerEmail?: string;
   raw?: any;
 }> {
@@ -163,14 +200,24 @@ export async function verifyPaystackTransaction(reference: string): Promise<{
       if (response.ok && data.status && data.data) {
         const d = data.data;
         const metadata = d.metadata || {};
+        const paymentType = metadata.paymentType || (metadata.artbookId ? 'artbook_purchase' : (metadata.packId ? 'coin_pack' : 'work_pass'));
+        const targetId = metadata.targetId || metadata.workId || metadata.artbookId || metadata.packId || '';
+
         return {
           success: d.status === 'success',
           status: d.status,
           amount: Math.round((d.amount || 0) / 100),
           currency: d.currency || 'XOF',
           uid: metadata.uid || '',
-          workId: metadata.workId || '',
-          workTitle: metadata.workTitle || '',
+          paymentType,
+          targetId,
+          workId: metadata.workId || (paymentType === 'work_pass' ? targetId : ''),
+          workTitle: metadata.workTitle || metadata.title || '',
+          artbookId: metadata.artbookId || (paymentType === 'artbook_purchase' ? targetId : ''),
+          artbookTitle: metadata.artbookTitle || metadata.title || '',
+          artistName: metadata.artistName || '',
+          packId: metadata.packId || (paymentType === 'coin_pack' ? targetId : ''),
+          coinsAmount: metadata.coinsAmount || 0,
           customerEmail: (d.customer && d.customer.email) || metadata.email || '',
           raw: d,
         };
@@ -180,12 +227,17 @@ export async function verifyPaystackTransaction(reference: string): Promise<{
     }
   }
 
-  // Fallback for test / development mode
+  // Fallback for test / development mode: detect type from reference
+  let detectedType: 'work_pass' | 'artbook_purchase' | 'coin_pack' = 'work_pass';
+  if (reference.includes('art')) detectedType = 'artbook_purchase';
+  if (reference.includes('coin')) detectedType = 'coin_pack';
+
   return {
     success: true,
     status: 'success',
-    amount: 2000,
+    amount: detectedType === 'work_pass' ? 2000 : 3500,
     currency: 'XOF',
+    paymentType: detectedType,
     raw: { simulated: true },
   };
 }

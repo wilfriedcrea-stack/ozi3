@@ -2837,6 +2837,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return u;
     }));
 
+    setReaderProfile(prev => {
+      if (prev && prev.uid === userId) {
+        return { ...prev, coinsBalance: Math.max(0, (prev.coinsBalance || 0) + amount) };
+      }
+      return prev;
+    });
+
     const targetUser = users.find(u => u.id === userId);
     if (targetUser) {
       const newTx: CoinTransaction = {

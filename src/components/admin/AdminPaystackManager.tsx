@@ -18,7 +18,9 @@ import {
   BookOpen,
   Calendar,
   Layers,
-  DollarSign
+  DollarSign,
+  Coins,
+  Palette
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { SubscriptionRecord } from '../../types';
@@ -291,6 +293,65 @@ export const AdminPaystackManager: React.FC = () => {
               {stats?.pendingCount || 0} transaction(s) en attente
             </div>
           </div>
+        </div>
+
+      </div>
+
+      {/* 3 Unified Monetization Streams (Pass Webtoon, Artbooks, Coins) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        
+        {/* Stream 1: Pass 30 Jours */}
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-950/40 via-zinc-900 to-zinc-900 border border-amber-500/30 flex items-center justify-between shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+              <BookOpen className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-zinc-300">Pass 30 Jours Webtoon</div>
+              <div className="text-lg font-black text-amber-400 font-heading">
+                {(stats?.workPassRevenueXof ?? stats?.totalRevenueXof ?? 0).toLocaleString('fr-FR')} FCFA
+              </div>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold">
+            {stats?.activeCount ?? 0} actif(s)
+          </span>
+        </div>
+
+        {/* Stream 2: Artbooks Payants */}
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-950/40 via-zinc-900 to-zinc-900 border border-purple-500/30 flex items-center justify-between shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
+              <Palette className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-zinc-300">Artbooks & Recueils HD</div>
+              <div className="text-lg font-black text-purple-400 font-heading">
+                {(stats?.artbooksRevenueXof ?? 0).toLocaleString('fr-FR')} FCFA
+              </div>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[10px] font-bold">
+            {stats?.artbooksSalesCount ?? 0} vente(s)
+          </span>
+        </div>
+
+        {/* Stream 3: Packs de Coins */}
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-950/40 via-zinc-900 to-zinc-900 border border-emerald-500/30 flex items-center justify-between shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+              <Coins className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-zinc-300">Packs de Coins Rechargés</div>
+              <div className="text-lg font-black text-emerald-400 font-heading">
+                {(stats?.coinsRevenueXof ?? 0).toLocaleString('fr-FR')} FCFA
+              </div>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold">
+            {stats?.coinsSalesCount ?? 0} recharge(s)
+          </span>
         </div>
 
       </div>

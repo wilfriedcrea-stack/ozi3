@@ -11,11 +11,19 @@ import {
   Edit3, 
   Check, 
   Loader2,
-  BookOpen
+  BookOpen,
+  Palette,
+  Download,
+  Coins
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
-import { fetchUserSubscriptions } from '../../services/paystackClientService';
-import { SubscriptionRecord } from '../../types';
+import { 
+  fetchUserSubscriptions, 
+  fetchUserArtbookPurchases, 
+  initiateCoinPackPurchase, 
+  verifyPaystackPayment 
+} from '../../services/paystackClientService';
+import { SubscriptionRecord, ArtbookPurchaseRecord, CoinPack } from '../../types';
 
 export const UserProfileModal: React.FC = () => {
   const { 
@@ -23,17 +31,27 @@ export const UserProfileModal: React.FC = () => {
     closeProfileModal, 
     currentUser, 
     readerProfile, 
+    users,
     logoutReader, 
-    updateReaderProfileData 
+    updateReaderProfileData,
+    monetization,
+    adjustUserCoins
   } = useData();
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'subscriptions'>('profile');
+  const userAccount = users?.find(u => u.id === currentUser?.uid || (currentUser?.email && u.email === currentUser.email));
+  const userCoinsBalance = userAccount?.coinsBalance ?? readerProfile?.coinsBalance ?? 0;
+
+  const [activeTab, setActiveTab] = useState<'profile' | 'subscriptions' | 'artbooks' | 'coins'>('profile');
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [subscriptions, setSubscriptions] = useState<SubscriptionRecord[]>([]);
   const [isLoadingSubs, setIsLoadingSubs] = useState(false);
+  const [artbooks, setArtbooks] = useState<ArtbookPurchaseRecord[]>([]);
+  const [isLoadingArtbooks, setIsLoadingArtbooks] = useState(false);
+  const [purchasingPackId, setPurchasingPackId] = useState<string | null>(null);
+  const [coinPurchaseSuccess, setCoinPurchaseSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeTab === 'subscriptions' && currentUser?.uid) {
@@ -42,6 +60,12 @@ export const UserProfileModal: React.FC = () => {
         .then(subs => setSubscriptions(subs))
         .catch(() => {})
         .finally(() => setIsLoadingSubs(false));
+    } else if (activeTab === 'artbooks' && currentUser?.uid) {
+      setIsLoadingArtbooks(true);
+      fetchUserArtbookPurchases(currentUser.uid)
+        .then(res => setArtbooks(res))
+        .catch(() => {})
+        .finally(() => setIsLoadingArtbooks(false));
     }
   }, [activeTab, currentUser?.uid]);
 
@@ -97,6 +121,64 @@ export const UserProfileModal: React.FC = () => {
   const handleLogout = async () => {
     await logoutReader();
     closeProfileModal();
+  };
+
+  const handleBuyCoinPack = async (pack: CoinPack) => {
+    if (!currentUser?.uid) return;
+    setPurchasingPackId(pack.id);
+    setCoinPurchaseSuccess(null);
+    try {
+      const totalCoins = pack.coins + (pack.bonusCoins || 0);
+      const res = await initiateCoinPackPurchase({
+        uid: currentUser.uid,
+        packId: pack.id,
+        packName: pack.name,
+        coinsAmount: totalCoins,
+        amount: pack.priceXof,
+        email: currentUser.email || `${currentUser.uid}@ozibd.net`
+      });
+
+      if (res.success && res.authorizationUrl) {
+        const width = 500;
+        const height = 650;
+        const left = (window.innerWidth - width) / 2;
+        const top = (window.innerHeight - height) / 2;
+        const popup = window.open(
+          res.authorizationUrl,
+          'PaystackCoinCheckout',
+          `width=${width},height=${height},top=${top},left=${left}`
+        );
+
+        let attempts = 0;
+        const interval = setInterval(async () => {
+          attempts++;
+          try {
+            const vRes = await verifyPaystackPayment(res.reference, currentUser.uid);
+            if (vRes.verified && vRes.success) {
+              clearInterval(interval);
+              adjustUserCoins(currentUser.uid, totalCoins, `Achat ${pack.name} via Paystack`);
+              setCoinPurchaseSuccess(`Félicitations ! +${totalCoins.toLocaleString('fr-FR')} Coins crédités sur votre compte !`);
+              setPurchasingPackId(null);
+              if (popup && !popup.closed) popup.close();
+            }
+          } catch {
+            // Polling retry
+          }
+
+          if (attempts > 50 || (popup && popup.closed && attempts > 8)) {
+            clearInterval(interval);
+            setPurchasingPackId(null);
+          }
+        }, 3000);
+      } else {
+        setFeedback(res.message || 'Impossible d\'initialiser le paiement Paystack.');
+        setPurchasingPackId(null);
+      }
+    } catch (err: any) {
+      console.error('[UserProfileModal] Coin purchase error:', err);
+      setFeedback('Erreur lors du traitement du paiement.');
+      setPurchasingPackId(null);
+    }
   };
 
   return (
@@ -195,7 +277,7 @@ export const UserProfileModal: React.FC = () => {
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            Informations
+            Infos
           </button>
           <button
             type="button"
@@ -206,7 +288,29 @@ export const UserProfileModal: React.FC = () => {
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            Mes Abonnements
+            Pass 30j
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('artbooks')}
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+              activeTab === 'artbooks' 
+                ? 'bg-zinc-800 text-white shadow-sm' 
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            Artbooks
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('coins')}
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+              activeTab === 'coins' 
+                ? 'bg-amber-500 text-zinc-950 shadow-sm font-black' 
+                : 'text-amber-400 hover:text-amber-300'
+            }`}
+          >
+            Coins
           </button>
         </div>
 
@@ -233,6 +337,26 @@ export const UserProfileModal: React.FC = () => {
                 <span>Statut plateforme</span>
               </span>
               <span className="text-zinc-300 font-medium">Lecteur OZI</span>
+            </div>
+
+            {/* Solde Coins OZI */}
+            <div className="p-3.5 rounded-2xl bg-zinc-950/60 border border-amber-500/30 flex items-center justify-between text-xs shadow-inner">
+              <span className="text-zinc-300 flex items-center gap-2">
+                <Coins className="w-4 h-4 text-amber-400" />
+                <span>Solde Coins OZI</span>
+              </span>
+              <div className="flex items-center gap-2">
+                <strong className="text-amber-400 font-black text-sm">
+                  {userCoinsBalance.toLocaleString('fr-FR')} Coins
+                </strong>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('coins')}
+                  className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-[10px] transition-all cursor-pointer"
+                >
+                  Recharger
+                </button>
+              </div>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-zinc-950/60 border border-zinc-800/80 flex items-center justify-between text-xs">
@@ -315,6 +439,141 @@ export const UserProfileModal: React.FC = () => {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* TAB 3: Artbooks Achetés via Paystack */}
+        {activeTab === 'artbooks' && (
+          <div className="mb-6 space-y-3">
+            {isLoadingArtbooks ? (
+              <div className="p-8 rounded-2xl bg-zinc-950/80 border border-zinc-800/80 text-center text-zinc-400 text-xs flex flex-col items-center justify-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin text-[#ff8679]" />
+                <span>Chargement de vos artbooks débloqués...</span>
+              </div>
+            ) : artbooks.length > 0 ? (
+              <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                {artbooks.map((art) => (
+                  <div 
+                    key={art.id} 
+                    className="p-3.5 rounded-2xl border bg-zinc-950 border-purple-500/30 text-left flex items-center justify-between gap-3 shadow-sm"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <Palette className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                        <span className="text-xs font-bold text-white truncate">
+                          {art.artbookTitle}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-zinc-400 mt-0.5 truncate">
+                        {art.artistName} • Réf : {art.paymentReference.slice(0, 16)}...
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold">
+                        Payé & Actif
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-6 rounded-2xl bg-zinc-950/80 border border-zinc-800/80 text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mx-auto">
+                  <Palette className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">Recueils & Artbooks OZI</h4>
+                  <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                    Achetez les artbooks officiels de vos artistes favoris par Mobile Money ou Carte pour débloquer les galeries HD et le téléchargement PDF.
+                  </p>
+                </div>
+                <div className="text-[11px] text-zinc-500 bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-800/60">
+                  Aucun artbook acheté pour le moment.
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 4: Packs de Coins (Recharge Paystack) */}
+        {activeTab === 'coins' && (
+          <div className="mb-6 space-y-3">
+            {/* Balance Overview */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-950/40 via-zinc-900 to-zinc-900 border border-amber-500/30 flex items-center justify-between shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Coins className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-[11px] text-zinc-400 font-bold uppercase tracking-wider">Solde Actuel</div>
+                  <div className="text-xl font-black text-amber-400 font-heading">
+                    {userCoinsBalance.toLocaleString('fr-FR')} Coins
+                  </div>
+                </div>
+              </div>
+              <span className="text-[11px] text-zinc-400 max-w-[120px] text-right font-medium">
+                Débloquez vos chapitres favoris
+              </span>
+            </div>
+
+            {coinPurchaseSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs font-bold flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{coinPurchaseSuccess}</span>
+              </div>
+            )}
+
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {(monetization?.coinPacks || []).map((pack) => {
+                const isBuying = purchasingPackId === pack.id;
+                const totalCoins = pack.coins + (pack.bonusCoins || 0);
+
+                return (
+                  <div
+                    key={pack.id}
+                    className="p-3 rounded-2xl bg-zinc-950 border border-zinc-800 hover:border-amber-500/40 transition-all flex items-center justify-between gap-3 shadow-sm"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-white truncate">
+                          {pack.name}
+                        </span>
+                        {pack.isPopular && (
+                          <span className="px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[9px] font-black uppercase">
+                            Populaire
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-zinc-400 flex items-center gap-2 mt-0.5">
+                        <span className="text-amber-400 font-bold">{totalCoins.toLocaleString('fr-FR')} Coins</span>
+                        {pack.bonusCoins > 0 && (
+                          <span className="text-emerald-400 text-[10px] font-semibold">(+{pack.bonusCoins} offerts)</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={purchasingPackId !== null}
+                      onClick={() => handleBuyCoinPack(pack)}
+                      className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 font-black text-xs transition-all shadow-md cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                    >
+                      {isBuying ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Paiement...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard className="w-3.5 h-3.5" />
+                          <span>{pack.priceXof.toLocaleString('fr-FR')} FCFA</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 

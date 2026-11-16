@@ -37,6 +37,7 @@ async function createServer() {
   // 4. Mount Paystack & Premium Subscriptions Routes
   app.use('/api/paystack', paystackRouter);
   app.use('/api/premium', paystackRouter);
+  app.use('/api/artbooks', paystackRouter);
 
   // 5. OpenGraph Share Card Handler (/share.php) for social media previews
   app.get('/share.php', (req, res) => {

@@ -187,6 +187,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Transactions et achats de packs de Coins Paystack
+    match /coin_transactions/{txId} {
+      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == resource.data.uid);
+      allow write: if isAdmin();
+    }
+
     // =========================================================================
     // 8. DIAGNOSTIC SANTÉ SYSTÈME
     // =========================================================================

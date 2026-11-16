@@ -234,6 +234,7 @@ export interface ReaderProfile {
   createdAt: string;
   updatedAt: string;
   bio?: string;
+  coinsBalance?: number;
 }
 
 export interface UserAccount {

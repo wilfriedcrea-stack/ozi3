@@ -146,14 +146,128 @@ export async function verifyPaystackPayment(
   }
 }
 
+/**
+ * Initiates an Artbook purchase via backend Paystack
+ */
+export async function initiateArtbookPurchase(params: {
+  uid: string;
+  artbookId: string;
+  artbookTitle: string;
+  artistName?: string;
+  email: string;
+  name?: string;
+  phone?: string;
+  amount: number;
+}): Promise<PaystackInitResponse> {
+  try {
+    const response = await fetch('/api/paystack/initialize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        uid: params.uid,
+        paymentType: 'artbook_purchase',
+        targetId: params.artbookId,
+        artbookId: params.artbookId,
+        artbookTitle: params.artbookTitle,
+        artistName: params.artistName,
+        email: params.email,
+        amount: params.amount,
+        currency: 'XOF',
+      }),
+    });
+    return await response.json();
+  } catch (err: any) {
+    console.error('[paystackClientService] Error initializing artbook purchase:', err);
+    return {
+      success: false,
+      message: err.message || 'Impossible de contacter le serveur de paiement.',
+    };
+  }
+}
+
+/**
+ * Checks if reader has paid for and unlocked access to a specific artbook
+ */
+export async function checkArtbookAccess(uid: string, artbookId: string): Promise<{
+  hasAccess: boolean;
+  purchase?: any;
+}> {
+  try {
+    const res = await fetch(`/api/artbooks/check-access?uid=${encodeURIComponent(uid)}&artbookId=${encodeURIComponent(artbookId)}`, {
+      headers: { 'x-reader-uid': uid }
+    });
+    if (!res.ok) return { hasAccess: false };
+    return await res.json();
+  } catch {
+    return { hasAccess: false };
+  }
+}
+
+/**
+ * Fetches all artbook purchases made by a reader
+ */
+export async function fetchUserArtbookPurchases(uid: string): Promise<any[]> {
+  try {
+    const res = await fetch(`/api/artbooks/user-purchases/${encodeURIComponent(uid)}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.purchases || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Initiates Coin Pack purchase via backend Paystack
+ */
+export async function initiateCoinPackPurchase(params: {
+  uid: string;
+  packId: string;
+  packName: string;
+  coinsAmount: number;
+  amount: number;
+  email: string;
+}): Promise<PaystackInitResponse> {
+  try {
+    const response = await fetch('/api/paystack/initialize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        uid: params.uid,
+        paymentType: 'coin_pack',
+        targetId: params.packId,
+        packId: params.packId,
+        packName: params.packName,
+        coinsAmount: params.coinsAmount,
+        amount: params.amount,
+        email: params.email,
+        currency: 'XOF',
+      }),
+    });
+    return await response.json();
+  } catch (err: any) {
+    console.error('[paystackClientService] Error initializing coin purchase:', err);
+    return {
+      success: false,
+      message: err.message || 'Impossible de joindre la passerelle Paystack.',
+    };
+  }
+}
+
 export interface AdminStatsData {
   totalRevenueXof: number;
+  workPassRevenueXof?: number;
+  artbooksRevenueXof?: number;
+  coinsRevenueXof?: number;
   activeCount: number;
   expiredCount: number;
   pendingCount: number;
+  artbooksSalesCount?: number;
+  coinsSalesCount?: number;
   totalTransactionsCount: number;
   byWork: Array<{ workId: string; workTitle: string; count: number; revenueXof: number }>;
   byMonth: Array<{ month: string; count: number; revenueXof: number }>;
+  byType?: Array<{ type: string; label: string; count: number; revenueXof: number }>;
 }
 
 /**

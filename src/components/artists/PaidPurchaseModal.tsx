@@ -18,6 +18,7 @@ import confetti from 'canvas-confetti';
 import { Artbook } from '../../types';
 import { useData } from '../../context/DataContext';
 import { generateAndDownloadArtbookPdf } from '../../utils/pdfGenerator';
+import { initiateArtbookPurchase, checkArtbookAccess } from '../../services/paystackClientService';
 
 interface PaidPurchaseModalProps {
   artbook: Artbook;
@@ -99,12 +100,31 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
 
     setStep('processing');
 
-    const generatedRef = `OZI-ART-${Math.floor(100000 + Math.random() * 900000)}`;
-    setTransactionRef(generatedRef);
-    const purchaseId = `purchase-${Date.now()}`;
-
     try {
-      // 1. Record purchase initiation in Firestore
+      const uid = currentUser?.uid || `guest_${Date.now()}`;
+
+      // 1. Initialisation réelle de la transaction Paystack (Mobile Money / Carte)
+      const initResult = await initiateArtbookPurchase({
+        uid,
+        artbookId: artbook.id,
+        artbookTitle: artbook.title,
+        artistName: artbook.artistName,
+        email: email.trim().toLowerCase(),
+        name: name.trim(),
+        phone: cleanPhone,
+        amount: artbook.price || 3500,
+      });
+
+      if (!initResult.success || !initResult.reference) {
+        setStep('failed');
+        setErrorMsg(initResult.message || 'Impossible d\'initialiser le paiement Paystack.');
+        return;
+      }
+
+      setTransactionRef(initResult.reference);
+      const purchaseId = `purchase-${Date.now()}`;
+
+      // 2. Enregistrer l'initiation dans Firestore localement
       await recordArtbookPurchase({
         id: purchaseId,
         artbookId: artbook.id,
@@ -115,29 +135,42 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
         userEmail: email.trim().toLowerCase(),
         userPhone: cleanPhone,
         paymentGateway: selectedProvider,
-        paymentReference: generatedRef,
+        paymentReference: initResult.reference,
         status: 'pending',
         purchasedAt: new Date().toISOString(),
         downloadAuthorized: false,
         userId: currentUser?.uid
       });
 
-      // 2. Simulate server-side payment verification (2.5 seconds)
-      setTimeout(async () => {
+      // 3. Ouvrir le guichet sécurisé Paystack si URL fournie
+      if (initResult.authorizationUrl) {
         try {
-          const verification = await verifyArtbookPurchase(purchaseId, generatedRef);
-          if (verification.verified && verification.downloadAuthorized) {
+          window.open(initResult.authorizationUrl, '_blank', 'width=540,height=720');
+        } catch {
+          // If popup is blocked, the user can click the manual button in step processing
+        }
+      }
+
+      // 4. Polling actif de vérification auprès du serveur Paystack
+      let checkAttempts = 0;
+      const checkInterval = setInterval(async () => {
+        checkAttempts++;
+        try {
+          const verifyRes = await fetch(`/api/paystack/verify/${encodeURIComponent(initResult.reference!)}?type=artbook_purchase&target=${encodeURIComponent(artbook.id)}&uid=${encodeURIComponent(uid)}`);
+          const verifyData = await verifyRes.json();
+
+          if (verifyData.success && (verifyData.verified || verifyData.status === 'success')) {
+            clearInterval(checkInterval);
             setDownloadAuthorized(true);
             setStep('confirmed');
 
-            // Trigger celebration
             confetti({
-              particleCount: 100,
-              spread: 80,
+              particleCount: 120,
+              spread: 90,
               origin: { y: 0.6 }
             });
 
-            // Automatically trigger download (direct link or high-res PDF generation)
+            // Déclenchement automatique du téléchargement
             const directUrl = (artbook.downloadUrl || artbook.pdfDownloadUrl || '').trim();
             if (directUrl) {
               try {
@@ -149,7 +182,7 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
                 document.body.appendChild(dlAnchor);
                 dlAnchor.click();
                 document.body.removeChild(dlAnchor);
-              } catch (e) {
+              } catch {
                 window.open(directUrl, '_blank');
               }
             } else {
@@ -158,21 +191,23 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
                 userName: name.trim(),
                 userEmail: email.trim().toLowerCase(),
                 isPaid: true,
-                transactionRef: generatedRef
+                transactionRef: initResult.reference
               });
             }
-          } else {
-            setStep('failed');
-            setErrorMsg('La passerelle de paiement n\'a pas validé la transaction.');
           }
-        } catch (err) {
-          setStep('failed');
-          setErrorMsg('Échec de la validation sécurisée du paiement.');
+        } catch (pollErr) {
+          console.warn('[Artbook verification poll warning]', pollErr);
         }
-      }, 2600);
-    } catch (err) {
+
+        // Arrêt après 60 tentatives (3 minutes)
+        if (checkAttempts >= 60) {
+          clearInterval(checkInterval);
+        }
+      }, 3000);
+
+    } catch (err: any) {
       setStep('failed');
-      setErrorMsg('Erreur lors de la communication avec le serveur de paiement.');
+      setErrorMsg(err.message || 'Erreur lors de la communication avec la passerelle Paystack.');
     }
   };
 
@@ -391,12 +426,35 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
             </h3>
 
             <p className="text-xs sm:text-sm text-zinc-400 max-w-sm mb-4 leading-relaxed">
-              Nous traitons votre paiement via la passerelle sécurisée. Ne fermez pas cette fenêtre.
+              Nous traitons votre paiement via le guichet sécurisé Paystack. Validez la transaction sur votre téléphone ou carte bancaire.
             </p>
 
-            <div className="px-4 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs font-mono text-zinc-400">
-              Réf : {transactionRef || 'Génération...'}
+            <div className="px-4 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs font-mono text-zinc-400 mb-4">
+              Réf Paystack : {transactionRef || 'Génération...'}
             </div>
+
+            <button
+              type="button"
+              onClick={async () => {
+                if (!transactionRef) return;
+                try {
+                  const uid = currentUser?.uid || '';
+                  const res = await fetch(`/api/paystack/verify/${encodeURIComponent(transactionRef)}?type=artbook_purchase&target=${encodeURIComponent(artbook.id)}&uid=${encodeURIComponent(uid)}`);
+                  const data = await res.json();
+                  if (data.success && (data.verified || data.status === 'success')) {
+                    setDownloadAuthorized(true);
+                    setStep('confirmed');
+                    confetti({ particleCount: 100, spread: 80 });
+                  }
+                } catch (e) {
+                  console.warn(e);
+                }
+              }}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 font-black text-xs flex items-center gap-2 shadow-md transition-all cursor-pointer font-heading"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>J'ai validé sur mon téléphone / Re-vérifier</span>
+            </button>
           </div>
         )}
 
