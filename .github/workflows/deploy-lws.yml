@@ -33,5 +33,16 @@ jobs:
           password: ${{ secrets.LWS_FTP_PASSWORD }}
           local-dir: ./dist/
           server-dir: ./
+          state-name: .ftp-deploy-ozi-state.json
           dangerous-clean-slate: false
-
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            polahandroid.com/**
+            uploads/**
+            webtoon/**
+            banner/**
+            article/**
+            artist/**
+            .quarantaine/**

@@ -1,6 +1,12 @@
+DirectoryIndex index.html
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
+
+  # Empêcher Google et les visiteurs d'accéder au sous-dossier polahandroid.com via le domaine ozibd.net
+  RewriteCond %{HTTP_HOST} ^(www\.)?ozibd\.net$ [NC]
+  RewriteRule ^polahandroid\.com(/.*)?$ - [R=404,L]
 
   # Route direct /oeuvre/<slug> or ?oeuvre=<slug> for social bots to share.php
   RewriteCond %{HTTP_USER_AGENT} (facebookexternalhit|Facebot|Meta-ExternalAgent|Twitterbot|WhatsApp|LinkedInBot|Discordbot|Slackbot|TelegramBot|Pinterest) [NC]
@@ -14,6 +20,15 @@
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule . /index.html [L]
 </IfModule>
+
+# Éviter qu'un ancien index.html (ex: Polahandroid) reste bloqué en cache navigateur/CDN
+<FilesMatch "^(index\.html)$">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires 0
+  </IfModule>
+</FilesMatch>
 
 # Activation de la compression GZIP pour la rapidité
 <IfModule mod_deflate.c>

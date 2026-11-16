@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /polahandroid.com/
+Disallow: /api/
+Disallow: /.quarantaine/
+
+Sitemap: https://ozibd.net/sitemap.xml
