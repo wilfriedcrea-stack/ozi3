@@ -5,7 +5,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const JSZip = require('jszip');
 
-async function addDirectoryToZip(zip, dirPath, rootPath) {
+function addDirectoryToZip(zip, dirPath, rootPath) {
   const entries = fs.readdirSync(dirPath, { withFileTypes: true });
 
   for (const entry of entries) {
@@ -13,15 +13,17 @@ async function addDirectoryToZip(zip, dirPath, rootPath) {
     const relativePath = path.relative(rootPath, fullPath).replace(/\\/g, '/');
 
     if (entry.name.endsWith('.zip')) {
-      // Skip any zip files to avoid recursion
+      continue;
+    }
+    if (relativePath === 'assets/aistudio' || relativePath.startsWith('assets/aistudio/')) {
       continue;
     }
 
     if (entry.isDirectory()) {
-      await addDirectoryToZip(zip, fullPath, rootPath);
+      addDirectoryToZip(zip, fullPath, rootPath);
     } else if (entry.isFile()) {
       const fileData = fs.readFileSync(fullPath);
-      zip.file(relativePath, fileData);
+      zip.file(relativePath, fileData, { binary: true, createFolders: false });
     }
   }
 }
@@ -39,17 +41,15 @@ async function createLwsZip() {
     process.exit(1);
   }
 
-  console.log('Packing dist into zip...');
+  console.log('Packing dist into Windows/LWS DOS-compatible zip...');
   const zip = new JSZip();
+  addDirectoryToZip(zip, distDir, distDir);
 
-  // Add all files recursively from dist
-  await addDirectoryToZip(zip, distDir, distDir);
-
-  // Generate the zip buffer
   const content = await zip.generateAsync({
     type: 'nodebuffer',
     compression: 'DEFLATE',
-    compressionOptions: { level: 9 }
+    compressionOptions: { level: 6 },
+    platform: 'DOS',
   });
 
   fs.writeFileSync(targetZipPath1, content);
@@ -57,12 +57,13 @@ async function createLwsZip() {
   fs.writeFileSync(distZipPath1, content);
   fs.writeFileSync(distZipPath2, content);
 
-  console.log(`Successfully generated LWS packs:`);
-  console.log(`- ${targetZipPath1} (${(content.length / (1024 * 1024)).toFixed(2)} MB)`);
-  console.log(`- ${targetZipPath2} (${(content.length / (1024 * 1024)).toFixed(2)} MB)`);
+  const sizeMb = (content.length / (1024 * 1024)).toFixed(2);
+  console.log(`Successfully generated Windows/LWS DOS-compatible packs:`);
+  console.log(`- ${targetZipPath1} (${sizeMb} MB)`);
+  console.log(`- ${targetZipPath2} (${sizeMb} MB)`);
 }
 
-createLwsZip().catch(err => {
+createLwsZip().catch((err) => {
   console.error('Error generating LWS zip:', err);
   process.exit(1);
 });

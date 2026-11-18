@@ -13,18 +13,38 @@ export const DownloadPackModal: React.FC<{ isOpen: boolean; onClose: () => void 
       setDownloading(true);
       setError(null);
       
-      const response = await fetch('/ozibd-lws-dist.zip', {
+      let response = await fetch('/api/lws-pack/download', {
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache'
         }
       });
 
+      if (!response.ok || !(response.headers.get('content-type') || '').includes('zip')) {
+        response = await fetch('/ozibd-lws-dist.zip', {
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        });
+      }
+
       if (!response.ok) {
         throw new Error(`Erreur réseau (${response.status})`);
       }
 
-      const blob = await response.blob();
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('text/html')) {
+        throw new Error('Le serveur a renvoyé une page HTML au lieu du fichier ZIP.');
+      }
+
+      const buffer = await response.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      if (bytes.length < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+        throw new Error('Le fichier téléchargé n\'est pas un ZIP valide.');
+      }
+
+      const blob = new Blob([buffer], { type: 'application/zip' });
       const blobUrl = window.URL.createObjectURL(blob);
       
       const a = document.createElement('a');

@@ -31,6 +31,43 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ activeTab, onNewSeries
   } = useData();
   const [syncing, setSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+  const [downloadingLws, setDownloadingLws] = useState(false);
+
+  const handleDownloadLwsPack = async () => {
+    if (downloadingLws) return;
+    setDownloadingLws(true);
+    setSyncFeedback('Préparation du Pack LWS (.zip)...');
+    try {
+      const response = await fetch('/api/lws-pack/download', { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`Erreur serveur (${response.status})`);
+      }
+      const buffer = await response.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      if (bytes.length < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+        throw new Error('Le fichier reçu n\'est pas un ZIP valide (HTML/proxy intercepté).');
+      }
+      const blob = new Blob([buffer], { type: 'application/zip' });
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = blobUrl;
+      a.download = 'ozibd-lws-dist.zip';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        window.URL.revokeObjectURL(blobUrl);
+        document.body.removeChild(a);
+      }, 1500);
+      setSyncFeedback('Pack LWS téléchargé avec succès !');
+      setTimeout(() => setSyncFeedback(null), 4000);
+    } catch (err: any) {
+      setSyncFeedback(`Erreur Pack LWS : ${err?.message || 'Téléchargement impossible'}`);
+      setTimeout(() => setSyncFeedback(null), 6000);
+    } finally {
+      setDownloadingLws(false);
+    }
+  };
 
   const handleSyncClick = async () => {
     setSyncing(true);
@@ -138,16 +175,17 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ activeTab, onNewSeries
         </button>
 
         {/* Download LWS package */}
-        <a
+        <button
+          type="button"
           id="admin-header-download-lws-btn"
-          href="/ozibd-lws-dist.zip"
-          download="ozibd-lws-dist.zip"
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold transition-colors font-heading"
+          onClick={handleDownloadLwsPack}
+          disabled={downloadingLws}
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold transition-colors font-heading cursor-pointer disabled:opacity-50"
           title="Télécharger le fichier zip prêt pour votre hébergement LWS"
         >
-          <Layers className="w-3.5 h-3.5 text-amber-400" />
-          <span className="hidden sm:inline">Pack LWS (.zip)</span>
-        </a>
+          <Layers className={`w-3.5 h-3.5 text-amber-400 ${downloadingLws ? 'animate-spin' : ''}`} />
+          <span className="hidden sm:inline">{downloadingLws ? 'Génération...' : 'Pack LWS (.zip)'}</span>
+        </button>
 
         {/* Back to Live Landing Page */}
         <button

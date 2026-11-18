@@ -1,13 +1,30 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import JSZip from 'jszip';
 import { paystackRouter } from './server/routes/paystackRoutes';
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+function addDistDirToZip(zip: JSZip, dirPath: string, rootPath: string) {
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    const relativePath = path.relative(rootPath, fullPath).replace(/\\/g, '/');
+    if (entry.name.endsWith('.zip')) continue;
+    if (relativePath === 'assets/aistudio' || relativePath.startsWith('assets/aistudio/')) continue;
+    if (entry.isDirectory()) {
+      addDistDirToZip(zip, fullPath, rootPath);
+    } else if (entry.isFile()) {
+      zip.file(relativePath, fs.readFileSync(fullPath), { binary: true, createFolders: false });
+    }
+  }
+}
 
 async function createServer() {
   const app = express();
@@ -38,6 +55,41 @@ async function createServer() {
   app.use('/api/paystack', paystackRouter);
   app.use('/api/premium', paystackRouter);
   app.use('/api/artbooks', paystackRouter);
+
+  // 4b. Direct LWS Pack ZIP Download Endpoint (generates fresh Windows/LWS DOS ZIP from dist/)
+  app.get('/api/lws-pack/download', async (_req, res) => {
+    try {
+      const distDir = path.join(__dirname, 'dist');
+      if (fs.existsSync(path.join(distDir, 'index.html'))) {
+        const zip = new JSZip();
+        addDistDirToZip(zip, distDir, distDir);
+        const buffer = await zip.generateAsync({
+          type: 'nodebuffer',
+          compression: 'DEFLATE',
+          compressionOptions: { level: 6 },
+          platform: 'DOS',
+        });
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', 'attachment; filename="ozibd-lws-dist.zip"');
+        res.setHeader('Content-Length', String(buffer.length));
+        res.setHeader('Cache-Control', 'no-store');
+        return res.status(200).send(buffer);
+      }
+
+      const fallbackZip = path.join(__dirname, 'public', 'ozibd-lws-dist.zip');
+      if (fs.existsSync(fallbackZip)) {
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', 'attachment; filename="ozibd-lws-dist.zip"');
+        res.setHeader('Cache-Control', 'no-store');
+        return res.sendFile(fallbackZip);
+      }
+
+      return res.status(404).json({ error: 'Pack LWS introuvable. Veuillez exécuter npm run build.' });
+    } catch (err: any) {
+      console.error('[OZIBD Server] Error generating LWS pack:', err);
+      return res.status(500).json({ error: err?.message || 'Erreur génération ZIP' });
+    }
+  });
 
   // 5. OpenGraph Share Card Handler (/share.php) for social media previews
   app.get('/share.php', (req, res) => {
