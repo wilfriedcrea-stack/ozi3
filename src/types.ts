@@ -420,6 +420,7 @@ export interface Artist {
   name: string;
   slug: string;
   photoUrl: string;
+  bannerAvatarUrl?: string;
   country?: string;
   bio: string;
   specialties: string[];

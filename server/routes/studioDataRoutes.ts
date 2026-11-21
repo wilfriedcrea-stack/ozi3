@@ -221,11 +221,27 @@ function writeStudioDataFile(data: Record<string, unknown>): void {
   fs.renameSync(tempFile, file);
 }
 
+function readFirebaseWebApiKey(): string | null {
+  try {
+    const cfgPath = path.resolve(__dirname, '..', '..', 'firebase-applet-config.json');
+    if (fs.existsSync(cfgPath)) {
+      const parsed = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+      if (parsed && typeof parsed.apiKey === 'string' && parsed.apiKey.trim()) {
+        return parsed.apiKey.trim();
+      }
+    }
+  } catch {}
+  return null;
+}
+
+const ALLOWED_UPLOAD_CATEGORIES = new Set(['covers', 'banners', 'chapters', 'audio', 'articles', 'authors', 'shop']);
+const UPLOADS_DIR = path.resolve(DATA_DIR, 'uploads');
+
 export const studioDataRouter = Router();
 
 studioDataRouter.post('/admin/login', (req: Request, res: Response) => {
   const username = typeof req.body?.username === 'string' ? req.body.username.trim().toLowerCase() : '';
-  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  const cleanPassword = typeof req.body?.password === 'string' ? req.body.password : '';
   const authCfg = readAuthConfig();
 
   const usernameAllowed =
@@ -233,7 +249,7 @@ studioDataRouter.post('/admin/login', (req: Request, res: Response) => {
     username.includes('wilfried') ||
     ['admin', 'ozi', 'ozibd'].includes(username);
 
-  if (!usernameAllowed || !verifyAdminPassword(password, authCfg.passwordHash)) {
+  if (!usernameAllowed || !verifyAdminPassword(cleanPassword, authCfg.passwordHash)) {
     return res.status(401).json({ success: false, error: 'Identifiants Studio invalides.' });
   }
 
@@ -252,6 +268,107 @@ studioDataRouter.post('/admin/login', (req: Request, res: Response) => {
   res.setHeader('Set-Cookie', cookieParts.join('; '));
 
   return res.status(200).json({ success: true, token });
+});
+
+studioDataRouter.post('/admin/google-login', async (req: Request, res: Response) => {
+  const idToken = typeof req.body?.idToken === 'string' ? req.body.idToken.trim() : '';
+  if (!idToken) {
+    return res.status(400).json({ success: false, error: 'Jeton Google manquant.' });
+  }
+  const apiKey = readFirebaseWebApiKey();
+  if (!apiKey) {
+    return res.status(500).json({ success: false, error: 'Configuration Firebase introuvable.' });
+  }
+
+  try {
+    const verifyResp = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      }
+    );
+    const verifyJson = (await verifyResp.json().catch(() => null)) as any;
+    const userRecord = Array.isArray(verifyJson?.users) ? verifyJson.users[0] : null;
+    const verifiedEmail = typeof userRecord?.email === 'string' ? userRecord.email.trim().toLowerCase() : '';
+    const emailVerified = Boolean(userRecord?.emailVerified);
+
+    const authCfg = readAuthConfig();
+    const isAuthorizedEmail =
+      emailVerified &&
+      Boolean(verifiedEmail) &&
+      (verifiedEmail === 'wilfriedcrea@gmail.com' ||
+        authCfg.allowedUsernames.some(u => u.toLowerCase() === verifiedEmail) ||
+        verifiedEmail.endsWith('@ozibd.net'));
+
+    if (!verifyResp.ok || !isAuthorizedEmail) {
+      return res.status(401).json({ success: false, error: 'Compte Google non autorisé.' });
+    }
+
+    const token = issueSignedSessionToken(verifiedEmail);
+    const https = isRequestHttps(req);
+    const cookieParts = [
+      `ozi_studio_session=${encodeURIComponent(token)}`,
+      'Path=/',
+      `Max-Age=${24 * 60 * 60}`,
+      'HttpOnly',
+      https ? 'SameSite=None' : 'SameSite=Lax',
+    ];
+    if (https) {
+      cookieParts.push('Secure', 'Partitioned');
+    }
+    res.setHeader('Set-Cookie', cookieParts.join('; '));
+
+    return res.status(200).json({ success: true, token });
+  } catch (err) {
+    console.warn('[StudioData] Google login verification error:', err);
+    return res.status(500).json({ success: false, error: 'Erreur de vérification Google.' });
+  }
+});
+
+studioDataRouter.post('/studio-upload', (req: Request, res: Response) => {
+  if (!isAdminAuthorized(req)) {
+    return res.status(401).json({ success: false, error: 'Session administrateur requise pour téléverser un fichier.' });
+  }
+
+  const rawCategory = typeof req.body?.category === 'string' ? req.body.category.trim().toLowerCase() : 'authors';
+  const category = ALLOWED_UPLOAD_CATEGORIES.has(rawCategory) ? rawCategory : 'authors';
+  const rawName = typeof req.body?.fileName === 'string' ? req.body.fileName.trim() : `upload_${Date.now()}.webp`;
+  const dataUrl = typeof req.body?.dataUrl === 'string' ? req.body.dataUrl.trim() : '';
+
+  const match = dataUrl.match(/^data:image\/(webp|png|jpeg|jpg|gif);base64,([A-Za-z0-9+/=]+)$/i);
+  if (!match) {
+    return res.status(400).json({ success: false, error: 'Format image invalide.' });
+  }
+
+  const extFromMime = match[1].toLowerCase() === 'jpeg' ? 'jpg' : match[1].toLowerCase();
+  const buffer = Buffer.from(match[2], 'base64');
+  if (buffer.length === 0 || buffer.length > 10 * 1024 * 1024) {
+    return res.status(400).json({ success: false, error: 'Image vide ou supérieure à 10 Mo.' });
+  }
+
+  try {
+    const baseName = path.basename(rawName, path.extname(rawName)).replace(/[^a-zA-Z0-9_-]/g, '_') || 'media';
+    const finalFileName = `${baseName}_${Date.now()}.${extFromMime}`;
+    const targetDir = safeResolveInDataDir(path.join(UPLOADS_DIR, category));
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+    const targetFile = safeResolveInDataDir(path.join(targetDir, finalFileName));
+    fs.writeFileSync(targetFile, buffer);
+
+    const publicUrl = `/uploads/${category}/${finalFileName}`;
+    return res.status(200).json({
+      success: true,
+      url: publicUrl,
+      path: `server/data/uploads/${category}/${finalFileName}`,
+      size: buffer.length,
+    });
+  } catch (err) {
+    console.error('[StudioUpload] Save failed:', err);
+    return res.status(500).json({ success: false, error: 'Échec de sauvegarde du média sur le serveur.' });
+  }
 });
 
 studioDataRouter.get('/admin/session', (req: Request, res: Response) => {

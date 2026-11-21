@@ -54,7 +54,8 @@ async function createServer() {
     });
   });
 
-  // 4. Mount Studio Persistence & Paystack Routes
+  // 4. Mount Studio Persistence, Uploads & Paystack Routes
+  app.use('/uploads', express.static(path.join(__dirname, 'server', 'data', 'uploads'), { maxAge: '7d' }));
   app.use('/api', studioDataRouter);
   app.use('/api/paystack', paystackRouter);
   app.use('/api/premium', paystackRouter);

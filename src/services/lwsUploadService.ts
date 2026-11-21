@@ -3,6 +3,7 @@
 
 import { LwsStorageFile } from '../types';
 import { uploadArtworkAsset } from './storageService';
+import { buildStudioAuthHeaders } from './studioSyncService';
 
 export const LWS_CONFIG = {
   ENDPOINT: 'https://ozibd.net/api/upload.php',
@@ -145,18 +146,19 @@ export async function uploadToLWS(
 
   if (onProgress) onProgress(15, 'Connexion au serveur LWS (ozibd.net)...');
 
-  // Determine endpoint: if on ozibd.net or same-host, prefer relative endpoint /api/upload.php
+  // Determine endpoint: if on ozibd.net, prefer relative /api/upload.php; otherwise try LWS briefly then local Express /api/studio-upload
   const isHostedOnLws = typeof window !== 'undefined' && window.location.hostname.includes('ozibd.net');
   const targetEndpoints = isHostedOnLws
     ? ['/api/upload.php', LWS_CONFIG.ENDPOINT]
-    : [LWS_CONFIG.ENDPOINT, '/api/upload.php'];
+    : [LWS_CONFIG.ENDPOINT];
 
   let lastError: any = null;
 
   for (const endpoint of targetEndpoints) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 45000);
+      const timeoutMs = isHostedOnLws ? 45000 : 8000;
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       if (onProgress) onProgress(35, `Transfert vers le serveur de stockage (${endpoint})...`);
 
@@ -172,29 +174,69 @@ export async function uploadToLWS(
       clearTimeout(timeoutId);
 
       if (response.ok) {
-        const data = await response.json();
-        if (data && data.success) {
-          if (onProgress) onProgress(100, 'Upload LWS terminé avec succès !');
+        const ct = (response.headers.get('content-type') || '').toLowerCase();
+        if (ct.includes('application/json')) {
+          const data = await response.json();
+          if (data && data.success) {
+            if (onProgress) onProgress(100, 'Upload LWS terminé avec succès !');
 
-          const url = data.url || `https://ozibd.net/uploads/${category}/${fileName}`;
-          return {
-            success: true,
-            url,
-            fileInfo: {
-              name: fileName,
-              path: data.path || `${LWS_CONFIG.DIRECTORIES[category]}${fileName}`,
-              directory: category,
-              size: fileOrBlob.size,
-              sizeFormatted: formatBytes(fileOrBlob.size),
-              mimeType: fileOrBlob.type || (category === 'audio' ? 'audio/mpeg' : 'image/webp'),
+            const url = data.url || `https://ozibd.net/uploads/${category}/${fileName}`;
+            return {
+              success: true,
               url,
-              uploadedAt: new Date().toISOString()
-            }
-          };
+              fileInfo: {
+                name: fileName,
+                path: data.path || `${LWS_CONFIG.DIRECTORIES[category]}${fileName}`,
+                directory: category,
+                size: fileOrBlob.size,
+                sizeFormatted: formatBytes(fileOrBlob.size),
+                mimeType: fileOrBlob.type || (category === 'audio' ? 'audio/mpeg' : 'image/webp'),
+                url,
+                uploadedAt: new Date().toISOString()
+              }
+            };
+          }
         }
       }
     } catch (endpointErr) {
       lastError = endpointErr;
+    }
+  }
+
+  // Try local Full-Stack Express Studio Upload (/api/studio-upload) for images so URLs stay small & persistent
+  if (fileOrBlob instanceof Blob && fileOrBlob.type.startsWith('image/')) {
+    try {
+      if (onProgress) onProgress(55, 'Enregistrement sur le serveur Studio...');
+      const dataUrl = await blobToDataURL(fileOrBlob);
+      const studioResp = await fetch('/api/studio-upload', {
+        method: 'POST',
+        credentials: 'include',
+        headers: buildStudioAuthHeaders(),
+        body: JSON.stringify({ fileName, category, dataUrl }),
+      });
+      const ct = (studioResp.headers.get('content-type') || '').toLowerCase();
+      if (studioResp.ok && ct.includes('application/json')) {
+        const studioData = await studioResp.json();
+        if (studioData && studioData.success && studioData.url) {
+          if (onProgress) onProgress(100, 'Média enregistré sur le serveur Studio !');
+          return {
+            success: true,
+            url: studioData.url,
+            fileInfo: {
+              name: fileName,
+              path: studioData.path || studioData.url,
+              directory: category,
+              size: fileOrBlob.size,
+              sizeFormatted: formatBytes(fileOrBlob.size),
+              mimeType: fileOrBlob.type || 'image/webp',
+              url: studioData.url,
+              uploadedAt: new Date().toISOString(),
+            },
+          };
+        }
+      }
+    } catch (studioUploadErr) {
+      lastError = studioUploadErr;
     }
   }
 

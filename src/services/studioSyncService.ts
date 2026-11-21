@@ -38,8 +38,36 @@ export interface StudioSessionCheckResult {
   authenticated: boolean;
 }
 
-// Keep session token strictly in JS memory (paired with HttpOnly cookie from server/LWS)
-let serverSessionToken: string | null = null;
+const SRV_TOKEN_STORAGE_KEY = 'ozi_studio_srv_token_v1';
+
+function readPersistedServerToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const t = sessionStorage.getItem(SRV_TOKEN_STORAGE_KEY) || localStorage.getItem(SRV_TOKEN_STORAGE_KEY);
+    return t && t.startsWith('ozi_srv_v1.') ? t : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePersistedServerToken(token: string | null, rememberMe = false): void {
+  serverSessionToken = token;
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.removeItem(SRV_TOKEN_STORAGE_KEY);
+    localStorage.removeItem(SRV_TOKEN_STORAGE_KEY);
+    if (token) {
+      if (rememberMe) {
+        localStorage.setItem(SRV_TOKEN_STORAGE_KEY, token);
+      } else {
+        sessionStorage.setItem(SRV_TOKEN_STORAGE_KEY, token);
+      }
+    }
+  } catch {}
+}
+
+// Keep session token synced with storage + HttpOnly cookie from server/LWS
+let serverSessionToken: string | null = readPersistedServerToken();
 let detectedMode: 'node' | 'php' | null = null;
 
 function isLikelyPhpHost(): boolean {
@@ -57,6 +85,7 @@ function buildEndpoints(mode: 'node' | 'php') {
   if (mode === 'php') {
     return {
       login: '/api/studio-data.php?action=login',
+      googleLogin: '/api/admin/google-login',
       logout: '/api/studio-data.php?action=logout',
       session: '/api/studio-data.php?action=session',
       changePassword: '/api/studio-data.php?action=change-password',
@@ -65,6 +94,7 @@ function buildEndpoints(mode: 'node' | 'php') {
   }
   return {
     login: '/api/admin/login',
+    googleLogin: '/api/admin/google-login',
     logout: '/api/admin/logout',
     session: '/api/admin/session',
     changePassword: '/api/admin/change-password',
@@ -72,7 +102,10 @@ function buildEndpoints(mode: 'node' | 'php') {
   };
 }
 
-function buildHeaders(): Record<string, string> {
+export function buildStudioAuthHeaders(): Record<string, string> {
+  if (!serverSessionToken) {
+    serverSessionToken = readPersistedServerToken();
+  }
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Requested-With': 'OziStudio',
@@ -97,7 +130,7 @@ async function fetchJsonWithFallback(
       credentials: 'include',
       cache: 'no-store',
       headers: {
-        ...buildHeaders(),
+        ...buildStudioAuthHeaders(),
         ...(init.headers as Record<string, string> | undefined),
       },
     });
@@ -127,14 +160,21 @@ async function fetchJsonWithFallback(
 }
 
 export function hasInMemoryServerToken(): boolean {
+  if (!serverSessionToken) {
+    serverSessionToken = readPersistedServerToken();
+  }
   return Boolean(serverSessionToken);
 }
 
 export function clearInMemoryServerToken(): void {
-  serverSessionToken = null;
+  writePersistedServerToken(null, false);
 }
 
-export async function loginStudioServer(username: string, password: string): Promise<{ success: boolean; error?: string }> {
+export async function loginStudioServer(
+  username: string,
+  password: string,
+  rememberMe: boolean = false
+): Promise<{ success: boolean; unreachable?: boolean; error?: string }> {
   const res = await fetchJsonWithFallback('login', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
@@ -142,14 +182,38 @@ export async function loginStudioServer(username: string, password: string): Pro
 
   if (res.ok && res.json?.success) {
     if (typeof res.json.token === 'string' && res.json.token.startsWith('ozi_srv_v1.')) {
-      serverSessionToken = res.json.token;
+      writePersistedServerToken(res.json.token, rememberMe);
     }
     return { success: true };
   }
 
   return {
     success: false,
+    unreachable: res.unreachable,
     error: res.json?.error || (res.unreachable ? 'Serveur inaccessible.' : 'Identifiants Studio invalides.'),
+  };
+}
+
+export async function loginStudioServerWithGoogleIdToken(
+  idToken: string,
+  rememberMe: boolean = true
+): Promise<{ success: boolean; unreachable?: boolean; error?: string }> {
+  const res = await fetchJsonWithFallback('googleLogin', {
+    method: 'POST',
+    body: JSON.stringify({ idToken }),
+  });
+
+  if (res.ok && res.json?.success) {
+    if (typeof res.json.token === 'string' && res.json.token.startsWith('ozi_srv_v1.')) {
+      writePersistedServerToken(res.json.token, rememberMe);
+    }
+    return { success: true };
+  }
+
+  return {
+    success: false,
+    unreachable: res.unreachable,
+    error: res.json?.error || 'Impossible de valider la session Google sur le serveur.',
   };
 }
 
@@ -168,9 +232,13 @@ export async function checkStudioServerSession(): Promise<StudioSessionCheckResu
   if (res.unreachable) {
     return { reachable: false, authenticated: false };
   }
+  const isAuth = Boolean(res.ok && res.json?.authenticated);
+  if (!isAuth) {
+    clearInMemoryServerToken();
+  }
   return {
     reachable: true,
-    authenticated: Boolean(res.ok && res.json?.authenticated),
+    authenticated: isAuth,
   };
 }
 

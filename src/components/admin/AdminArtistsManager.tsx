@@ -189,6 +189,7 @@ export const AdminArtistsManager: React.FC = () => {
   const [artistForm, setArtistForm] = useState<{
     name: string;
     photoUrl: string;
+    bannerAvatarUrl: string;
     bannerUrl: string;
     country: string;
     bio: string;
@@ -201,6 +202,7 @@ export const AdminArtistsManager: React.FC = () => {
   }>({
     name: '',
     photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
+    bannerAvatarUrl: '',
     bannerUrl: '',
     country: 'Côte d\'Ivoire',
     bio: '',
@@ -217,6 +219,8 @@ export const AdminArtistsManager: React.FC = () => {
   const [hoveredCardArtbookId, setHoveredCardArtbookId] = useState<string | null>(null);
   const [isUploadingArtistPhoto, setIsUploadingArtistPhoto] = useState(false);
   const [artistPhotoUploadStatus, setArtistPhotoUploadStatus] = useState<string | null>(null);
+  const [isUploadingBannerAvatar, setIsUploadingBannerAvatar] = useState(false);
+  const [artistBannerAvatarUploadStatus, setArtistBannerAvatarUploadStatus] = useState<string | null>(null);
   const [isUploadingArtistBanner, setIsUploadingArtistBanner] = useState(false);
   const [artistBannerUploadStatus, setArtistBannerUploadStatus] = useState<string | null>(null);
   const [isSavingArtist, setIsSavingArtist] = useState(false);
@@ -228,10 +232,11 @@ export const AdminArtistsManager: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     setIsUploadingArtistPhoto(true);
+    setArtistSaveError(null);
     setArtistPhotoUploadStatus('Optimisation WebP de la photo de profil...');
     try {
       const compressed = await compressImageToWebP(file, 600, 0.88);
-      setArtistPhotoUploadStatus('Transfert vers le stockage sécurisé...');
+      setArtistPhotoUploadStatus('Enregistrement de la photo sur le serveur...');
       const res = await uploadToLWS(
         compressed.file,
         `artist_avatar_${Date.now()}.webp`,
@@ -240,7 +245,19 @@ export const AdminArtistsManager: React.FC = () => {
       const finalUrl = res.url || compressed.dataUrl;
       setArtistForm(prev => ({ ...prev, photoUrl: finalUrl }));
       if (res.fileInfo) addLwsFile(res.fileInfo);
-      setArtistPhotoUploadStatus('Photo de profil prête ! Cliquez sur « Enregistrer » pour valider.');
+
+      if (editingArtist) {
+        const savedOk = await updateArtist(editingArtist.id, { photoUrl: finalUrl });
+        if (savedOk) {
+          setEditingArtist(prev => (prev ? { ...prev, photoUrl: finalUrl } : null));
+          setArtistPhotoUploadStatus('Photo de profil téléversée et enregistrée automatiquement sur le site !');
+        } else {
+          setArtistPhotoUploadStatus('Photo prête localement, mais l\'enregistrement serveur a échoué.');
+          setArtistSaveError('Session expirée ou serveur indisponible : la photo n\'a pas pu être sauvegardée sur le serveur.');
+        }
+      } else {
+        setArtistPhotoUploadStatus('Photo de profil prête ! Cliquez sur « Créer l\'Artiste » pour valider.');
+      }
     } catch (err) {
       console.error('Upload artist photo error:', err);
       setArtistPhotoUploadStatus('Erreur lors du téléversement de la photo de profil.');
@@ -250,14 +267,54 @@ export const AdminArtistsManager: React.FC = () => {
     }
   };
 
+  const handleUploadArtistBannerAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingBannerAvatar(true);
+    setArtistSaveError(null);
+    setArtistBannerAvatarUploadStatus('Optimisation WebP de la photo circulaire...');
+    try {
+      const compressed = await compressImageToWebP(file, 600, 0.88);
+      setArtistBannerAvatarUploadStatus('Enregistrement de la photo circulaire sur le serveur...');
+      const res = await uploadToLWS(
+        compressed.file,
+        `artist_circle_${Date.now()}.webp`,
+        'authors'
+      );
+      const finalUrl = res.url || compressed.dataUrl;
+      setArtistForm(prev => ({ ...prev, bannerAvatarUrl: finalUrl }));
+      if (res.fileInfo) addLwsFile(res.fileInfo);
+
+      if (editingArtist) {
+        const savedOk = await updateArtist(editingArtist.id, { bannerAvatarUrl: finalUrl });
+        if (savedOk) {
+          setEditingArtist(prev => (prev ? { ...prev, bannerAvatarUrl: finalUrl } : null));
+          setArtistBannerAvatarUploadStatus('Photo circulaire enregistrée automatiquement sur la bannière !');
+        } else {
+          setArtistBannerAvatarUploadStatus('Photo prête localement, mais l\'enregistrement serveur a échoué.');
+          setArtistSaveError('Session expirée ou serveur indisponible : la photo circulaire n\'a pas pu être sauvegardée.');
+        }
+      } else {
+        setArtistBannerAvatarUploadStatus('Photo circulaire prête ! Cliquez sur « Créer l\'Artiste » pour valider.');
+      }
+    } catch (err) {
+      console.error('Upload artist circle avatar error:', err);
+      setArtistBannerAvatarUploadStatus('Erreur lors du téléversement de la photo circulaire.');
+    } finally {
+      setIsUploadingBannerAvatar(false);
+      e.target.value = '';
+    }
+  };
+
   const handleUploadArtistBanner = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setIsUploadingArtistBanner(true);
+    setArtistSaveError(null);
     setArtistBannerUploadStatus('Optimisation WebP de la bannière en cours...');
     try {
       const compressed = await compressImageToWebP(file, 1600, 0.88);
-      setArtistBannerUploadStatus('Transfert vers le stockage LWS (ozibd.net)...');
+      setArtistBannerUploadStatus('Transfert vers le stockage sécurisé...');
       const res = await uploadToLWS(
         compressed.file,
         `artist_banner_${Date.now()}.webp`,
@@ -266,7 +323,19 @@ export const AdminArtistsManager: React.FC = () => {
       const finalUrl = res.url || compressed.dataUrl;
       setArtistForm(prev => ({ ...prev, bannerUrl: finalUrl }));
       if (res.fileInfo) addLwsFile(res.fileInfo);
-      setArtistBannerUploadStatus('Bannière prête ! Cliquez sur « Enregistrer les modifications » pour publier.');
+
+      if (editingArtist) {
+        const savedOk = await updateArtist(editingArtist.id, { bannerUrl: finalUrl });
+        if (savedOk) {
+          setEditingArtist(prev => (prev ? { ...prev, bannerUrl: finalUrl } : null));
+          setArtistBannerUploadStatus('Bannière téléversée et enregistrée automatiquement sur le site !');
+        } else {
+          setArtistBannerUploadStatus('Bannière prête localement, mais l\'enregistrement serveur a échoué.');
+          setArtistSaveError('Session expirée ou serveur indisponible : la bannière n\'a pas pu être sauvegardée.');
+        }
+      } else {
+        setArtistBannerUploadStatus('Bannière prête ! Cliquez sur « Créer l\'Artiste » pour publier.');
+      }
     } catch (err) {
       console.error('Upload artist banner error:', err);
       setArtistBannerUploadStatus('Erreur lors du téléversement de la bannière.');
@@ -329,11 +398,13 @@ export const AdminArtistsManager: React.FC = () => {
   const handleOpenAddArtist = () => {
     setEditingArtist(null);
     setArtistPhotoUploadStatus(null);
+    setArtistBannerAvatarUploadStatus(null);
     setArtistBannerUploadStatus(null);
     setArtistSaveError(null);
     setArtistForm({
       name: '',
       photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
+      bannerAvatarUrl: '',
       bannerUrl: '',
       country: 'Côte d\'Ivoire',
       bio: '',
@@ -350,11 +421,13 @@ export const AdminArtistsManager: React.FC = () => {
   const handleOpenEditArtist = (artist: Artist) => {
     setEditingArtist(artist);
     setArtistPhotoUploadStatus(null);
+    setArtistBannerAvatarUploadStatus(null);
     setArtistBannerUploadStatus(null);
     setArtistSaveError(null);
     setArtistForm({
       name: artist.name,
       photoUrl: artist.photoUrl,
+      bannerAvatarUrl: artist.bannerAvatarUrl || '',
       bannerUrl: artist.bannerUrl || '',
       country: artist.country || 'Côte d\'Ivoire',
       bio: artist.bio || '',
@@ -382,6 +455,9 @@ export const AdminArtistsManager: React.FC = () => {
     }
 
     const normalizedPhotoUrl = normalizeImageUrl(artistForm.photoUrl);
+    const normalizedBannerAvatarUrl = artistForm.bannerAvatarUrl.trim()
+      ? normalizeImageUrl(artistForm.bannerAvatarUrl)
+      : '';
     const normalizedBannerUrl = artistForm.bannerUrl.trim()
       ? normalizeImageUrl(artistForm.bannerUrl)
       : '';
@@ -389,6 +465,7 @@ export const AdminArtistsManager: React.FC = () => {
     const payload = {
       name: artistForm.name.trim(),
       photoUrl: normalizedPhotoUrl,
+      bannerAvatarUrl: normalizedBannerAvatarUrl,
       bannerUrl: normalizedBannerUrl,
       country: artistForm.country.trim(),
       bio: artistForm.bio.trim(),
@@ -881,8 +958,12 @@ export const AdminArtistsManager: React.FC = () => {
                     <div className="flex items-center gap-3">
                       <div className="w-14 h-14 rounded-full overflow-hidden border border-slate-700 shrink-0 bg-slate-900">
                         <img 
-                          src={artist.photoUrl} 
-                          alt="" 
+                          src={normalizeImageUrl(artist.bannerAvatarUrl || artist.photoUrl, 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80')} 
+                          alt={artist.name}
+                          referrerPolicy="no-referrer"
+                          onError={e => {
+                            (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80';
+                          }}
                           className="w-full h-full object-cover rounded-full" 
                         />
                       </div>
@@ -1364,12 +1445,18 @@ export const AdminArtistsManager: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-bold text-slate-300">
-                    Photo de Profil (URL ou téléversement) <span className="text-purple-400">*</span>
-                  </label>
-                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs cursor-pointer transition-all shadow-md shadow-purple-600/20">
+              {/* Photo de profil principale */}
+              <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <label className="block text-xs font-bold text-white">
+                      Photo de Profil Principale <span className="text-purple-400">*</span>
+                    </label>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Affichée dans la grille des artistes et utilisée par défaut dans l'en-tête.
+                    </p>
+                  </div>
+                  <label className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs cursor-pointer transition-all shadow-md shadow-purple-600/20 shrink-0">
                     {isUploadingArtistPhoto ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
@@ -1386,31 +1473,128 @@ export const AdminArtistsManager: React.FC = () => {
                   </label>
                 </div>
                 <div className="flex items-center gap-3">
+                  <img
+                    src={normalizeImageUrl(artistForm.photoUrl, 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80')}
+                    alt="Photo de profil"
+                    referrerPolicy="no-referrer"
+                    onError={e => {
+                      (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80';
+                    }}
+                    className="w-14 h-14 rounded-full object-cover border border-slate-700 shrink-0 bg-slate-950"
+                  />
                   <input
                     type="text"
                     required
                     value={artistForm.photoUrl}
                     onChange={e => setArtistForm({ ...artistForm, photoUrl: e.target.value })}
                     placeholder="https://..."
-                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-purple-500 text-sm text-white focus:outline-none"
+                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-purple-500 text-xs text-white focus:outline-none"
                   />
-                  {artistForm.photoUrl && (
-                    <img
-                      src={normalizeImageUrl(artistForm.photoUrl)}
-                      alt=""
-                      className="w-11 h-11 rounded-full object-cover border border-slate-700 shrink-0"
-                    />
-                  )}
                 </div>
                 {artistPhotoUploadStatus && (
-                  <p className="text-[11px] text-purple-300 mt-1.5 font-medium">
+                  <p className="text-[11px] text-purple-300 font-medium">
                     {artistPhotoUploadStatus}
                   </p>
                 )}
               </div>
 
-              {/* Section Bannière de la Page Artiste */}
-              <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 space-y-3">
+              {/* Section En-tête & Bannière de la Page Artiste */}
+              <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 space-y-4">
+                {/* Photo Circulaire spécifique à la bannière */}
+                <div className="space-y-2.5 pb-4 border-b border-slate-800/80">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <User className="w-4 h-4 text-purple-400 shrink-0" />
+                        <label className="text-xs font-bold text-white">
+                          Photo Circulaire de la Bannière (Page Artiste)
+                        </label>
+                        <span
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                            artistForm.bannerAvatarUrl.trim()
+                              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                              : 'bg-slate-800 text-slate-400 border border-slate-700'
+                          }`}
+                        >
+                          {artistForm.bannerAvatarUrl.trim() ? 'Personnalisée' : 'Photo principale'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Avatar rond affiché avant le nom dans la bannière. Laissez vide pour réutiliser la photo principale.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {artistForm.bannerAvatarUrl.trim() && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setArtistForm(prev => ({ ...prev, bannerAvatarUrl: '' }));
+                            if (editingArtist) {
+                              const ok = await updateArtist(editingArtist.id, { bannerAvatarUrl: '' });
+                              if (ok) {
+                                setEditingArtist(prev => (prev ? { ...prev, bannerAvatarUrl: '' } : null));
+                                setArtistBannerAvatarUploadStatus('Photo circulaire réinitialisée sur la photo principale.');
+                              }
+                            } else {
+                              setArtistBannerAvatarUploadStatus('Photo circulaire réinitialisée sur la photo principale.');
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold border border-slate-700 transition-colors cursor-pointer"
+                          title="Réutiliser la photo principale"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Photo principale</span>
+                        </button>
+                      )}
+
+                      <label className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs cursor-pointer transition-all shadow-md shadow-purple-600/20">
+                        {isUploadingBannerAvatar ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Upload className="w-3.5 h-3.5" />
+                        )}
+                        <span>{isUploadingBannerAvatar ? 'Transfert...' : 'Téléverser'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          disabled={isUploadingBannerAvatar}
+                          onChange={handleUploadArtistBannerAvatar}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={normalizeImageUrl(
+                        artistForm.bannerAvatarUrl || artistForm.photoUrl,
+                        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80'
+                      )}
+                      alt="Aperçu photo circulaire"
+                      referrerPolicy="no-referrer"
+                      onError={e => {
+                        (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80';
+                      }}
+                      className="w-14 h-14 rounded-full object-cover border border-slate-700 shrink-0 bg-slate-950"
+                    />
+                    <input
+                      type="text"
+                      value={artistForm.bannerAvatarUrl}
+                      onChange={e => setArtistForm({ ...artistForm, bannerAvatarUrl: e.target.value })}
+                      placeholder="https://... (laisser vide pour utiliser la photo principale)"
+                      className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 focus:border-purple-500 text-xs text-white focus:outline-none"
+                    />
+                  </div>
+                  {artistBannerAvatarUploadStatus && (
+                    <p className="text-[11px] text-purple-300 font-medium">
+                      {artistBannerAvatarUploadStatus}
+                    </p>
+                  )}
+                </div>
+
+                {/* Image d'arrière-plan de la bannière */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-2">
@@ -1437,9 +1621,17 @@ export const AdminArtistsManager: React.FC = () => {
                     {artistForm.bannerUrl.trim() && (
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                           setArtistForm(prev => ({ ...prev, bannerUrl: '' }));
-                          setArtistBannerUploadStatus('Bannière réinitialisée sur l\'image par défaut.');
+                          if (editingArtist) {
+                            const ok = await updateArtist(editingArtist.id, { bannerUrl: '' });
+                            if (ok) {
+                              setEditingArtist(prev => (prev ? { ...prev, bannerUrl: '' } : null));
+                              setArtistBannerUploadStatus('Bannière réinitialisée sur l\'image par défaut.');
+                            }
+                          } else {
+                            setArtistBannerUploadStatus('Bannière réinitialisée sur l\'image par défaut.');
+                          }
                         }}
                         className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold border border-slate-700 transition-colors cursor-pointer"
                         title="Revenir à la bannière par défaut"
@@ -1472,25 +1664,43 @@ export const AdminArtistsManager: React.FC = () => {
                   <img
                     src={normalizeImageUrl(artistForm.bannerUrl, '/assets/aistudio/B_b43464f2.png')}
                     alt="Aperçu bannière de l'artiste"
+                    referrerPolicy="no-referrer"
                     className="w-full h-full object-cover object-center"
                     onError={e => {
                       (e.currentTarget as HTMLImageElement).src = '/assets/aistudio/B_b43464f2.png';
                     }}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-black/15" />
-                  <div className="absolute bottom-2.5 left-3.5 right-3.5 flex items-end justify-between gap-2 pointer-events-none">
-                    <div>
-                      <span className="block text-[9px] uppercase tracking-widest text-purple-300 font-bold">
-                        Aperçu en-tête public
-                      </span>
-                      <span className="block text-sm sm:text-base font-black uppercase tracking-tight text-white truncate">
-                        {artistForm.name.trim() || 'Nom de l\'artiste'}
-                      </span>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-black/15" />
+                  <div className="absolute inset-0 flex items-center px-4 sm:px-6 pointer-events-none">
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <img
+                        src={normalizeImageUrl(
+                          artistForm.bannerAvatarUrl || artistForm.photoUrl,
+                          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80'
+                        )}
+                        alt=""
+                        referrerPolicy="no-referrer"
+                        onError={e => {
+                          (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80';
+                        }}
+                        className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover shadow-xl shrink-0 bg-zinc-900"
+                      />
+                      <div className="min-w-0">
+                        <span className="block text-[9px] uppercase tracking-widest text-purple-300 font-bold mb-0.5">
+                          Aperçu en-tête public
+                        </span>
+                        <span className="block text-sm sm:text-lg font-black uppercase tracking-tight text-white truncate">
+                          {artistForm.name.trim() || 'Nom de l\'artiste'}
+                        </span>
+                        <span className="block text-[11px] text-white/85 truncate max-w-md mt-0.5">
+                          {artistForm.bio.trim() || artistForm.featuredSeriesTitle.trim() || artistForm.name.trim() || 'Sous-titre de l\'artiste'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Saisie manuelle d'URL */}
+                {/* Saisie manuelle d'URL de bannière */}
                 <div>
                   <input
                     type="text"
@@ -1640,7 +1850,7 @@ export const AdminArtistsManager: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSavingArtist || isUploadingArtistBanner || isUploadingArtistPhoto}
+                  disabled={isSavingArtist || isUploadingArtistBanner || isUploadingArtistPhoto || isUploadingBannerAvatar}
                   className="px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-lg shadow-purple-600/20 disabled:opacity-60 inline-flex items-center gap-2 cursor-pointer"
                 >
                   {isSavingArtist && <Loader2 className="w-3.5 h-3.5 animate-spin" />}

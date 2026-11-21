@@ -1269,6 +1269,7 @@ function normalizeFirestoreArtist(id: string, data: Partial<Artist>): Artist {
     name: data.name || 'Artiste OZI',
     slug: data.slug || id,
     photoUrl: normalizeImageUrl(data.photoUrl),
+    bannerAvatarUrl: data.bannerAvatarUrl ? normalizeImageUrl(data.bannerAvatarUrl) : '',
     bannerUrl: data.bannerUrl ? normalizeImageUrl(data.bannerUrl) : '',
     country: data.country || '',
     bio: data.bio || '',
@@ -1292,6 +1293,7 @@ export async function syncArtistToFirestoreDetailed(databaseInstance: Firestore,
     const cleaned = cleanFirestoreObject({
       ...artist,
       photoUrl: normalizeImageUrl(artist.photoUrl),
+      bannerAvatarUrl: artist.bannerAvatarUrl ? normalizeImageUrl(artist.bannerAvatarUrl) : '',
       bannerUrl: artist.bannerUrl ? normalizeImageUrl(artist.bannerUrl) : '',
       bio: artist.bio ?? '',
       country: artist.country ?? '',
@@ -1511,6 +1513,7 @@ export async function syncAllArtistsToFirestore(
         const cleaned = cleanFirestoreObject({
           ...artist,
           photoUrl: normalizeImageUrl(artist.photoUrl),
+          bannerAvatarUrl: artist.bannerAvatarUrl ? normalizeImageUrl(artist.bannerAvatarUrl) : '',
           bannerUrl: artist.bannerUrl ? normalizeImageUrl(artist.bannerUrl) : '',
           bio: artist.bio ?? '',
           country: artist.country ?? '',

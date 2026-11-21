@@ -124,6 +124,7 @@ import { signInWithPopup, onAuthStateChanged, User, signOut } from 'firebase/aut
 import { auth, googleProvider } from '../lib/firebase';
 import {
   loginStudioServer,
+  loginStudioServerWithGoogleIdToken,
   logoutStudioServer,
   checkStudioServerSession,
   changeStudioServerPassword,
@@ -131,7 +132,7 @@ import {
   pushStudioDataPatch,
   mergeEntitiesByRecency,
   mergeIdSets,
-  hasInMemoryServerToken
+  clearInMemoryServerToken
 } from '../services/studioSyncService';
 import { 
   signInReaderWithGoogle, 
@@ -943,20 +944,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newArtist: Artist = {
       ...artistData,
       photoUrl: normalizeImageUrl(artistData.photoUrl),
+      bannerAvatarUrl: artistData.bannerAvatarUrl ? normalizeImageUrl(artistData.bannerAvatarUrl) : '',
       bannerUrl: artistData.bannerUrl ? normalizeImageUrl(artistData.bannerUrl) : '',
       id: `artist-${slug}-${Date.now().toString(36)}`,
       slug: slug || `artist-${Date.now().toString(36)}`,
       createdAt: nowIso,
       updatedAt: nowIso
     };
-    const nextArtists = [newArtist, ...artistsRef.current];
+    const previousArtists = artistsRef.current;
+    const nextArtists = [newArtist, ...previousArtists];
     persistArtistsLocally(nextArtists);
 
     const srvRes = await pushStudioDataPatch({
       artists: nextArtists,
       deletedArtistIds: Array.from(deletedArtistIdsRef.current)
     });
+
     if (srvRes.unauthorized) {
+      persistArtistsLocally(previousArtists);
+      clearInMemoryServerToken();
       setLastCloudError({
         message: srvRes.error || 'Session Studio expirée. Veuillez vous reconnecter.',
         needsGoogleAuth: false
@@ -964,13 +970,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return false;
     }
 
+    let firestoreSaved = false;
     if (isFirebaseAdminConnectedRef.current) {
       try {
         const fb = initializeFirebaseCustom();
         if (fb.db) {
-          await syncArtistToFirestoreDetailed(fb.db, newArtist).catch(() => {});
+          const fbRes = await syncArtistToFirestoreDetailed(fb.db, newArtist);
+          firestoreSaved = fbRes.success;
         }
       } catch {}
+    }
+
+    if (!srvRes.success && !firestoreSaved) {
+      persistArtistsLocally(previousArtists);
+      setLastCloudError({
+        message: srvRes.error || 'Impossible d\'enregistrer sur le serveur. Veuillez réessayer.',
+        needsGoogleAuth: false
+      });
+      return false;
     }
 
     setLastCloudError(null);
@@ -978,7 +995,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [persistArtistsLocally]);
 
   const updateArtist = useCallback(async (id: string, updates: Partial<Artist>): Promise<boolean> => {
-    const existing = artistsRef.current.find(a => a.id === id);
+    const previousArtists = artistsRef.current;
+    const existing = previousArtists.find(a => a.id === id);
     if (!existing) {
       setLastCloudError({
         message: 'Artiste introuvable dans la session actuelle.',
@@ -986,23 +1004,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       return false;
     }
+    const nextBannerAvatarRaw = updates.bannerAvatarUrl !== undefined ? updates.bannerAvatarUrl : existing.bannerAvatarUrl;
+    const nextBannerRaw = updates.bannerUrl !== undefined ? updates.bannerUrl : existing.bannerUrl;
     const updatedArtist: Artist = {
       ...existing,
       ...updates,
       photoUrl: normalizeImageUrl(updates.photoUrl !== undefined ? updates.photoUrl : existing.photoUrl),
-      bannerUrl: (updates.bannerUrl !== undefined ? updates.bannerUrl : existing.bannerUrl)
-        ? normalizeImageUrl(updates.bannerUrl !== undefined ? updates.bannerUrl : existing.bannerUrl)
-        : '',
+      bannerAvatarUrl: nextBannerAvatarRaw ? normalizeImageUrl(nextBannerAvatarRaw) : '',
+      bannerUrl: nextBannerRaw ? normalizeImageUrl(nextBannerRaw) : '',
       updatedAt: new Date().toISOString()
     };
-    const nextArtists = artistsRef.current.map(a => (a.id === id ? updatedArtist : a));
+    const nextArtists = previousArtists.map(a => (a.id === id ? updatedArtist : a));
     persistArtistsLocally(nextArtists);
 
     const srvRes = await pushStudioDataPatch({
       artists: nextArtists,
       deletedArtistIds: Array.from(deletedArtistIdsRef.current)
     });
+
     if (srvRes.unauthorized) {
+      persistArtistsLocally(previousArtists);
+      clearInMemoryServerToken();
       setLastCloudError({
         message: srvRes.error || 'Session Studio expirée. Veuillez vous reconnecter.',
         needsGoogleAuth: false
@@ -1010,13 +1032,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return false;
     }
 
+    let firestoreSaved = false;
     if (isFirebaseAdminConnectedRef.current) {
       try {
         const fb = initializeFirebaseCustom();
         if (fb.db) {
-          await syncArtistToFirestoreDetailed(fb.db, updatedArtist).catch(() => {});
+          const fbRes = await syncArtistToFirestoreDetailed(fb.db, updatedArtist);
+          firestoreSaved = fbRes.success;
         }
       } catch {}
+    }
+
+    if (!srvRes.success && !firestoreSaved) {
+      persistArtistsLocally(previousArtists);
+      setLastCloudError({
+        message: srvRes.error || 'Impossible d\'enregistrer les modifications sur le serveur.',
+        needsGoogleAuth: false
+      });
+      return false;
     }
 
     setLastCloudError(null);
@@ -1706,9 +1739,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      if (isAuthenticated && !hasInMemoryServerToken()) {
+      if (isAuthenticated) {
         const srvSession = await checkStudioServerSession();
         if (srvSession.reachable && !srvSession.authenticated && isMounted) {
+          clearInMemoryServerToken();
           setIsAuthenticated(false);
           sessionStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
           localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
@@ -2302,7 +2336,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 3. Cryptographic & Server Verification
     const [isPassValid, srvRes] = await Promise.all([
       verifyPassword(cleanPass, adminCredentials.passwordHash),
-      loginStudioServer(cleanUser, cleanPass)
+      loginStudioServer(cleanUser, cleanPass, rememberMe)
     ]);
 
     if (!isPassValid && !srvRes.success) {
@@ -2372,6 +2406,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (isAuthorizedAdmin) {
         resetFailedLoginAttempts();
+        try {
+          const idToken = await user.getIdToken();
+          await loginStudioServerWithGoogleIdToken(idToken, true);
+        } catch {}
         const sessionPayload = await generateAdminSessionToken(userEmail, adminCredentials.passwordHash, 24 * 60 * 60 * 1000);
         setIsAuthenticated(true);
         setLastCloudError(null);
@@ -3459,6 +3497,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const normalized = artistsRef.current.map(a => ({
         ...a,
         photoUrl: normalizeImageUrl(a.photoUrl),
+        bannerAvatarUrl: a.bannerAvatarUrl ? normalizeImageUrl(a.bannerAvatarUrl) : '',
         bannerUrl: a.bannerUrl ? normalizeImageUrl(a.bannerUrl) : '',
         updatedAt: a.updatedAt || new Date().toISOString()
       }));
@@ -3468,8 +3507,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         artists: normalized,
         deletedArtistIds: Array.from(deletedArtistIdsRef.current)
       });
-      if (srvRes.unauthorized) {
-        const errMsg = srvRes.error || 'Session Studio expirée. Veuillez vous reconnecter.';
+      if (!srvRes.success) {
+        const errMsg = srvRes.error || 'Session Studio expirée ou serveur indisponible. Veuillez vous reconnecter.';
         setLastCloudError({ message: errMsg, needsGoogleAuth: false });
         return { success: false, message: errMsg };
       }

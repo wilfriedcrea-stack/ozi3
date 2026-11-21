@@ -128,48 +128,83 @@ export const ArtistDetailPage: React.FC = () => {
     );
   }
 
-  // Fallback banner image if artist has none
-  const bannerImage = normalizeImageUrl(currentArtist.bannerUrl, '/assets/aistudio/B_b43464f2.png');
+  // Fallback banner & avatar images if artist has none
+  const FALLBACK_BANNER = '/assets/aistudio/B_b43464f2.png';
+  const FALLBACK_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80';
+  const bannerImage = normalizeImageUrl(currentArtist.bannerUrl, FALLBACK_BANNER);
+  const avatarImage = normalizeImageUrl(currentArtist.bannerAvatarUrl || currentArtist.photoUrl, FALLBACK_AVATAR);
+  const subtitleText =
+    currentArtist.bio?.trim() ||
+    currentArtist.featuredSeriesTitle?.trim() ||
+    currentArtist.name;
 
   return (
     <div className="w-full bg-[#000000] text-white">
 
       {/* ======================================================== */}
-      {/* 1) SECTION BANNIÈRE ARTISTE (Image + Nom + Description)  */}
+      {/* 1) SECTION BANNIÈRE ARTISTE (Avatar Circulaire + Nom)    */}
       {/* ======================================================== */}
-      <section className="relative w-full h-[52vh] min-h-[380px] max-h-[640px] overflow-hidden bg-black flex flex-col justify-between">
+      <section className="relative w-full min-h-[360px] sm:h-[44vh] sm:min-h-[370px] sm:max-h-[520px] overflow-hidden bg-black flex flex-col justify-between">
         
         {/* Background Banner Image */}
         <div className="absolute inset-0 w-full h-full">
           <img 
             src={bannerImage} 
             alt={currentArtist.name}
+            referrerPolicy="no-referrer"
+            onError={e => {
+              const img = e.currentTarget;
+              if (!img.src.endsWith(FALLBACK_BANNER)) {
+                img.src = FALLBACK_BANNER;
+              }
+            }}
             className="w-full h-full object-cover object-center"
           />
-          {/* Subtle gradient to ensure clear text legibility matching B_b43464f2.png */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-black/20" />
+          {/* Scrim dégradé subtil vers le bas pour la lisibilité */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-black/15" />
         </div>
 
         {/* Top Floating Back Link */}
-        <div className="relative z-20 px-6 sm:px-10 lg:px-16 pt-6">
+        <div className="relative z-20 px-6 sm:px-10 lg:px-14 pt-5 sm:pt-6">
           <button
             onClick={() => setViewMode('artistes')}
-            className="inline-flex items-center gap-2 text-xs uppercase tracking-widest text-white/80 hover:text-white transition-colors bg-black/40 backdrop-blur-md px-3.5 py-1.5 border border-white/20 hover:border-white cursor-pointer"
+            className="inline-flex items-center gap-2 text-[11px] uppercase tracking-widest text-white/85 hover:text-white transition-colors bg-black/45 backdrop-blur-md px-3.5 py-1.5 border border-white/15 hover:border-white cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Artistes</span>
           </button>
         </div>
 
-        {/* Bottom Banner Content: Nom de l'artiste + petite description */}
-        <div className="relative z-20 w-full px-6 sm:px-10 lg:px-16 pb-8 sm:pb-12 max-w-6xl">
-          <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-white uppercase tracking-tight font-sans leading-none drop-shadow-md">
-            {currentArtist.name}
-          </h1>
+        {/* Main Banner Content: Photo circulaire à gauche + Titre & Sous-titre à droite */}
+        <div className="relative z-20 w-full flex-1 flex items-center px-6 sm:px-12 lg:px-24 py-6 sm:py-8">
+          <div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-8 lg:gap-10 w-full max-w-6xl">
+            {/* Photo de profil circulaire avant le nom */}
+            <div className="w-32 h-32 sm:w-44 sm:h-44 md:w-48 md:h-48 lg:w-56 lg:h-56 rounded-full overflow-hidden shrink-0 shadow-[0_14px_38px_rgba(0,0,0,0.65)] bg-zinc-900">
+              <img
+                src={avatarImage}
+                alt={`Portrait de ${currentArtist.name}`}
+                referrerPolicy="no-referrer"
+                onError={e => {
+                  const img = e.currentTarget;
+                  if (img.src !== FALLBACK_AVATAR) {
+                    img.src = FALLBACK_AVATAR;
+                  }
+                }}
+                className="w-full h-full object-cover object-center"
+              />
+            </div>
 
-          <p className="text-sm sm:text-base text-white/90 max-w-2xl mt-3 sm:mt-4 leading-relaxed font-sans drop-shadow font-normal">
-            {currentArtist.bio || 'Directeur artistique et maître illustrateur, explorant la richesse des mythes et de l\'imaginaire contemporain.'}
-          </p>
+            {/* Titre + Sous-titre disposés à droite de la photo */}
+            <div className="flex flex-col items-center sm:items-start text-center sm:text-left min-w-0">
+              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white uppercase tracking-tight font-sans leading-none drop-shadow-[0_4px_16px_rgba(0,0,0,0.55)]">
+                {currentArtist.name}
+              </h1>
+
+              <p className="text-sm sm:text-base lg:text-[17px] text-white/90 max-w-2xl mt-2.5 sm:mt-3 leading-relaxed font-sans font-normal drop-shadow-[0_2px_10px_rgba(0,0,0,0.6)] line-clamp-3">
+                {subtitleText}
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
