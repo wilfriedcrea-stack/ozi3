@@ -534,6 +534,7 @@ export interface ChapterReview {
   chapterId?: string;
   chapterNumber?: number;
   uid: string;
+  userId?: string;
   userName: string;
   userAvatar?: string;
   userEmail?: string;
@@ -545,3 +546,18 @@ export interface ChapterReview {
   status: 'approved' | 'pending' | 'hidden';
 }
 
+export interface ArtbookReview {
+  id: string;
+  artbookId: string;
+  artbookTitle?: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  rating: number; // 0 = sans note, 1 à 5 = étoiles attribuées sur 5
+  commentText: string;
+  likesCount: number;
+  likedBy: string[];
+  createdAt: string;
+  updatedAt?: string;
+  status: 'approved' | 'pending' | 'hidden';
+}

@@ -35,7 +35,10 @@ import {
   Laptop,
   Smartphone,
   Tablet,
-  Cloud
+  Cloud,
+  Upload,
+  Loader2,
+  RotateCcw
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Artist, Artbook } from '../../types';
@@ -45,6 +48,8 @@ import {
   deleteArtistFromFirestore, 
   syncAllArtistsToFirestore 
 } from '../../services/firebaseService';
+import { compressImageToWebP, uploadToLWS } from '../../services/lwsUploadService';
+import { normalizeImageUrl } from '../../utils/imageUtils';
 
 export const AdminArtistsManager: React.FC = () => {
   const { 
@@ -63,7 +68,8 @@ export const AdminArtistsManager: React.FC = () => {
     syncAllArtistsToFirestoreNow,
     syncAllArtbooksToFirestoreNow,
     isSyncingArtists,
-    isSyncingArtbooks
+    isSyncingArtbooks,
+    addLwsFile
   } = useData();
 
   const [activeSubTab, setActiveSubTab] = useState<'artists' | 'artbooks' | 'activity'>('artists');
@@ -212,6 +218,34 @@ export const AdminArtistsManager: React.FC = () => {
   const [newSpecialtyInput, setNewSpecialtyInput] = useState('');
   const [modalHoverActive, setModalHoverActive] = useState(false);
   const [hoveredCardArtbookId, setHoveredCardArtbookId] = useState<string | null>(null);
+  const [isUploadingArtistBanner, setIsUploadingArtistBanner] = useState(false);
+  const [artistBannerUploadStatus, setArtistBannerUploadStatus] = useState<string | null>(null);
+
+  const handleUploadArtistBanner = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingArtistBanner(true);
+    setArtistBannerUploadStatus('Optimisation WebP de la bannière en cours...');
+    try {
+      const compressed = await compressImageToWebP(file, 1600, 0.88);
+      setArtistBannerUploadStatus('Transfert vers le stockage LWS (ozibd.net)...');
+      const res = await uploadToLWS(
+        compressed.file,
+        `artist_banner_${Date.now()}.webp`,
+        'banners'
+      );
+      const finalUrl = res.url || compressed.dataUrl;
+      setArtistForm(prev => ({ ...prev, bannerUrl: finalUrl }));
+      if (res.fileInfo) addLwsFile(res.fileInfo);
+      setArtistBannerUploadStatus('Bannière prête ! Cliquez sur « Enregistrer les modifications » pour publier.');
+    } catch (err) {
+      console.error('Upload artist banner error:', err);
+      setArtistBannerUploadStatus('Erreur lors du téléversement de la bannière.');
+    } finally {
+      setIsUploadingArtistBanner(false);
+      e.target.value = '';
+    }
+  };
 
   // Artbook Form State
   const [artbookForm, setArtbookForm] = useState<{
@@ -265,6 +299,7 @@ export const AdminArtistsManager: React.FC = () => {
   // Open modal handlers
   const handleOpenAddArtist = () => {
     setEditingArtist(null);
+    setArtistBannerUploadStatus(null);
     setArtistForm({
       name: '',
       photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
@@ -283,6 +318,7 @@ export const AdminArtistsManager: React.FC = () => {
 
   const handleOpenEditArtist = (artist: Artist) => {
     setEditingArtist(artist);
+    setArtistBannerUploadStatus(null);
     setArtistForm({
       name: artist.name,
       photoUrl: artist.photoUrl,
@@ -303,11 +339,16 @@ export const AdminArtistsManager: React.FC = () => {
     e.preventDefault();
     if (!artistForm.name.trim()) return;
 
+    const normalizedPhotoUrl = normalizeImageUrl(artistForm.photoUrl);
+    const normalizedBannerUrl = artistForm.bannerUrl.trim()
+      ? normalizeImageUrl(artistForm.bannerUrl)
+      : '';
+
     if (editingArtist) {
       await updateArtist(editingArtist.id, {
         name: artistForm.name.trim(),
-        photoUrl: artistForm.photoUrl.trim(),
-        bannerUrl: artistForm.bannerUrl.trim() || undefined,
+        photoUrl: normalizedPhotoUrl,
+        bannerUrl: normalizedBannerUrl,
         country: artistForm.country.trim(),
         bio: artistForm.bio.trim(),
         specialties: artistForm.specialties,
@@ -323,8 +364,8 @@ export const AdminArtistsManager: React.FC = () => {
     } else {
       await addArtist({
         name: artistForm.name.trim(),
-        photoUrl: artistForm.photoUrl.trim(),
-        bannerUrl: artistForm.bannerUrl.trim() || undefined,
+        photoUrl: normalizedPhotoUrl,
+        bannerUrl: normalizedBannerUrl,
         country: artistForm.country.trim(),
         bio: artistForm.bio.trim(),
         specialties: artistForm.specialties,
@@ -1272,6 +1313,104 @@ export const AdminArtistsManager: React.FC = () => {
                   />
                   {artistForm.photoUrl && (
                     <img src={artistForm.photoUrl} alt="" className="w-10 h-10 rounded-full object-cover border border-slate-700" />
+                  )}
+                </div>
+              </div>
+
+              {/* Section Bannière de la Page Artiste */}
+              <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4 text-purple-400 shrink-0" />
+                      <label className="text-xs font-bold text-white">
+                        Image de Bannière (Page Artiste)
+                      </label>
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                          artistForm.bannerUrl.trim()
+                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                            : 'bg-slate-800 text-slate-400 border border-slate-700'
+                        }`}
+                      >
+                        {artistForm.bannerUrl.trim() ? 'Personnalisée' : 'Par défaut'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Grand visuel d'en-tête affiché en haut de la fiche de l'artiste. Format paysage recommandé (1920 × 640 px).
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {artistForm.bannerUrl.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setArtistForm(prev => ({ ...prev, bannerUrl: '' }));
+                          setArtistBannerUploadStatus('Bannière réinitialisée sur l\'image par défaut.');
+                        }}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold border border-slate-700 transition-colors cursor-pointer"
+                        title="Revenir à la bannière par défaut"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Par défaut</span>
+                      </button>
+                    )}
+
+                    <label className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs cursor-pointer transition-all shadow-md shadow-purple-600/20">
+                      {isUploadingArtistBanner ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="w-3.5 h-3.5" />
+                      )}
+                      <span>{isUploadingArtistBanner ? 'Transfert...' : 'Téléverser'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={isUploadingArtistBanner}
+                        onChange={handleUploadArtistBanner}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Aperçu grand format en direct */}
+                <div className="relative w-full h-32 sm:h-36 rounded-xl overflow-hidden border border-slate-800 bg-black">
+                  <img
+                    src={normalizeImageUrl(artistForm.bannerUrl, '/assets/aistudio/B_b43464f2.png')}
+                    alt="Aperçu bannière de l'artiste"
+                    className="w-full h-full object-cover object-center"
+                    onError={e => {
+                      (e.currentTarget as HTMLImageElement).src = '/assets/aistudio/B_b43464f2.png';
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-black/15" />
+                  <div className="absolute bottom-2.5 left-3.5 right-3.5 flex items-end justify-between gap-2 pointer-events-none">
+                    <div>
+                      <span className="block text-[9px] uppercase tracking-widest text-purple-300 font-bold">
+                        Aperçu en-tête public
+                      </span>
+                      <span className="block text-sm sm:text-base font-black uppercase tracking-tight text-white truncate">
+                        {artistForm.name.trim() || 'Nom de l\'artiste'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Saisie manuelle d'URL */}
+                <div>
+                  <input
+                    type="text"
+                    value={artistForm.bannerUrl}
+                    onChange={e => setArtistForm({ ...artistForm, bannerUrl: e.target.value })}
+                    placeholder="https://ozibd.net/uploads/banners/... (laisser vide pour la bannière par défaut)"
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 focus:border-purple-500 text-xs text-white focus:outline-none"
+                  />
+                  {artistBannerUploadStatus && (
+                    <p className="text-[11px] text-purple-300 mt-1.5 font-medium">
+                      {artistBannerUploadStatus}
+                    </p>
                   )}
                 </div>
               </div>

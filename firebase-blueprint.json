@@ -240,6 +240,27 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "seriesId", "userId", "userName", "rating", "commentText"]
+    },
+    "ArtbookReview": {
+      "title": "ArtbookReview",
+      "description": "Avis, commentaire et note sur 5 etoiles pour un artbook",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "artbookId": { "type": "string" },
+        "artbookTitle": { "type": "string", "maxLength": 200 },
+        "userId": { "type": "string" },
+        "userName": { "type": "string", "maxLength": 100 },
+        "userAvatar": { "type": "string", "maxLength": 1000 },
+        "rating": { "type": "number" },
+        "commentText": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "likesCount": { "type": "number" },
+        "likedBy": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "status": { "type": "string", "enum": ["approved", "pending", "hidden"] }
+      },
+      "required": ["id", "artbookId", "userId", "userName", "rating", "commentText", "likesCount", "likedBy", "createdAt", "status"]
     }
   },
   "firestore": {
@@ -300,6 +321,10 @@
     "/reviews/{reviewId}": {
       "schema": "Review",
       "description": "Avis, commentaires et notations des lecteurs"
+    },
+    "/artbook_reviews/{reviewId}": {
+      "schema": "ArtbookReview",
+      "description": "Commentaires et notes 5/5 sur les artbooks"
     },
     "/reported_comments/{reportId}": {
       "description": "Signalements de commentaires par les lecteurs pour modération"

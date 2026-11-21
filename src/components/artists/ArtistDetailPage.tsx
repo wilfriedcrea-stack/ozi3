@@ -1,9 +1,7 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ArrowLeft, Check, ShoppingBag, Download } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ArrowLeft, ShoppingBag, Download } from 'lucide-react';
 import { Artist, Artbook } from '../../types';
 import { useData } from '../../context/DataContext';
-import { FreeDownloadModal } from './FreeDownloadModal';
-import { PaidPurchaseModal } from './PaidPurchaseModal';
 
 import { normalizeImageUrl } from '../../utils/imageUtils';
 
@@ -26,6 +24,7 @@ export const ArtistDetailPage: React.FC = () => {
     artists, 
     artbooks, 
     selectedArtistId, 
+    openArtbookPage,
     setViewMode 
   } = useData();
 
@@ -81,10 +80,6 @@ export const ArtistDetailPage: React.FC = () => {
   const [activeProductId, setActiveProductId] = useState<string>(() => products[0]?.id || '');
   const [hoveredProductId, setHoveredProductId] = useState<string | null>(null);
 
-  // Modals for Free Download and Paid Purchase
-  const [downloadModalArtbook, setDownloadModalArtbook] = useState<Artbook | null>(null);
-  const [purchaseModalArtbook, setPurchaseModalArtbook] = useState<Artbook | null>(null);
-
   // Update active product when artist changes
   useEffect(() => {
     if (products.length > 0) {
@@ -107,41 +102,9 @@ export const ArtistDetailPage: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
   }, [currentArtist?.id]);
 
-  // Unified Handler for Product Action: Free Download -> Form, Paid -> Checkout
+  // Navigate to the Artbook preview, download & comments/ratings page
   const handleProductAction = (product: ArtistShopProduct) => {
-    const cleanTitle = product.name.replace(`${currentArtist.name} - `, '');
-    const targetArtbook: Artbook = product.artbook || {
-      id: product.id,
-      title: cleanTitle,
-      slug: cleanTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-      artistId: currentArtist.id,
-      artistName: currentArtist.name,
-      coverUrl: product.mainImage,
-      alternateCoverUrl: product.alternateImage,
-      description: product.description,
-      price: product.isFree ? 0 : product.priceNumber,
-      isFree: product.isFree,
-      previewImages: [
-        product.mainImage,
-        product.alternateImage,
-        product.mainImage,
-        product.alternateImage,
-        product.mainImage
-      ],
-      downloadUrl: '',
-      downloadsCount: 0,
-      pageCount: 64,
-      releaseYear: new Date().getFullYear(),
-      fileSizeFormatted: '45 Mo',
-      rating: 4.9,
-      tags: [product.format]
-    };
-
-    if (product.isFree) {
-      setDownloadModalArtbook(targetArtbook);
-    } else {
-      setPurchaseModalArtbook(targetArtbook);
-    }
+    openArtbookPage(product.id);
   };
 
   // Find currently featured/spotlighted product
@@ -383,25 +346,6 @@ export const ArtistDetailPage: React.FC = () => {
 
         </div>
       </section>
-
-      {/* Modale de Téléchargement Gratuit (Formulaire Nom, Email, Téléphone -> Téléchargement) */}
-      {downloadModalArtbook && (
-        <FreeDownloadModal
-          artbook={downloadModalArtbook}
-          isOpen={Boolean(downloadModalArtbook)}
-          onClose={() => setDownloadModalArtbook(null)}
-        />
-      )}
-
-      {/* Modale d'Achat Sécurisé (Mobile Money & Carte) */}
-      {purchaseModalArtbook && (
-        <PaidPurchaseModal
-          artbook={purchaseModalArtbook}
-          isOpen={Boolean(purchaseModalArtbook)}
-          onClose={() => setPurchaseModalArtbook(null)}
-        />
-      )}
-
     </div>
   );
 };

@@ -234,7 +234,7 @@ export const FreeDownloadModal: React.FC<FreeDownloadModalProps> = ({
                   className="flex-1 py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                  <span>Télécharger à nouveau</span>
+                  <span>{isSubmitting ? 'Téléchargement en cours...' : 'Télécharger à nouveau'}</span>
                 </button>
               )}
 
@@ -355,7 +355,7 @@ export const FreeDownloadModal: React.FC<FreeDownloadModalProps> = ({
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Génération du PDF en cours...</span>
+                      <span>Téléchargement en cours...</span>
                     </>
                   ) : (
                     <>

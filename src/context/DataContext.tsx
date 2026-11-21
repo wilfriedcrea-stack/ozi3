@@ -880,11 +880,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const updateArtist = useCallback(async (id: string, updates: Partial<Artist>): Promise<boolean> => {
-    let updatedArtist: Artist | null = null;
+    const existing = artists.find(a => a.id === id);
+    let updatedArtist: Artist | null = existing ? { ...existing, ...updates } : null;
     setArtists(prev => prev.map(a => {
       if (a.id === id) {
-        updatedArtist = { ...a, ...updates };
-        return updatedArtist;
+        const merged = { ...a, ...updates };
+        updatedArtist = merged;
+        return merged;
       }
       return a;
     }));
@@ -899,7 +901,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
     return true;
-  }, []);
+  }, [artists]);
 
   const deleteArtist = useCallback(async (id: string): Promise<boolean> => {
     setArtists(prev => prev.filter(a => a.id !== id));

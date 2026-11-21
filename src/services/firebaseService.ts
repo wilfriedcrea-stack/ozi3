@@ -1212,10 +1212,13 @@ export function subscribeToFirestoreHeroSlides(onUpdate: (slides: HomeHeroSlide[
 export async function syncArtistToFirestore(databaseInstance: Firestore, artist: Artist): Promise<boolean> {
   try {
     const ref = doc(databaseInstance, 'artists', artist.id);
-    await setDoc(ref, {
+    const cleaned = cleanFirestoreObject({
       ...artist,
+      photoUrl: normalizeImageUrl(artist.photoUrl),
+      bannerUrl: artist.bannerUrl ? normalizeImageUrl(artist.bannerUrl) : '',
       updatedAt: new Date().toISOString()
-    }, { merge: true });
+    });
+    await setDoc(ref, cleaned, { merge: true });
     return true;
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `artists/${artist.id}`);

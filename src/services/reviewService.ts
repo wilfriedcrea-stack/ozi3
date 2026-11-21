@@ -149,6 +149,7 @@ export async function submitReaderReview(params: {
       chapterId: params.chapterId || undefined,
       chapterNumber: params.chapterNumber || undefined,
       uid: params.uid,
+      userId: params.uid,
       userName: params.userName || 'Lecteur OZI',
       userAvatar: params.userAvatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${params.uid}`,
       userEmail: params.userEmail || '',

@@ -503,7 +503,7 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
                 className="flex-1 py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
               >
                 {isDownloadingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                <span>Télécharger mon Artbook (PDF)</span>
+                <span>{isDownloadingPdf ? 'Téléchargement en cours...' : 'Télécharger mon Artbook (PDF)'}</span>
               </button>
 
               <button
