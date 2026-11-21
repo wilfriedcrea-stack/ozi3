@@ -160,8 +160,8 @@ export const ArtistDetailPage: React.FC = () => {
             }}
             className="w-full h-full object-cover object-center"
           />
-          {/* Scrim dégradé subtil vers le bas pour la lisibilité */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-black/15" />
+          {/* Scrim dégradé très léger vers le bas */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent" />
         </div>
 
         {/* Top Floating Back Link */}
