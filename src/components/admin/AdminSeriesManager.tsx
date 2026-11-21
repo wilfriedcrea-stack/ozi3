@@ -93,9 +93,15 @@ export const AdminSeriesManager: React.FC = () => {
     setSeriesModalOpen(true);
   };
 
+  const [seriesSaveNotice, setSeriesSaveNotice] = useState<string | null>(null);
+
   const handleSaveSeries = async (data: Partial<Series>) => {
     if (editingSeries) {
-      await updateSeries(editingSeries.id, data);
+      const ok = await updateSeries(editingSeries.id, data);
+      if (!ok) {
+        setSeriesSaveNotice('Modifications enregistrées localement uniquement : connectez le compte Google Admin (en haut) pour les enregistrer dans Firestore.');
+        setTimeout(() => setSeriesSaveNotice(null), 7000);
+      }
     } else {
       await addSeries(data as any);
     }
@@ -153,7 +159,13 @@ export const AdminSeriesManager: React.FC = () => {
 
   return (
     <div className="p-6 sm:p-8 flex flex-col gap-6 max-w-7xl mx-auto w-full">
-      
+      {seriesSaveNotice && (
+        <div className="p-3.5 rounded-2xl bg-amber-950/70 border border-amber-500/50 text-amber-200 text-xs font-bold flex items-center gap-2.5">
+          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+          <span>{seriesSaveNotice}</span>
+        </div>
+      )}
+
       {/* Top Toolbar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>

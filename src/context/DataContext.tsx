@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Series, 
   SeriesGenre,
@@ -102,11 +102,15 @@ import {
   fetchHeroSlidesFromFirestore,
   subscribeToFirestoreHeroSlides,
   syncArtistToFirestore,
+  syncArtistToFirestoreDetailed,
   fetchArtistsFromFirestore,
   deleteArtistFromFirestore,
+  deleteArtistFromFirestoreDetailed,
   syncArtbookToFirestore,
+  syncArtbookToFirestoreDetailed,
   fetchArtbooksFromFirestore,
   deleteArtbookFromFirestore,
+  deleteArtbookFromFirestoreDetailed,
   subscribeToFirestoreArtists,
   subscribeToFirestoreArtbooks,
   syncAllArtistsToFirestore,
@@ -166,6 +170,10 @@ interface DataContextType {
   isPasswordModalOpen: boolean;
   setIsPasswordModalOpen: (open: boolean) => void;
   openPasswordModal: () => void;
+  isFirebaseAdminConnected: boolean;
+  firebaseAuthEmail: string | null;
+  lastCloudError: { message: string; needsGoogleAuth: boolean; code?: string } | null;
+  clearLastCloudError: () => void;
 
   // Reader Firebase Authentication & Profile
   currentUser: User | null;
@@ -223,7 +231,7 @@ interface DataContextType {
 
   // Series actions
   addSeries: (series: Omit<Series, 'id' | 'slug' | 'totalReads' | 'totalLikes' | 'rating' | 'reviewsCount' | 'updatedAt'>) => void;
-  updateSeries: (id: string, updates: Partial<Series>) => void;
+  updateSeries: (id: string, updates: Partial<Series>) => Promise<boolean>;
   deleteSeries: (id: string) => void;
   cleanupDuplicates: () => Promise<{ cleaned: number; message: string }>;
   addChapter: (seriesId: string, chapter: Omit<Chapter, 'id' | 'seriesId' | 'releaseDate' | 'likesCount'>) => void;
@@ -561,6 +569,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [readerProfile, setReaderProfile] = useState<ReaderProfile | null>(null);
   const [isReaderAuthLoading, setIsReaderAuthLoading] = useState<boolean>(true);
+  const [lastCloudError, setLastCloudError] = useState<{ message: string; needsGoogleAuth: boolean; code?: string } | null>(null);
+  const clearLastCloudError = useCallback(() => setLastCloudError(null), []);
+  const firebaseAuthEmail = currentUser?.email || null;
+  const isFirebaseAdminConnected = Boolean(firebaseAuthEmail && firebaseAuthEmail.toLowerCase() === 'wilfriedcrea@gmail.com');
+  const artistsRef = useRef<Artist[]>(artists);
+  const artbooksRef = useRef<Artbook[]>(artbooks);
+  const hasPendingLocalArtistEditsRef = useRef<boolean>(false);
+  const hasSeenNonEmptyRemoteArtistsRef = useRef<boolean>(false);
+  const hasPendingLocalArtbookEditsRef = useRef<boolean>(false);
+  const hasSeenNonEmptyRemoteArtbooksRef = useRef<boolean>(false);
+  useEffect(() => { artistsRef.current = artists; }, [artists]);
+  useEffect(() => { artbooksRef.current = artbooks; }, [artbooks]);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [authModalInitialTab, setAuthModalInitialTab] = useState<'login' | 'register' | 'forgot'>('login');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
@@ -859,6 +879,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { verified: true, downloadAuthorized: true };
   }, [artbookPurchases]);
 
+  const persistArtistsLocally = useCallback((nextArtists: Artist[]) => {
+    artistsRef.current = nextArtists;
+    setArtists(nextArtists);
+    try {
+      localStorage.setItem(STORAGE_KEYS.ARTISTS, JSON.stringify(nextArtists));
+    } catch (storageErr) {
+      console.warn('Unable to persist artists to localStorage:', storageErr);
+    }
+  }, []);
+
+  const persistArtbooksLocally = useCallback((nextArtbooks: Artbook[]) => {
+    artbooksRef.current = nextArtbooks;
+    setArtbooks(nextArtbooks);
+    try {
+      localStorage.setItem(STORAGE_KEYS.ARTBOOKS, JSON.stringify(nextArtbooks));
+    } catch (storageErr) {
+      console.warn('Unable to persist artbooks to localStorage:', storageErr);
+    }
+  }, []);
+
   const addArtist = useCallback(async (artistData: Omit<Artist, 'id' | 'slug' | 'createdAt'>): Promise<boolean> => {
     const slug = artistData.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     const newArtist: Artist = {
@@ -867,54 +907,108 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       slug: slug || `artist-${Date.now().toString(36)}`,
       createdAt: new Date().toISOString()
     };
-    setArtists(prev => [newArtist, ...prev]);
+    const nextArtists = [newArtist, ...artistsRef.current];
+    hasPendingLocalArtistEditsRef.current = true;
+    persistArtistsLocally(nextArtists);
     try {
       const fb = initializeFirebaseCustom();
       if (fb.db) {
-        await syncArtistToFirestore(fb.db, newArtist);
+        const res = await syncArtistToFirestoreDetailed(fb.db, newArtist);
+        if (!res.success) {
+          setLastCloudError({
+            message: res.error || 'Échec de l\'enregistrement de l\'artiste sur Firestore.',
+            needsGoogleAuth: Boolean(res.needsGoogleAuth),
+            code: res.code
+          });
+          return false;
+        }
+        hasPendingLocalArtistEditsRef.current = false;
+        setLastCloudError(null);
+        return true;
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Sync new artist to Firestore warning:', err);
+      setLastCloudError({
+        message: err?.message || 'Erreur réseau lors de l\'enregistrement Firestore.',
+        needsGoogleAuth: false
+      });
+      return false;
     }
-    return true;
-  }, []);
+    return false;
+  }, [persistArtistsLocally]);
 
   const updateArtist = useCallback(async (id: string, updates: Partial<Artist>): Promise<boolean> => {
-    const existing = artists.find(a => a.id === id);
-    let updatedArtist: Artist | null = existing ? { ...existing, ...updates } : null;
-    setArtists(prev => prev.map(a => {
-      if (a.id === id) {
-        const merged = { ...a, ...updates };
-        updatedArtist = merged;
-        return merged;
-      }
-      return a;
-    }));
-    if (updatedArtist) {
-      try {
-        const fb = initializeFirebaseCustom();
-        if (fb.db) {
-          await syncArtistToFirestore(fb.db, updatedArtist);
-        }
-      } catch (err) {
-        console.warn('Sync update artist warning:', err);
-      }
+    const existing = artistsRef.current.find(a => a.id === id);
+    if (!existing) {
+      setLastCloudError({
+        message: 'Artiste introuvable dans la session actuelle.',
+        needsGoogleAuth: false
+      });
+      return false;
     }
-    return true;
-  }, [artists]);
-
-  const deleteArtist = useCallback(async (id: string): Promise<boolean> => {
-    setArtists(prev => prev.filter(a => a.id !== id));
+    const updatedArtist: Artist = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date().toISOString()
+    };
+    const nextArtists = artistsRef.current.map(a => (a.id === id ? updatedArtist : a));
+    hasPendingLocalArtistEditsRef.current = true;
+    persistArtistsLocally(nextArtists);
     try {
       const fb = initializeFirebaseCustom();
       if (fb.db) {
-        await deleteArtistFromFirestore(fb.db, id);
+        const res = await syncArtistToFirestoreDetailed(fb.db, updatedArtist);
+        if (!res.success) {
+          setLastCloudError({
+            message: res.error || 'Échec de la mise à jour de l\'artiste sur Firestore.',
+            needsGoogleAuth: Boolean(res.needsGoogleAuth),
+            code: res.code
+          });
+          return false;
+        }
+        hasPendingLocalArtistEditsRef.current = false;
+        setLastCloudError(null);
+        return true;
       }
-    } catch (err) {
-      console.warn('Delete artist warning:', err);
+    } catch (err: any) {
+      console.warn('Sync update artist warning:', err);
+      setLastCloudError({
+        message: err?.message || 'Erreur réseau lors de la mise à jour Firestore.',
+        needsGoogleAuth: false
+      });
+      return false;
     }
-    return true;
-  }, []);
+    return false;
+  }, [persistArtistsLocally]);
+
+  const deleteArtist = useCallback(async (id: string): Promise<boolean> => {
+    const nextArtists = artistsRef.current.filter(a => a.id !== id);
+    persistArtistsLocally(nextArtists);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        const res = await deleteArtistFromFirestoreDetailed(fb.db, id);
+        if (!res.success) {
+          setLastCloudError({
+            message: res.error || 'Échec de la suppression de l\'artiste sur Firestore.',
+            needsGoogleAuth: Boolean(res.needsGoogleAuth),
+            code: res.code
+          });
+          return false;
+        }
+        setLastCloudError(null);
+        return true;
+      }
+    } catch (err: any) {
+      console.warn('Delete artist warning:', err);
+      setLastCloudError({
+        message: err?.message || 'Erreur lors de la suppression Firestore.',
+        needsGoogleAuth: false
+      });
+      return false;
+    }
+    return false;
+  }, [persistArtistsLocally]);
 
   const addArtbook = useCallback(async (artbookData: Omit<Artbook, 'id' | 'slug' | 'downloadsCount' | 'createdAt'>): Promise<boolean> => {
     const slug = artbookData.title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -925,72 +1019,139 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       downloadsCount: 0,
       createdAt: new Date().toISOString()
     };
-    setArtbooks(prev => [newArtbook, ...prev]);
+    const nextArtbooks = [newArtbook, ...artbooksRef.current];
+    hasPendingLocalArtbookEditsRef.current = true;
+    persistArtbooksLocally(nextArtbooks);
+
+    let updatedLinkedArtist: Artist | null = null;
     if (newArtbook.artistId) {
-      setArtists(prev => prev.map(a => {
-        if (a.id === newArtbook.artistId && !a.artbookIds.includes(newArtbook.id)) {
-          const updated = { ...a, artbookIds: [...a.artbookIds, newArtbook.id] };
-          const fb = initializeFirebaseCustom();
-          if (fb.db) syncArtistToFirestore(fb.db, updated).catch(() => {});
-          return updated;
+      const nextArtists = artistsRef.current.map(a => {
+        if (a.id === newArtbook.artistId && !(a.artbookIds || []).includes(newArtbook.id)) {
+          updatedLinkedArtist = { ...a, artbookIds: [...(a.artbookIds || []), newArtbook.id] };
+          return updatedLinkedArtist;
         }
         return a;
-      }));
+      });
+      if (updatedLinkedArtist) {
+        persistArtistsLocally(nextArtists);
+      }
     }
     try {
       const fb = initializeFirebaseCustom();
       if (fb.db) {
-        await syncArtbookToFirestore(fb.db, newArtbook);
+        if (updatedLinkedArtist) {
+          await syncArtistToFirestoreDetailed(fb.db, updatedLinkedArtist).catch(() => {});
+        }
+        const res = await syncArtbookToFirestoreDetailed(fb.db, newArtbook);
+        if (!res.success) {
+          setLastCloudError({
+            message: res.error || 'Échec de l\'enregistrement de l\'artbook sur Firestore.',
+            needsGoogleAuth: Boolean(res.needsGoogleAuth),
+            code: res.code
+          });
+          return false;
+        }
+        hasPendingLocalArtbookEditsRef.current = false;
+        setLastCloudError(null);
+        return true;
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Sync new artbook to Firestore warning:', err);
+      setLastCloudError({
+        message: err?.message || 'Erreur lors de la synchronisation de l\'artbook.',
+        needsGoogleAuth: false
+      });
+      return false;
     }
-    return true;
-  }, []);
+    return false;
+  }, [persistArtbooksLocally, persistArtistsLocally]);
 
   const updateArtbook = useCallback(async (id: string, updates: Partial<Artbook>): Promise<boolean> => {
-    let updatedArtbook: Artbook | null = null;
-    setArtbooks(prev => prev.map(a => {
-      if (a.id === id) {
-        updatedArtbook = { ...a, ...updates };
-        return updatedArtbook;
-      }
-      return a;
-    }));
-    if (updatedArtbook) {
-      try {
-        const fb = initializeFirebaseCustom();
-        if (fb.db) {
-          await syncArtbookToFirestore(fb.db, updatedArtbook);
-        }
-      } catch (err) {
-        console.warn('Sync update artbook warning:', err);
-      }
+    const existing = artbooksRef.current.find(a => a.id === id);
+    if (!existing) {
+      setLastCloudError({
+        message: 'Artbook introuvable dans la session actuelle.',
+        needsGoogleAuth: false
+      });
+      return false;
     }
-    return true;
-  }, []);
-
-  const deleteArtbook = useCallback(async (id: string): Promise<boolean> => {
-    setArtbooks(prev => prev.filter(a => a.id !== id));
-    setArtists(prev => prev.map(a => {
-      if (a.artbookIds?.includes(id)) {
-        const updated = { ...a, artbookIds: a.artbookIds.filter(abId => abId !== id) };
-        const fb = initializeFirebaseCustom();
-        if (fb.db) syncArtistToFirestore(fb.db, updated).catch(() => {});
-        return updated;
-      }
-      return a;
-    }));
+    const updatedArtbook: Artbook = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date().toISOString()
+    };
+    const nextArtbooks = artbooksRef.current.map(a => (a.id === id ? updatedArtbook : a));
+    hasPendingLocalArtbookEditsRef.current = true;
+    persistArtbooksLocally(nextArtbooks);
     try {
       const fb = initializeFirebaseCustom();
       if (fb.db) {
-        await deleteArtbookFromFirestore(fb.db, id);
+        const res = await syncArtbookToFirestoreDetailed(fb.db, updatedArtbook);
+        if (!res.success) {
+          setLastCloudError({
+            message: res.error || 'Échec de la mise à jour de l\'artbook sur Firestore.',
+            needsGoogleAuth: Boolean(res.needsGoogleAuth),
+            code: res.code
+          });
+          return false;
+        }
+        hasPendingLocalArtbookEditsRef.current = false;
+        setLastCloudError(null);
+        return true;
       }
-    } catch (err) {
-      console.warn('Delete artbook warning:', err);
+    } catch (err: any) {
+      console.warn('Sync update artbook warning:', err);
+      setLastCloudError({
+        message: err?.message || 'Erreur lors de la mise à jour de l\'artbook.',
+        needsGoogleAuth: false
+      });
+      return false;
     }
-    return true;
-  }, []);
+    return false;
+  }, [persistArtbooksLocally]);
+
+  const deleteArtbook = useCallback(async (id: string): Promise<boolean> => {
+    const nextArtbooks = artbooksRef.current.filter(a => a.id !== id);
+    persistArtbooksLocally(nextArtbooks);
+    let updatedArtist: Artist | null = null;
+    const nextArtists = artistsRef.current.map(a => {
+      if (a.artbookIds?.includes(id)) {
+        updatedArtist = { ...a, artbookIds: a.artbookIds.filter(abId => abId !== id) };
+        return updatedArtist;
+      }
+      return a;
+    });
+    if (updatedArtist) {
+      persistArtistsLocally(nextArtists);
+    }
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        if (updatedArtist) {
+          await syncArtistToFirestoreDetailed(fb.db, updatedArtist).catch(() => {});
+        }
+        const res = await deleteArtbookFromFirestoreDetailed(fb.db, id);
+        if (!res.success) {
+          setLastCloudError({
+            message: res.error || 'Échec de la suppression de l\'artbook sur Firestore.',
+            needsGoogleAuth: Boolean(res.needsGoogleAuth),
+            code: res.code
+          });
+          return false;
+        }
+        setLastCloudError(null);
+        return true;
+      }
+    } catch (err: any) {
+      console.warn('Delete artbook warning:', err);
+      setLastCloudError({
+        message: err?.message || 'Erreur lors de la suppression de l\'artbook.',
+        needsGoogleAuth: false
+      });
+      return false;
+    }
+    return false;
+  }, [persistArtbooksLocally, persistArtistsLocally]);
 
   // Sync artists & artbooks to localStorage
   useEffect(() => {
@@ -1053,23 +1214,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           fetchArtbooksFromFirestore()
         ]);
 
-        if (remoteArtists) {
+        if (remoteArtists && !hasPendingLocalArtistEditsRef.current) {
           const userOnly = remoteArtists.filter(a => a && a.id && !DEMO_ARTIST_IDS.has(a.id));
           if (userOnly.length > 0) {
-            setArtists(userOnly);
-            try {
-              localStorage.setItem(STORAGE_KEYS.ARTISTS, JSON.stringify(userOnly));
-            } catch {}
+            hasSeenNonEmptyRemoteArtistsRef.current = true;
+            persistArtistsLocally(userOnly);
           }
         }
 
-        if (remoteArtbooks) {
+        if (remoteArtbooks && !hasPendingLocalArtbookEditsRef.current) {
           const userOnlyAb = remoteArtbooks.filter(ab => ab && ab.id && !DEMO_AB_IDS.has(ab.id));
           if (userOnlyAb.length > 0) {
-            setArtbooks(userOnlyAb);
-            try {
-              localStorage.setItem(STORAGE_KEYS.ARTBOOKS, JSON.stringify(userOnlyAb));
-            } catch {}
+            hasSeenNonEmptyRemoteArtbooksRef.current = true;
+            persistArtbooksLocally(userOnlyAb);
           }
         }
       } catch (err) {
@@ -1079,23 +1236,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initRemoteArtistsAndArtbooks();
 
     // 2. Persistent real-time onSnapshot listener: immediately updates state on ALL devices
-    const unsubscribeArtists = subscribeToFirestoreArtists((liveArtists) => {
-      if (liveArtists) {
-        const userOnly = liveArtists.filter(a => a && a.id && !DEMO_ARTIST_IDS.has(a.id));
-        setArtists(userOnly);
-        try {
-          localStorage.setItem(STORAGE_KEYS.ARTISTS, JSON.stringify(userOnly));
-        } catch {}
+    const unsubscribeArtists = subscribeToFirestoreArtists((liveArtists, meta) => {
+      if (!liveArtists) return;
+      if (hasPendingLocalArtistEditsRef.current) return;
+      const userOnly = liveArtists.filter(a => a && a.id && !DEMO_ARTIST_IDS.has(a.id));
+      if (userOnly.length > 0) {
+        hasSeenNonEmptyRemoteArtistsRef.current = true;
+        persistArtistsLocally(userOnly);
+      } else if (hasSeenNonEmptyRemoteArtistsRef.current && !meta?.fromCache) {
+        persistArtistsLocally([]);
       }
     });
 
-    const unsubscribeArtbooks = subscribeToFirestoreArtbooks((liveArtbooks) => {
-      if (liveArtbooks) {
-        const userOnlyAb = liveArtbooks.filter(ab => ab && ab.id && !DEMO_AB_IDS.has(ab.id));
-        setArtbooks(userOnlyAb);
-        try {
-          localStorage.setItem(STORAGE_KEYS.ARTBOOKS, JSON.stringify(userOnlyAb));
-        } catch {}
+    const unsubscribeArtbooks = subscribeToFirestoreArtbooks((liveArtbooks, meta) => {
+      if (!liveArtbooks) return;
+      if (hasPendingLocalArtbookEditsRef.current) return;
+      const userOnlyAb = liveArtbooks.filter(ab => ab && ab.id && !DEMO_AB_IDS.has(ab.id));
+      if (userOnlyAb.length > 0) {
+        hasSeenNonEmptyRemoteArtbooksRef.current = true;
+        persistArtbooksLocally(userOnlyAb);
+      } else if (hasSeenNonEmptyRemoteArtbooksRef.current && !meta?.fromCache) {
+        persistArtbooksLocally([]);
       }
     });
 
@@ -1103,7 +1264,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubscribeArtists();
       unsubscribeArtbooks();
     };
-  }, []);
+  }, [persistArtistsLocally, persistArtbooksLocally]);
 
   // Listen to browser navigation (back/forward buttons)
   useEffect(() => {
@@ -1296,6 +1457,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return INITIAL_APP_VERSION;
     }
   });
+  const seriesRef = useRef<Series[]>(series);
+  const teasersRef = useRef<Teaser[]>(teasers);
+  const pressReleasesRef = useRef<PressRelease[]>(pressReleases);
+  const articlesRef = useRef<Article[]>(articles);
+  const appVersionRef = useRef<AppVersionInfo>(appVersion);
+  useEffect(() => { seriesRef.current = series; }, [series]);
+  useEffect(() => { teasersRef.current = teasers; }, [teasers]);
+  useEffect(() => { pressReleasesRef.current = pressReleases; }, [pressReleases]);
+  useEffect(() => { articlesRef.current = articles; }, [articles]);
+  useEffect(() => { appVersionRef.current = appVersion; }, [appVersion]);
 
   const [analytics, setAnalytics] = useState<AnalyticsOverview>(() => {
     try {
@@ -1469,6 +1640,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return INITIAL_MONETIZATION;
     }
   });
+  const monetizationRef = useRef<MonetizationSettings>(monetization);
+  useEffect(() => { monetizationRef.current = monetization; }, [monetization]);
 
   const [creatorPayouts, setCreatorPayouts] = useState<CreatorPayout[]>(() => {
     try {
@@ -2009,6 +2182,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         resetFailedLoginAttempts();
         const sessionPayload = await generateAdminSessionToken(userEmail, adminCredentials.passwordHash, 24 * 60 * 60 * 1000);
         setIsAuthenticated(true);
+        setLastCloudError(null);
         const now = new Date().toISOString();
         setAdminUserState(prev => ({
           ...prev,
@@ -2217,29 +2391,42 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const updateSeries = useCallback(async (id: string, updates: Partial<Series>) => {
-    let targetUpdated: Series | null = null;
-    const nowIso = new Date().toISOString();
-    const nowDate = nowIso.split('T')[0];
+  const updateSeries = useCallback(async (id: string, updates: Partial<Series>): Promise<boolean> => {
+    const existing = seriesRef.current.find(s => s.id === id);
+    if (!existing) return false;
+    const nowDate = new Date().toISOString().split('T')[0];
+    const targetUpdated: Series = { ...existing, ...updates, updatedAt: nowDate };
+    const nextSeries = seriesRef.current.map(s => (s.id === id ? targetUpdated : s));
+    seriesRef.current = nextSeries;
+    setSeries(nextSeries);
+    try {
+      localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(nextSeries));
+    } catch {}
 
-    setSeries(prev => prev.map(s => {
-      if (s.id === id) {
-        targetUpdated = { ...s, ...updates, updatedAt: nowDate };
-        return targetUpdated;
-      }
-      return s;
-    }));
-
-    if (targetUpdated) {
-      try {
-        const fb = initializeFirebaseCustom();
-        if (fb.db) {
-          await syncSeriesToFirestore(fb.db, targetUpdated);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        const res = await syncSeriesToFirestore(fb.db, targetUpdated);
+        if (!res.success) {
+          setLastCloudError({
+            message: (res as any).errorMessage || 'Échec de la mise à jour de la série sur Firestore.',
+            needsGoogleAuth: Boolean((res as any).needsGoogleAuth),
+            code: (res as any).errorCode
+          });
+          return false;
         }
-      } catch (syncErr) {
-        console.warn('Sync updated series to Firestore warning:', syncErr);
+        setLastCloudError(null);
+        return true;
       }
+    } catch (syncErr: any) {
+      console.warn('Sync updated series to Firestore warning:', syncErr);
+      setLastCloudError({
+        message: syncErr?.message || 'Erreur réseau lors de la synchronisation Firestore.',
+        needsGoogleAuth: false
+      });
+      return false;
     }
+    return false;
   }, []);
 
   const deleteSeries = useCallback(async (id: string) => {
@@ -2260,18 +2447,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(STORAGE_KEYS.DELETED_SERIES, JSON.stringify(Array.from(set)));
     } catch {}
 
-    setSeries(prev => {
-      const updated = prev.filter(s => {
-        if (s.id === id || s.slug === id) return false;
-        if (slug && (s.slug === slug || s.id === slug)) return false;
-        if (title && s.title?.trim().toLowerCase() === title.trim().toLowerCase()) return false;
-        return true;
-      });
-      try {
-        localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(updated));
-      } catch {}
-      return updated;
+    const updatedList = seriesRef.current.filter(s => {
+      if (s.id === id || s.slug === id) return false;
+      if (slug && (s.slug === slug || s.id === slug)) return false;
+      if (title && s.title?.trim().toLowerCase() === title.trim().toLowerCase()) return false;
+      return true;
     });
+    seriesRef.current = updatedList;
+    setSeries(updatedList);
+    try {
+      localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(updatedList));
+    } catch {}
     setAnalytics(prev => ({ ...prev, seriesCount: Math.max(0, prev.seriesCount - 1) }));
 
     try {
@@ -2293,6 +2479,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Chapters CRUD
   const addChapter = useCallback(async (seriesId: string, chapterData: Omit<Chapter, 'id' | 'seriesId' | 'releaseDate' | 'likesCount'>) => {
+    const target = seriesRef.current.find(s => s.id === seriesId);
+    if (!target) return;
     const chapterId = `ch-${Date.now()}`;
     const newChapter: Chapter = {
       ...chapterData,
@@ -2301,79 +2489,63 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       releaseDate: new Date().toISOString().split('T')[0],
       likesCount: 0
     };
-
-    let updatedSeries: Series | null = null;
-    setSeries(prev => prev.map(s => {
-      if (s.id === seriesId) {
-        const updatedChapters = [...(s.chapters || []), newChapter];
-        updatedSeries = {
-          ...s,
-          chapters: updatedChapters,
-          chaptersCount: updatedChapters.length,
-          updatedAt: new Date().toISOString().split('T')[0]
-        };
-        return updatedSeries;
-      }
-      return s;
-    }));
-
-    if (updatedSeries) {
-      try {
-        const fb = initializeFirebaseCustom();
-        if (fb.db) {
-          await syncSeriesToFirestore(fb.db, updatedSeries);
-        }
-      } catch (err) {
-        console.warn('Sync new chapter to Firestore warning:', err);
-      }
-    }
-
+    const updatedChapters = [...(target.chapters || []), newChapter];
+    const updatedSeries: Series = {
+      ...target,
+      chapters: updatedChapters,
+      chaptersCount: updatedChapters.length,
+      updatedAt: new Date().toISOString().split('T')[0]
+    };
+    const nextSeries = seriesRef.current.map(s => (s.id === seriesId ? updatedSeries : s));
+    seriesRef.current = nextSeries;
+    setSeries(nextSeries);
     setAnalytics(prev => ({ ...prev, chaptersPublished: prev.chaptersPublished + 1 }));
+
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncSeriesToFirestore(fb.db, updatedSeries);
+      }
+    } catch (err) {
+      console.warn('Sync new chapter to Firestore warning:', err);
+    }
   }, []);
 
   const updateChapter = useCallback(async (seriesId: string, chapterId: string, updates: Partial<Chapter>) => {
-    let updatedSeries: Series | null = null;
-    setSeries(prev => prev.map(s => {
-      if (s.id === seriesId && s.chapters) {
-        const updatedChapters = s.chapters.map(c => c.id === chapterId ? { ...c, ...updates } : c);
-        updatedSeries = { ...s, chapters: updatedChapters, updatedAt: new Date().toISOString().split('T')[0] };
-        return updatedSeries;
-      }
-      return s;
-    }));
+    const target = seriesRef.current.find(s => s.id === seriesId);
+    if (!target || !target.chapters) return;
+    const updatedChapters = target.chapters.map(c => c.id === chapterId ? { ...c, ...updates } : c);
+    const updatedSeries: Series = { ...target, chapters: updatedChapters, updatedAt: new Date().toISOString().split('T')[0] };
+    const nextSeries = seriesRef.current.map(s => (s.id === seriesId ? updatedSeries : s));
+    seriesRef.current = nextSeries;
+    setSeries(nextSeries);
 
-    if (updatedSeries) {
-      try {
-        const fb = initializeFirebaseCustom();
-        if (fb.db) {
-          await syncSeriesToFirestore(fb.db, updatedSeries);
-        }
-      } catch (err) {
-        console.warn('Sync updated chapter to Firestore warning:', err);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncSeriesToFirestore(fb.db, updatedSeries);
       }
+    } catch (err) {
+      console.warn('Sync updated chapter to Firestore warning:', err);
     }
   }, []);
 
   const deleteChapter = useCallback(async (seriesId: string, chapterId: string) => {
-    let updatedSeries: Series | null = null;
-    setSeries(prev => prev.map(s => {
-      if (s.id === seriesId && s.chapters) {
-        const updatedChapters = s.chapters.filter(c => c.id !== chapterId);
-        updatedSeries = { ...s, chapters: updatedChapters, chaptersCount: updatedChapters.length };
-        return updatedSeries;
-      }
-      return s;
-    }));
+    const target = seriesRef.current.find(s => s.id === seriesId);
+    if (!target || !target.chapters) return;
+    const updatedChapters = target.chapters.filter(c => c.id !== chapterId);
+    const updatedSeries: Series = { ...target, chapters: updatedChapters, chaptersCount: updatedChapters.length };
+    const nextSeries = seriesRef.current.map(s => (s.id === seriesId ? updatedSeries : s));
+    seriesRef.current = nextSeries;
+    setSeries(nextSeries);
 
-    if (updatedSeries) {
-      try {
-        const fb = initializeFirebaseCustom();
-        if (fb.db) {
-          await syncSeriesToFirestore(fb.db, updatedSeries);
-        }
-      } catch (err) {
-        console.warn('Sync delete chapter to Firestore warning:', err);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncSeriesToFirestore(fb.db, updatedSeries);
       }
+    } catch (err) {
+      console.warn('Sync delete chapter to Firestore warning:', err);
     }
   }, []);
 
@@ -2385,7 +2557,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       viewsCount: 0,
       releaseDate: new Date().toISOString().split('T')[0]
     };
-    setTeasers(prev => [newTeaser, ...prev]);
+    const nextTeasers = [newTeaser, ...teasersRef.current];
+    teasersRef.current = nextTeasers;
+    setTeasers(nextTeasers);
 
     try {
       const fb = initializeFirebaseCustom();
@@ -2398,29 +2572,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const updateTeaser = useCallback(async (id: string, updates: Partial<Teaser>) => {
-    let updatedTeaser: Teaser | null = null;
-    setTeasers(prev => prev.map(t => {
-      if (t.id === id) {
-        updatedTeaser = { ...t, ...updates };
-        return updatedTeaser;
-      }
-      return t;
-    }));
+    const target = teasersRef.current.find(t => t.id === id);
+    if (!target) return;
+    const updatedTeaser: Teaser = { ...target, ...updates };
+    const nextTeasers = teasersRef.current.map(t => (t.id === id ? updatedTeaser : t));
+    teasersRef.current = nextTeasers;
+    setTeasers(nextTeasers);
 
-    if (updatedTeaser) {
-      try {
-        const fb = initializeFirebaseCustom();
-        if (fb.db) {
-          await syncTeaserToFirestore(fb.db, updatedTeaser);
-        }
-      } catch (err) {
-        console.warn('Sync update teaser to Firestore warning:', err);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncTeaserToFirestore(fb.db, updatedTeaser);
       }
+    } catch (err) {
+      console.warn('Sync update teaser to Firestore warning:', err);
     }
   }, []);
 
   const deleteTeaser = useCallback(async (id: string) => {
-    setTeasers(prev => prev.filter(t => t.id !== id));
+    const nextTeasers = teasersRef.current.filter(t => t.id !== id);
+    teasersRef.current = nextTeasers;
+    setTeasers(nextTeasers);
     try {
       const fb = initializeFirebaseCustom();
       if (fb.db) {
@@ -2440,7 +2612,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       slug,
       date: new Date().toISOString().split('T')[0]
     };
-    setPressReleases(prev => [newPress, ...prev]);
+    const nextPress = [newPress, ...pressReleasesRef.current];
+    pressReleasesRef.current = nextPress;
+    setPressReleases(nextPress);
 
     try {
       const fb = initializeFirebaseCustom();
@@ -2453,29 +2627,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const updatePressRelease = useCallback(async (id: string, updates: Partial<PressRelease>) => {
-    let updatedPress: PressRelease | null = null;
-    setPressReleases(prev => prev.map(p => {
-      if (p.id === id) {
-        updatedPress = { ...p, ...updates };
-        return updatedPress;
-      }
-      return p;
-    }));
+    const target = pressReleasesRef.current.find(p => p.id === id);
+    if (!target) return;
+    const updatedPress: PressRelease = { ...target, ...updates };
+    const nextPress = pressReleasesRef.current.map(p => (p.id === id ? updatedPress : p));
+    pressReleasesRef.current = nextPress;
+    setPressReleases(nextPress);
 
-    if (updatedPress) {
-      try {
-        const fb = initializeFirebaseCustom();
-        if (fb.db) {
-          await syncPressToFirestore(fb.db, updatedPress);
-        }
-      } catch (err) {
-        console.warn('Sync update press release to Firestore warning:', err);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncPressToFirestore(fb.db, updatedPress);
       }
+    } catch (err) {
+      console.warn('Sync update press release to Firestore warning:', err);
     }
   }, []);
 
   const deletePressRelease = useCallback(async (id: string) => {
-    setPressReleases(prev => prev.filter(p => p.id !== id));
+    const nextPress = pressReleasesRef.current.filter(p => p.id !== id);
+    pressReleasesRef.current = nextPress;
+    setPressReleases(nextPress);
     try {
       const fb = initializeFirebaseCustom();
       if (fb.db) {
@@ -2497,7 +2669,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       published: articleData.published !== undefined ? articleData.published : true,
       publishedAt: articleData.publishedAt || new Date().toISOString().split('T')[0]
     };
-    setArticles(prev => [newArticle, ...prev]);
+    const nextArticles = [newArticle, ...articlesRef.current];
+    articlesRef.current = nextArticles;
+    setArticles(nextArticles);
 
     try {
       const fb = initializeFirebaseCustom();
@@ -2510,28 +2684,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const updateArticle = useCallback(async (id: string, updates: Partial<Article>) => {
-    let updatedArticle: Article | null = null;
-    setArticles(prev => prev.map(a => {
-      if (a.id === id) {
-        updatedArticle = { ...a, ...updates };
-        return updatedArticle;
+    const target = articlesRef.current.find(a => a.id === id);
+    if (!target) return;
+    const updatedArticle: Article = { ...target, ...updates };
+    const nextArticles = articlesRef.current.map(a => (a.id === id ? updatedArticle : a));
+    articlesRef.current = nextArticles;
+    setArticles(nextArticles);
+
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncArticleToFirestore(fb.db, updatedArticle);
       }
-      return a;
-    }));
-    if (updatedArticle) {
-      try {
-        const fb = initializeFirebaseCustom();
-        if (fb.db) {
-          await syncArticleToFirestore(fb.db, updatedArticle);
-        }
-      } catch (err) {
-        console.warn('Sync update article error:', err);
-      }
+    } catch (err) {
+      console.warn('Sync update article error:', err);
     }
   }, []);
 
   const deleteArticle = useCallback(async (id: string) => {
-    setArticles(prev => prev.filter(a => a.id !== id));
+    const nextArticles = articlesRef.current.filter(a => a.id !== id);
+    articlesRef.current = nextArticles;
+    setArticles(nextArticles);
     try {
       const fb = initializeFirebaseCustom();
       if (fb.db) {
@@ -2544,21 +2717,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Version Info
   const updateAppVersion = useCallback(async (updates: Partial<AppVersionInfo>) => {
-    let targetUpdated: AppVersionInfo | null = null;
-    setAppVersion(prev => {
-      targetUpdated = { ...prev, ...updates };
-      return targetUpdated;
-    });
+    const targetUpdated: AppVersionInfo = { ...appVersionRef.current, ...updates };
+    appVersionRef.current = targetUpdated;
+    setAppVersion(targetUpdated);
 
-    if (targetUpdated) {
-      try {
-        const fb = initializeFirebaseCustom();
-        if (fb.db) {
-          await syncAppVersionToFirestore(fb.db, targetUpdated);
-        }
-      } catch (err) {
-        console.warn('Sync app version warning:', err);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncAppVersionToFirestore(fb.db, targetUpdated);
       }
+    } catch (err) {
+      console.warn('Sync app version warning:', err);
     }
   }, []);
 
@@ -2650,53 +2819,45 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Monetization Actions
   const updateMonetizationSettings = useCallback(async (updates: Partial<MonetizationSettings>) => {
-    let updatedMonetization: MonetizationSettings | null = null;
-    setMonetization(prev => {
-      updatedMonetization = { ...prev, ...updates };
-      return updatedMonetization;
-    });
+    const updatedMonetization: MonetizationSettings = { ...monetizationRef.current, ...updates };
+    monetizationRef.current = updatedMonetization;
+    setMonetization(updatedMonetization);
     addModerationLog(
       'Mise à jour Paramètres Monétisation',
       'monetization',
       'settings',
       `Modification des taux et paramètres de monétisation par ${adminUser.email}`
     );
-    if (updatedMonetization) {
-      try {
-        const fb = initializeFirebaseCustom();
-        if (fb.db) {
-          await syncMonetizationToFirestore(fb.db, updatedMonetization);
-        }
-      } catch (err) {
-        console.warn('Sync monetization settings to Firestore warning:', err);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncMonetizationToFirestore(fb.db, updatedMonetization);
       }
+    } catch (err) {
+      console.warn('Sync monetization settings to Firestore warning:', err);
     }
   }, [addModerationLog, adminUser.email]);
 
   const updateCoinPack = useCallback(async (packId: string, updates: Partial<CoinPack>) => {
-    let updatedMonetization: MonetizationSettings | null = null;
-    setMonetization(prev => {
-      updatedMonetization = {
-        ...prev,
-        coinPacks: prev.coinPacks.map(p => p.id === packId ? { ...p, ...updates } : p)
-      };
-      return updatedMonetization;
-    });
+    const updatedMonetization: MonetizationSettings = {
+      ...monetizationRef.current,
+      coinPacks: monetizationRef.current.coinPacks.map(p => p.id === packId ? { ...p, ...updates } : p)
+    };
+    monetizationRef.current = updatedMonetization;
+    setMonetization(updatedMonetization);
     addModerationLog(
       'Mise à jour Pack de Coins',
       'monetization',
       packId,
       `Ajustement du pack de coins ${packId}`
     );
-    if (updatedMonetization) {
-      try {
-        const fb = initializeFirebaseCustom();
-        if (fb.db) {
-          await syncMonetizationToFirestore(fb.db, updatedMonetization);
-        }
-      } catch (err) {
-        console.warn('Sync update coin pack to Firestore warning:', err);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncMonetizationToFirestore(fb.db, updatedMonetization);
       }
+    } catch (err) {
+      console.warn('Sync update coin pack to Firestore warning:', err);
     }
   }, [addModerationLog]);
 
@@ -2705,74 +2866,62 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...pack,
       id: `pack-${Date.now()}`
     };
-    let updatedMonetization: MonetizationSettings | null = null;
-    setMonetization(prev => {
-      updatedMonetization = {
-        ...prev,
-        coinPacks: [...prev.coinPacks, newPack]
-      };
-      return updatedMonetization;
-    });
+    const updatedMonetization: MonetizationSettings = {
+      ...monetizationRef.current,
+      coinPacks: [...monetizationRef.current.coinPacks, newPack]
+    };
+    monetizationRef.current = updatedMonetization;
+    setMonetization(updatedMonetization);
     addModerationLog(
       'Ajout Pack de Coins',
       'monetization',
       newPack.id,
       `Création du pack ${newPack.name} (${newPack.coins} Coins à ${newPack.priceXof} FCFA)`
     );
-    if (updatedMonetization) {
-      try {
-        const fb = initializeFirebaseCustom();
-        if (fb.db) {
-          await syncMonetizationToFirestore(fb.db, updatedMonetization);
-        }
-      } catch (err) {
-        console.warn('Sync add coin pack to Firestore warning:', err);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncMonetizationToFirestore(fb.db, updatedMonetization);
       }
+    } catch (err) {
+      console.warn('Sync add coin pack to Firestore warning:', err);
     }
   }, [addModerationLog]);
 
   const deleteCoinPack = useCallback(async (packId: string) => {
-    let updatedMonetization: MonetizationSettings | null = null;
-    setMonetization(prev => {
-      updatedMonetization = {
-        ...prev,
-        coinPacks: prev.coinPacks.filter(p => p.id !== packId)
-      };
-      return updatedMonetization;
-    });
+    const updatedMonetization: MonetizationSettings = {
+      ...monetizationRef.current,
+      coinPacks: monetizationRef.current.coinPacks.filter(p => p.id !== packId)
+    };
+    monetizationRef.current = updatedMonetization;
+    setMonetization(updatedMonetization);
     addModerationLog('Suppression Pack de Coins', 'monetization', packId, `Suppression du pack ${packId}`);
-    if (updatedMonetization) {
-      try {
-        const fb = initializeFirebaseCustom();
-        if (fb.db) {
-          await syncMonetizationToFirestore(fb.db, updatedMonetization);
-        }
-      } catch (err) {
-        console.warn('Sync delete coin pack to Firestore warning:', err);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncMonetizationToFirestore(fb.db, updatedMonetization);
       }
+    } catch (err) {
+      console.warn('Sync delete coin pack to Firestore warning:', err);
     }
   }, [addModerationLog]);
 
   const togglePaymentGateway = useCallback(async (gatewayId: string) => {
-    let updatedMonetization: MonetizationSettings | null = null;
-    setMonetization(prev => {
-      updatedMonetization = {
-        ...prev,
-        supportedPaymentGateways: prev.supportedPaymentGateways.map(g => 
-          g.id === gatewayId ? { ...g, isActive: !g.isActive } : g
-        )
-      };
-      return updatedMonetization;
-    });
-    if (updatedMonetization) {
-      try {
-        const fb = initializeFirebaseCustom();
-        if (fb.db) {
-          await syncMonetizationToFirestore(fb.db, updatedMonetization);
-        }
-      } catch (err) {
-        console.warn('Sync payment gateway to Firestore warning:', err);
+    const updatedMonetization: MonetizationSettings = {
+      ...monetizationRef.current,
+      supportedPaymentGateways: monetizationRef.current.supportedPaymentGateways.map(g => 
+        g.id === gatewayId ? { ...g, isActive: !g.isActive } : g
+      )
+    };
+    monetizationRef.current = updatedMonetization;
+    setMonetization(updatedMonetization);
+    try {
+      const fb = initializeFirebaseCustom();
+      if (fb.db) {
+        await syncMonetizationToFirestore(fb.db, updatedMonetization);
       }
+    } catch (err) {
+      console.warn('Sync payment gateway to Firestore warning:', err);
     }
   }, []);
 
@@ -3058,21 +3207,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!fb.db) {
         return { success: false, message: 'Client Firestore indisponible.' };
       }
-      const res = await syncAllArtistsToFirestore(fb.db, artists);
+      const res = await syncAllArtistsToFirestore(fb.db, artistsRef.current);
       if (res.success) {
+        hasPendingLocalArtistEditsRef.current = false;
+        setLastCloudError(null);
         return {
           success: true,
           message: `Synchronisation réussie ! Les ${res.count} artistes sont maintenant à jour et visibles sur tous les appareils.`
         };
       } else {
-        return { success: false, message: 'Erreur lors de la synchronisation des artistes.' };
+        const errMsg = res.errorMessage || 'Erreur lors de la synchronisation des artistes.';
+        setLastCloudError({
+          message: errMsg,
+          needsGoogleAuth: Boolean(res.needsGoogleAuth)
+        });
+        return { success: false, message: errMsg };
       }
     } catch (err: any) {
       return { success: false, message: err?.message || 'Erreur lors de la synchronisation des artistes.' };
     } finally {
       setIsSyncingArtists(false);
     }
-  }, [artists]);
+  }, []);
 
   const syncAllArtbooksToFirestoreNow = useCallback(async (): Promise<{ success: boolean; message: string }> => {
     setIsSyncingArtbooks(true);
@@ -3081,21 +3237,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!fb.db) {
         return { success: false, message: 'Client Firestore indisponible.' };
       }
-      const res = await syncAllArtbooksToFirestore(fb.db, artbooks);
+      const res = await syncAllArtbooksToFirestore(fb.db, artbooksRef.current);
       if (res.success) {
+        hasPendingLocalArtbookEditsRef.current = false;
+        setLastCloudError(null);
         return {
           success: true,
           message: `Synchronisation réussie ! Les ${res.count} artbooks sont maintenant à jour et accessibles au téléchargement sur tous les appareils.`
         };
       } else {
-        return { success: false, message: 'Erreur lors de la synchronisation des artbooks.' };
+        const errMsg = res.errorMessage || 'Erreur lors de la synchronisation des artbooks.';
+        setLastCloudError({
+          message: errMsg,
+          needsGoogleAuth: Boolean(res.needsGoogleAuth)
+        });
+        return { success: false, message: errMsg };
       }
     } catch (err: any) {
       return { success: false, message: err?.message || 'Erreur lors de la synchronisation des artbooks.' };
     } finally {
       setIsSyncingArtbooks(false);
     }
-  }, [artbooks]);
+  }, []);
 
   const [isSyncingArticlesCloud, setIsSyncingArticlesCloud] = useState(false);
 
@@ -3330,6 +3493,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isPasswordModalOpen,
       setIsPasswordModalOpen,
       openPasswordModal,
+      isFirebaseAdminConnected,
+      firebaseAuthEmail,
+      lastCloudError,
+      clearLastCloudError,
       viewMode,
       setViewMode,
       selectedArticleId,

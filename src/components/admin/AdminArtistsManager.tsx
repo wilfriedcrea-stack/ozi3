@@ -38,12 +38,14 @@ import {
   Cloud,
   Upload,
   Loader2,
-  RotateCcw
+  RotateCcw,
+  AlertTriangle
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Artist, Artbook } from '../../types';
 import { 
-  syncArtistToFirestore, 
+  syncArtistToFirestore,
+  syncArtistToFirestoreDetailed,
   initializeFirebaseCustom, 
   deleteArtistFromFirestore, 
   syncAllArtistsToFirestore 
@@ -69,7 +71,12 @@ export const AdminArtistsManager: React.FC = () => {
     syncAllArtbooksToFirestoreNow,
     isSyncingArtists,
     isSyncingArtbooks,
-    addLwsFile
+    addLwsFile,
+    isFirebaseAdminConnected,
+    firebaseAuthEmail,
+    loginWithGoogle,
+    lastCloudError,
+    clearLastCloudError
   } = useData();
 
   const [activeSubTab, setActiveSubTab] = useState<'artists' | 'artbooks' | 'activity'>('artists');
@@ -127,18 +134,55 @@ export const AdminArtistsManager: React.FC = () => {
 
   const [syncingSingleArtistId, setSyncingSingleArtistId] = useState<string | null>(null);
 
+  const [isConnectingGoogle, setIsConnectingGoogle] = useState(false);
+
+  const handleConnectGoogleAdmin = async () => {
+    setIsConnectingGoogle(true);
+    try {
+      const res = await loginWithGoogle();
+      const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      if (res.success) {
+        clearLastCloudError();
+        setSyncStatusNotice({
+          success: true,
+          message: 'Compte Google Administrateur connecté ! Vous pouvez enregistrer et synchroniser vos fiches artistes dans le cloud.',
+          timestamp: now
+        });
+      } else {
+        setSyncStatusNotice({
+          success: false,
+          message: res.message || 'Impossible de connecter le compte Google Administrateur.',
+          timestamp: now
+        });
+      }
+    } finally {
+      setIsConnectingGoogle(false);
+    }
+  };
+
   const handleSyncSingleArtist = async (artist: Artist) => {
     setSyncingSingleArtistId(artist.id);
     try {
       const fb = initializeFirebaseCustom();
       if (fb.db) {
-        await syncArtistToFirestore(fb.db, artist);
-        setSaveNotice(`Artiste "${artist.name}" mis à jour avec succès sur tous les appareils !`);
-        setTimeout(() => setSaveNotice(null), 3500);
+        const res = await syncArtistToFirestoreDetailed(fb.db, artist);
+        if (res.success) {
+          setSaveNotice(`Artiste "${artist.name}" mis à jour avec succès sur tous les appareils !`);
+          setTimeout(() => setSaveNotice(null), 3500);
+        } else {
+          setSyncStatusNotice({
+            success: false,
+            message: res.error || `Erreur de mise à jour Firestore pour ${artist.name}`,
+            timestamp: new Date().toLocaleTimeString('fr-FR')
+          });
+        }
       }
     } catch (err: any) {
-      setSaveNotice(`Erreur de mise à jour pour ${artist.name}`);
-      setTimeout(() => setSaveNotice(null), 3500);
+      setSyncStatusNotice({
+        success: false,
+        message: err?.message || `Erreur de mise à jour pour ${artist.name}`,
+        timestamp: new Date().toLocaleTimeString('fr-FR')
+      });
     } finally {
       setSyncingSingleArtistId(null);
     }
@@ -218,8 +262,40 @@ export const AdminArtistsManager: React.FC = () => {
   const [newSpecialtyInput, setNewSpecialtyInput] = useState('');
   const [modalHoverActive, setModalHoverActive] = useState(false);
   const [hoveredCardArtbookId, setHoveredCardArtbookId] = useState<string | null>(null);
+  const [isUploadingArtistPhoto, setIsUploadingArtistPhoto] = useState(false);
+  const [artistPhotoUploadStatus, setArtistPhotoUploadStatus] = useState<string | null>(null);
   const [isUploadingArtistBanner, setIsUploadingArtistBanner] = useState(false);
   const [artistBannerUploadStatus, setArtistBannerUploadStatus] = useState<string | null>(null);
+  const [isSavingArtist, setIsSavingArtist] = useState(false);
+  const [artistSaveError, setArtistSaveError] = useState<string | null>(null);
+  const [isSavingArtbook, setIsSavingArtbook] = useState(false);
+  const [artbookSaveError, setArtbookSaveError] = useState<string | null>(null);
+
+  const handleUploadArtistPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingArtistPhoto(true);
+    setArtistPhotoUploadStatus('Optimisation WebP de la photo de profil...');
+    try {
+      const compressed = await compressImageToWebP(file, 600, 0.88);
+      setArtistPhotoUploadStatus('Transfert vers le stockage sécurisé...');
+      const res = await uploadToLWS(
+        compressed.file,
+        `artist_avatar_${Date.now()}.webp`,
+        'authors'
+      );
+      const finalUrl = res.url || compressed.dataUrl;
+      setArtistForm(prev => ({ ...prev, photoUrl: finalUrl }));
+      if (res.fileInfo) addLwsFile(res.fileInfo);
+      setArtistPhotoUploadStatus('Photo de profil prête ! Cliquez sur « Enregistrer » pour valider.');
+    } catch (err) {
+      console.error('Upload artist photo error:', err);
+      setArtistPhotoUploadStatus('Erreur lors du téléversement de la photo de profil.');
+    } finally {
+      setIsUploadingArtistPhoto(false);
+      e.target.value = '';
+    }
+  };
 
   const handleUploadArtistBanner = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -299,7 +375,9 @@ export const AdminArtistsManager: React.FC = () => {
   // Open modal handlers
   const handleOpenAddArtist = () => {
     setEditingArtist(null);
+    setArtistPhotoUploadStatus(null);
     setArtistBannerUploadStatus(null);
+    setArtistSaveError(null);
     setArtistForm({
       name: '',
       photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
@@ -318,13 +396,15 @@ export const AdminArtistsManager: React.FC = () => {
 
   const handleOpenEditArtist = (artist: Artist) => {
     setEditingArtist(artist);
+    setArtistPhotoUploadStatus(null);
     setArtistBannerUploadStatus(null);
+    setArtistSaveError(null);
     setArtistForm({
       name: artist.name,
       photoUrl: artist.photoUrl,
       bannerUrl: artist.bannerUrl || '',
       country: artist.country || 'Côte d\'Ivoire',
-      bio: artist.bio,
+      bio: artist.bio || '',
       specialties: artist.specialties || [],
       featuredSeriesTitle: artist.featuredSeriesTitle || '',
       instagram: artist.socials?.instagram || '',
@@ -335,54 +415,78 @@ export const AdminArtistsManager: React.FC = () => {
     setArtistModalOpen(true);
   };
 
-  const handleSaveArtist = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const saveArtistFormToCloud = async () => {
     if (!artistForm.name.trim()) return;
+    setIsSavingArtist(true);
+    setArtistSaveError(null);
 
     const normalizedPhotoUrl = normalizeImageUrl(artistForm.photoUrl);
     const normalizedBannerUrl = artistForm.bannerUrl.trim()
       ? normalizeImageUrl(artistForm.bannerUrl)
       : '';
 
-    if (editingArtist) {
-      await updateArtist(editingArtist.id, {
-        name: artistForm.name.trim(),
-        photoUrl: normalizedPhotoUrl,
-        bannerUrl: normalizedBannerUrl,
-        country: artistForm.country.trim(),
-        bio: artistForm.bio.trim(),
-        specialties: artistForm.specialties,
-        featuredSeriesTitle: artistForm.featuredSeriesTitle.trim() || undefined,
-        socials: {
-          instagram: artistForm.instagram.trim() || undefined,
-          twitter: artistForm.twitter.trim() || undefined,
-          artstation: artistForm.artstation.trim() || undefined,
-          youtube: artistForm.youtube.trim() || undefined
-        }
-      });
-      setSaveNotice(`Artiste "${artistForm.name}" mis à jour avec succès.`);
-    } else {
-      await addArtist({
-        name: artistForm.name.trim(),
-        photoUrl: normalizedPhotoUrl,
-        bannerUrl: normalizedBannerUrl,
-        country: artistForm.country.trim(),
-        bio: artistForm.bio.trim(),
-        specialties: artistForm.specialties,
-        artbookIds: [],
-        featuredSeriesTitle: artistForm.featuredSeriesTitle.trim() || undefined,
-        socials: {
-          instagram: artistForm.instagram.trim() || undefined,
-          twitter: artistForm.twitter.trim() || undefined,
-          artstation: artistForm.artstation.trim() || undefined,
-          youtube: artistForm.youtube.trim() || undefined
-        }
-      });
-      setSaveNotice(`Nouvel artiste "${artistForm.name}" ajouté avec succès.`);
-    }
+    const payload = {
+      name: artistForm.name.trim(),
+      photoUrl: normalizedPhotoUrl,
+      bannerUrl: normalizedBannerUrl,
+      country: artistForm.country.trim(),
+      bio: artistForm.bio.trim(),
+      specialties: artistForm.specialties,
+      featuredSeriesTitle: artistForm.featuredSeriesTitle.trim(),
+      socials: {
+        instagram: artistForm.instagram.trim(),
+        twitter: artistForm.twitter.trim(),
+        artstation: artistForm.artstation.trim(),
+        youtube: artistForm.youtube.trim()
+      }
+    };
 
-    setArtistModalOpen(false);
-    setTimeout(() => setSaveNotice(null), 3000);
+    try {
+      const ok = editingArtist
+        ? await updateArtist(editingArtist.id, payload)
+        : await addArtist({ ...payload, artbookIds: [] });
+
+      if (!ok) {
+        setArtistSaveError(
+          lastCloudError?.message ||
+          (!isFirebaseAdminConnected
+            ? 'Sauvegarde Cloud bloquée : connectez votre compte Google Administrateur (wilfriedcrea@gmail.com) ci-dessous pour enregistrer définitivement.'
+            : 'Impossible d\'enregistrer les modifications sur Firestore. Vérifiez la taille des images et votre connexion.')
+        );
+        return;
+      }
+
+      setSaveNotice(
+        editingArtist
+          ? `Artiste "${artistForm.name}" mis à jour et enregistré dans le cloud.`
+          : `Nouvel artiste "${artistForm.name}" ajouté et enregistré dans le cloud.`
+      );
+      setArtistModalOpen(false);
+      setTimeout(() => setSaveNotice(null), 3500);
+    } finally {
+      setIsSavingArtist(false);
+    }
+  };
+
+  const handleSaveArtist = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await saveArtistFormToCloud();
+  };
+
+  const handleGoogleConnectAndSaveArtist = async () => {
+    setIsConnectingGoogle(true);
+    setArtistSaveError(null);
+    try {
+      const res = await loginWithGoogle();
+      if (!res.success) {
+        setArtistSaveError(res.message || 'Connexion Google annulée.');
+        return;
+      }
+      clearLastCloudError();
+      await saveArtistFormToCloud();
+    } finally {
+      setIsConnectingGoogle(false);
+    }
   };
 
   const handleOpenAddArtbook = (initialTab: 'general' | 'covers' | 'preview' | 'link' = 'general') => {
@@ -413,6 +517,7 @@ export const AdminArtistsManager: React.FC = () => {
       downloadUrl: '',
       rating: 4.9
     });
+    setArtbookSaveError(null);
     setArtbookModalOpen(true);
   };
 
@@ -420,6 +525,7 @@ export const AdminArtistsManager: React.FC = () => {
     setEditingArtbook(artbook);
     setArtbookModalTab(initialTab);
     setModalHoverActive(false);
+    setArtbookSaveError(null);
     setArtbookForm({
       artistId: artbook.artistId,
       artistName: artbook.artistName,
@@ -446,59 +552,81 @@ export const AdminArtistsManager: React.FC = () => {
     setArtbookModalOpen(true);
   };
 
-  const handleSaveArtbook = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const saveArtbookFormToCloud = async () => {
     if (!artbookForm.title.trim()) return;
+    setIsSavingArtbook(true);
+    setArtbookSaveError(null);
 
     const selectedArtObj = artists.find(a => a.id === artbookForm.artistId);
     const finalArtistName = selectedArtObj?.name || artbookForm.artistName || 'Artiste OZI';
     const cleanDownloadUrl = artbookForm.downloadUrl.trim();
     const cleanAlternateCoverUrl = artbookForm.alternateCoverUrl.trim();
 
-    if (editingArtbook) {
-      await updateArtbook(editingArtbook.id, {
-        artistId: artbookForm.artistId,
-        artistName: finalArtistName,
-        title: artbookForm.title.trim(),
-        description: artbookForm.description.trim(),
-        coverUrl: artbookForm.coverUrl.trim(),
-        alternateCoverUrl: cleanAlternateCoverUrl || undefined,
-        previewImages: artbookForm.previewImages,
-        price: Number(artbookForm.price),
-        isFree: Number(artbookForm.price) === 0,
-        pageCount: Number(artbookForm.pageCount),
-        releaseYear: Number(artbookForm.releaseYear),
-        tags: artbookForm.tags,
-        fileSizeFormatted: artbookForm.fileSizeFormatted.trim(),
-        downloadUrl: cleanDownloadUrl || undefined,
-        pdfDownloadUrl: cleanDownloadUrl || undefined,
-        rating: Number(artbookForm.rating)
-      });
-      setSaveNotice(`Artbook "${artbookForm.title}" mis à jour.`);
-    } else {
-      await addArtbook({
-        artistId: artbookForm.artistId,
-        artistName: finalArtistName,
-        title: artbookForm.title.trim(),
-        description: artbookForm.description.trim(),
-        coverUrl: artbookForm.coverUrl.trim(),
-        alternateCoverUrl: cleanAlternateCoverUrl || undefined,
-        previewImages: artbookForm.previewImages,
-        price: Number(artbookForm.price),
-        isFree: Number(artbookForm.price) === 0,
-        pageCount: Number(artbookForm.pageCount),
-        releaseYear: Number(artbookForm.releaseYear),
-        tags: artbookForm.tags,
-        fileSizeFormatted: artbookForm.fileSizeFormatted.trim(),
-        downloadUrl: cleanDownloadUrl || undefined,
-        pdfDownloadUrl: cleanDownloadUrl || undefined,
-        rating: Number(artbookForm.rating)
-      });
-      setSaveNotice(`Nouvel artbook "${artbookForm.title}" publié avec succès.`);
-    }
+    const payload = {
+      artistId: artbookForm.artistId,
+      artistName: finalArtistName,
+      title: artbookForm.title.trim(),
+      description: artbookForm.description.trim(),
+      coverUrl: artbookForm.coverUrl.trim(),
+      alternateCoverUrl: cleanAlternateCoverUrl,
+      previewImages: artbookForm.previewImages,
+      price: Number(artbookForm.price),
+      isFree: Number(artbookForm.price) === 0,
+      pageCount: Number(artbookForm.pageCount),
+      releaseYear: Number(artbookForm.releaseYear),
+      tags: artbookForm.tags,
+      fileSizeFormatted: artbookForm.fileSizeFormatted.trim(),
+      downloadUrl: cleanDownloadUrl,
+      pdfDownloadUrl: cleanDownloadUrl,
+      rating: Number(artbookForm.rating)
+    };
 
-    setArtbookModalOpen(false);
-    setTimeout(() => setSaveNotice(null), 3000);
+    try {
+      const ok = editingArtbook
+        ? await updateArtbook(editingArtbook.id, payload)
+        : await addArtbook(payload);
+
+      if (!ok) {
+        setArtbookSaveError(
+          lastCloudError?.message ||
+          (!isFirebaseAdminConnected
+            ? 'Sauvegarde Cloud bloquée : connectez votre compte Google Administrateur (wilfriedcrea@gmail.com) pour enregistrer cet artbook.'
+            : 'Impossible d\'enregistrer cet artbook sur Firestore.')
+        );
+        return;
+      }
+
+      setSaveNotice(
+        editingArtbook
+          ? `Artbook "${artbookForm.title}" mis à jour dans le cloud.`
+          : `Nouvel artbook "${artbookForm.title}" publié avec succès.`
+      );
+      setArtbookModalOpen(false);
+      setTimeout(() => setSaveNotice(null), 3500);
+    } finally {
+      setIsSavingArtbook(false);
+    }
+  };
+
+  const handleSaveArtbook = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await saveArtbookFormToCloud();
+  };
+
+  const handleGoogleConnectAndSaveArtbook = async () => {
+    setIsConnectingGoogle(true);
+    setArtbookSaveError(null);
+    try {
+      const res = await loginWithGoogle();
+      if (!res.success) {
+        setArtbookSaveError(res.message || 'Connexion Google annulée.');
+        return;
+      }
+      clearLastCloudError();
+      await saveArtbookFormToCloud();
+    } finally {
+      setIsConnectingGoogle(false);
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -532,6 +660,39 @@ export const AdminArtistsManager: React.FC = () => {
   return (
     <div className="p-6 sm:p-8 space-y-8 bg-[#090a0f] min-h-screen text-slate-100">
       
+      {/* Firebase Admin Google Auth Guard Banner */}
+      {!isFirebaseAdminConnected ? (
+        <div className="p-4 rounded-2xl bg-amber-950/60 border border-amber-500/50 text-amber-100 text-xs sm:text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-black text-amber-300">
+                Session Cloud non reliée à Google Admin ({firebaseAuthEmail ? `connecté en tant que ${firebaseAuthEmail}` : 'aucun compte Google actif'})
+              </div>
+              <p className="text-xs text-amber-100/85 mt-0.5">
+                Pour que vos photos, bannières, descriptions et artbooks soient enregistrés durablement sur Firestore et conservés après actualisation, connectez le compte Google Administrateur (wilfriedcrea@gmail.com).
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={isConnectingGoogle}
+            onClick={handleConnectGoogleAdmin}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black shrink-0 cursor-pointer transition-all shadow-md disabled:opacity-60"
+          >
+            {isConnectingGoogle ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+            <span>{isConnectingGoogle ? 'Connexion...' : 'Connecter Google Admin'}</span>
+          </button>
+        </div>
+      ) : (
+        <div className="px-4 py-2.5 rounded-2xl bg-emerald-950/35 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>Écriture Cloud Firestore autorisée ({firebaseAuthEmail}) — toutes vos modifications restent enregistrées.</span>
+          </div>
+        </div>
+      )}
+
       {/* Top Notification */}
       {saveNotice && (
         <div className="p-4 rounded-2xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-sm font-bold flex items-center justify-between shadow-lg animate-in fade-in">
@@ -1299,9 +1460,26 @@ export const AdminArtistsManager: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">
-                  URL Photo de Profil <span className="text-purple-400">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-slate-300">
+                    Photo de Profil (URL ou téléversement) <span className="text-purple-400">*</span>
+                  </label>
+                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs cursor-pointer transition-all shadow-md shadow-purple-600/20">
+                    {isUploadingArtistPhoto ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="w-3.5 h-3.5" />
+                    )}
+                    <span>{isUploadingArtistPhoto ? 'Transfert...' : 'Téléverser photo'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={isUploadingArtistPhoto}
+                      onChange={handleUploadArtistPhoto}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
                 <div className="flex items-center gap-3">
                   <input
                     type="text"
@@ -1312,9 +1490,18 @@ export const AdminArtistsManager: React.FC = () => {
                     className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-purple-500 text-sm text-white focus:outline-none"
                   />
                   {artistForm.photoUrl && (
-                    <img src={artistForm.photoUrl} alt="" className="w-10 h-10 rounded-full object-cover border border-slate-700" />
+                    <img
+                      src={normalizeImageUrl(artistForm.photoUrl)}
+                      alt=""
+                      className="w-11 h-11 rounded-full object-cover border border-slate-700 shrink-0"
+                    />
                   )}
                 </div>
+                {artistPhotoUploadStatus && (
+                  <p className="text-[11px] text-purple-300 mt-1.5 font-medium">
+                    {artistPhotoUploadStatus}
+                  </p>
+                )}
               </div>
 
               {/* Section Bannière de la Page Artiste */}
@@ -1528,9 +1715,30 @@ export const AdminArtistsManager: React.FC = () => {
                 </div>
               </div>
 
+              {artistSaveError && (
+                <div className="p-3.5 rounded-2xl bg-rose-950/70 border border-rose-500/60 text-rose-100 text-xs space-y-2.5">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <span className="font-bold leading-relaxed">{artistSaveError}</span>
+                  </div>
+                  {!isFirebaseAdminConnected && (
+                    <button
+                      type="button"
+                      disabled={isConnectingGoogle || isSavingArtist}
+                      onClick={handleGoogleConnectAndSaveArtist}
+                      className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black cursor-pointer transition-all"
+                    >
+                      {isConnectingGoogle ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                      <span>{isConnectingGoogle ? 'Connexion Google...' : 'Connecter Google (wilfriedcrea@gmail.com) & Enregistrer'}</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
               <div className="pt-4 flex justify-end gap-3">
                 <button
                   type="button"
+                  disabled={isSavingArtist}
                   onClick={() => setArtistModalOpen(false)}
                   className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300"
                 >
@@ -1538,9 +1746,15 @@ export const AdminArtistsManager: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-lg shadow-purple-600/20"
+                  disabled={isSavingArtist || isUploadingArtistBanner || isUploadingArtistPhoto}
+                  className="px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-lg shadow-purple-600/20 disabled:opacity-60 inline-flex items-center gap-2 cursor-pointer"
                 >
-                  {editingArtist ? 'Enregistrer les modifications' : 'Créer l\'Artiste'}
+                  {isSavingArtist && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>
+                    {isSavingArtist
+                      ? 'Enregistrement...'
+                      : (editingArtist ? 'Enregistrer les modifications' : 'Créer l\'Artiste')}
+                  </span>
                 </button>
               </div>
             </form>
@@ -2187,6 +2401,26 @@ export const AdminArtistsManager: React.FC = () => {
                 </div>
               )}
 
+              {artbookSaveError && (
+                <div className="p-3.5 rounded-2xl bg-rose-950/70 border border-rose-500/60 text-rose-100 text-xs space-y-2.5">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <span className="font-bold leading-relaxed">{artbookSaveError}</span>
+                  </div>
+                  {!isFirebaseAdminConnected && (
+                    <button
+                      type="button"
+                      disabled={isConnectingGoogle || isSavingArtbook}
+                      onClick={handleGoogleConnectAndSaveArtbook}
+                      className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black cursor-pointer transition-all"
+                    >
+                      {isConnectingGoogle ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                      <span>{isConnectingGoogle ? 'Connexion Google...' : 'Connecter Google (wilfriedcrea@gmail.com) & Enregistrer'}</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* MODAL FOOTER */}
               <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -2221,6 +2455,7 @@ export const AdminArtistsManager: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
+                    disabled={isSavingArtbook}
                     onClick={() => setArtbookModalOpen(false)}
                     className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300"
                   >
@@ -2228,9 +2463,15 @@ export const AdminArtistsManager: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2.5 rounded-xl bg-[#ff8679] hover:bg-[#eb6e60] text-white text-xs font-bold shadow-lg shadow-[#ff8679]/20 cursor-pointer"
+                    disabled={isSavingArtbook}
+                    className="px-6 py-2.5 rounded-xl bg-[#ff8679] hover:bg-[#eb6e60] text-white text-xs font-bold shadow-lg shadow-[#ff8679]/20 cursor-pointer disabled:opacity-60 inline-flex items-center gap-2"
                   >
-                    {editingArtbook ? 'Enregistrer les modifications' : 'Publier l\'Artbook'}
+                    {isSavingArtbook && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    <span>
+                      {isSavingArtbook
+                        ? 'Enregistrement...'
+                        : (editingArtbook ? 'Enregistrer les modifications' : 'Publier l\'Artbook')}
+                    </span>
                   </button>
                 </div>
               </div>

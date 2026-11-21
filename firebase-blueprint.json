@@ -172,10 +172,17 @@
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" },
+        "slug": { "type": "string" },
         "photoUrl": { "type": "string" },
+        "bannerUrl": { "type": "string" },
         "country": { "type": "string" },
         "bio": { "type": "string" },
-        "specialties": { "type": "array" }
+        "specialties": { "type": "array" },
+        "featuredSeriesTitle": { "type": "string" },
+        "artbookIds": { "type": "array" },
+        "socials": { "type": "object" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
       },
       "required": ["id", "name", "photoUrl"]
     },

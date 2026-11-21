@@ -227,13 +227,17 @@ export async function uploadToLWS(
     console.warn('Firebase Storage fallback failed:', cloudErr);
   }
 
-  // Fallback 2: Offline / Preview Data URL
+  // Fallback 2: Offline / Preview Data URL (strictly bounded for Firestore 1MB doc & localStorage quotas)
   console.warn('All remote storage failed, falling back to local media buffer:', lastError);
-  if (onProgress) onProgress(90, 'Finalisation média local...');
+  if (onProgress) onProgress(90, 'Optimisation locale de secours...');
 
   let previewUrl = '';
   if (fileOrBlob instanceof Blob) {
-    previewUrl = await blobToDataURL(fileOrBlob);
+    if (fileOrBlob.type.startsWith('image/') && fileOrBlob.size > 160_000) {
+      previewUrl = await compressBlobToSafeDataUrl(fileOrBlob, 180_000, 1024);
+    } else {
+      previewUrl = await blobToDataURL(fileOrBlob);
+    }
   }
 
   const fallbackUrl = previewUrl || `https://ozibd.net/uploads/${category}/${fileName}`;
@@ -253,6 +257,33 @@ export async function uploadToLWS(
       uploadedAt: new Date().toISOString()
     }
   };
+}
+
+/**
+ * Compresses an image Blob into a Data URL strictly under maxChars so Firestore documents never exceed 1MB
+ */
+export async function compressBlobToSafeDataUrl(
+  blob: Blob,
+  maxChars: number = 180_000,
+  initialMaxWidth: number = 1024
+): Promise<string> {
+  try {
+    const widths = [initialMaxWidth, 820, 640, 480];
+    const qualities = [0.78, 0.65, 0.52, 0.4];
+
+    for (const w of widths) {
+      for (const q of qualities) {
+        const res = await compressImageToWebP(blob, w, q);
+        if (res.dataUrl && res.dataUrl.length <= maxChars) {
+          return res.dataUrl;
+        }
+      }
+    }
+    const smallest = await compressImageToWebP(blob, 420, 0.35);
+    return smallest.dataUrl;
+  } catch {
+    return await blobToDataURL(blob);
+  }
 }
 
 /**

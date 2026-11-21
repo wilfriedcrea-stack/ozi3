@@ -1,4 +1,4 @@
-import { db } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
 import { Firestore, collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, getDocFromServer, getDocs, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { Series, Teaser, PressRelease, AppVersionInfo, CreatorSubmission, Article, HomeHeroSlide, Artist, Artbook, ArtbookDownloadRecord, ArtbookPurchaseRecord, MonetizationSettings, UserAccount } from '../types';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
@@ -17,17 +17,67 @@ export enum OperationType {
 
 export interface FirestoreErrorInfo {
   error: string;
+  code: string;
+  friendlyMessage: string;
+  needsGoogleAuth: boolean;
   operationType: OperationType;
   path: string | null;
   timestamp: string;
+  authInfo: {
+    userId: string | null;
+    email: string | null;
+    emailVerified: boolean;
+    providerId: string | null;
+  };
+}
+
+export interface FirestoreWriteResult {
+  success: boolean;
+  error?: string;
+  code?: string;
+  needsGoogleAuth?: boolean;
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): FirestoreErrorInfo {
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  const code = (error as { code?: string } | null)?.code || '';
+  const currentUser = auth?.currentUser || null;
+  const email = currentUser?.email || null;
+
+  const isPermissionDenied =
+    code === 'permission-denied' ||
+    rawMessage.toLowerCase().includes('permission-denied') ||
+    rawMessage.toLowerCase().includes('insufficient permissions');
+
+  const isSizeExceeded =
+    code === 'invalid-argument' ||
+    code === 'resource-exhausted' ||
+    rawMessage.toLowerCase().includes('exceeds the maximum allowed size') ||
+    rawMessage.toLowerCase().includes('longer than 1048487');
+
+  let friendlyMessage = rawMessage;
+  if (isPermissionDenied) {
+    friendlyMessage = email
+      ? `Permission Firestore refusée pour le compte « ${email} ». Connectez le compte Google Administrateur (wilfriedcrea@gmail.com) pour enregistrer dans le cloud.`
+      : `Connexion Google Admin requise (wilfriedcrea@gmail.com) : Firestore refuse l'écriture sans session Google autorisée.`;
+  } else if (isSizeExceeded) {
+    friendlyMessage = `Les images envoyées sont trop lourdes pour un seul document Firestore (limite 1 Mo). Utilisez des images plus légères ou une URL directe.`;
+  }
+
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: rawMessage,
+    code,
+    friendlyMessage,
+    needsGoogleAuth: isPermissionDenied,
     operationType,
     path,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    authInfo: {
+      userId: currentUser?.uid || null,
+      email,
+      emailVerified: Boolean(currentUser?.emailVerified),
+      providerId: currentUser?.providerData?.[0]?.providerId || null
+    }
   };
   console.warn('Firestore Operation Notice:', JSON.stringify(errInfo));
   return errInfo;
@@ -581,8 +631,14 @@ export async function syncSeriesToFirestore(databaseInstance: Firestore = db, se
 
     return { success: true };
   } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `series/${series.id}`);
-    return { success: false, error: err };
+    const info = handleFirestoreError(err, OperationType.WRITE, `series/${series.id}`);
+    return {
+      success: false,
+      error: err,
+      errorMessage: info.friendlyMessage,
+      errorCode: info.code,
+      needsGoogleAuth: info.needsGoogleAuth
+    };
   }
 }
 
@@ -960,12 +1016,12 @@ export async function syncSubmissionToFirestore(databaseInstance: Firestore = db
 
 export async function syncArticleToFirestore(databaseInstance: Firestore = db, article: Article) {
   try {
-    const safeArticle: Article = {
+    const safeArticle = cleanFirestoreObject({
       ...article,
       image: normalizeImageUrl(article.image),
       galleryImages: (article.galleryImages || []).map(img => normalizeImageUrl(img))
-    };
-    await setDoc(doc(databaseInstance, 'articles', safeArticle.id), safeArticle, { merge: true });
+    });
+    await setDoc(doc(databaseInstance, 'articles', article.id), safeArticle, { merge: true });
     return { success: true };
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `articles/${article.id}`);
@@ -1209,21 +1265,65 @@ export function subscribeToFirestoreHeroSlides(onUpdate: (slides: HomeHeroSlide[
 // ARTISTS & ARTBOOKS FIRESTORE SERVICES
 // ====================================================
 
-export async function syncArtistToFirestore(databaseInstance: Firestore, artist: Artist): Promise<boolean> {
+function normalizeFirestoreArtist(id: string, data: Partial<Artist>): Artist {
+  return {
+    id,
+    name: data.name || 'Artiste OZI',
+    slug: data.slug || id,
+    photoUrl: normalizeImageUrl(data.photoUrl),
+    bannerUrl: data.bannerUrl ? normalizeImageUrl(data.bannerUrl) : '',
+    country: data.country || '',
+    bio: data.bio || '',
+    specialties: Array.isArray(data.specialties) ? data.specialties : [],
+    featuredSeriesTitle: data.featuredSeriesTitle || '',
+    artbookIds: Array.isArray(data.artbookIds) ? data.artbookIds : [],
+    socials: {
+      instagram: data.socials?.instagram || '',
+      twitter: data.socials?.twitter || '',
+      artstation: data.socials?.artstation || '',
+      youtube: data.socials?.youtube || ''
+    },
+    createdAt: data.createdAt || new Date().toISOString(),
+    updatedAt: data.updatedAt
+  };
+}
+
+export async function syncArtistToFirestoreDetailed(databaseInstance: Firestore, artist: Artist): Promise<FirestoreWriteResult> {
   try {
     const ref = doc(databaseInstance, 'artists', artist.id);
     const cleaned = cleanFirestoreObject({
       ...artist,
       photoUrl: normalizeImageUrl(artist.photoUrl),
       bannerUrl: artist.bannerUrl ? normalizeImageUrl(artist.bannerUrl) : '',
+      bio: artist.bio ?? '',
+      country: artist.country ?? '',
+      specialties: Array.isArray(artist.specialties) ? artist.specialties : [],
+      artbookIds: Array.isArray(artist.artbookIds) ? artist.artbookIds : [],
+      featuredSeriesTitle: artist.featuredSeriesTitle ?? '',
+      socials: {
+        instagram: artist.socials?.instagram ?? '',
+        twitter: artist.socials?.twitter ?? '',
+        artstation: artist.socials?.artstation ?? '',
+        youtube: artist.socials?.youtube ?? ''
+      },
       updatedAt: new Date().toISOString()
     });
     await setDoc(ref, cleaned, { merge: true });
-    return true;
+    return { success: true };
   } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `artists/${artist.id}`);
-    return false;
+    const info = handleFirestoreError(err, OperationType.WRITE, `artists/${artist.id}`);
+    return {
+      success: false,
+      error: info.friendlyMessage,
+      code: info.code,
+      needsGoogleAuth: info.needsGoogleAuth
+    };
   }
+}
+
+export async function syncArtistToFirestore(databaseInstance: Firestore, artist: Artist): Promise<boolean> {
+  const res = await syncArtistToFirestoreDetailed(databaseInstance, artist);
+  return res.success;
 }
 
 export async function fetchArtistsFromFirestore(databaseInstance: Firestore = db): Promise<Artist[] | null> {
@@ -1232,13 +1332,7 @@ export async function fetchArtistsFromFirestore(databaseInstance: Firestore = db
     const snapshot = await getDocs(ref);
     const list: Artist[] = [];
     snapshot.forEach(d => {
-      const data = d.data() as Artist;
-      list.push({
-        ...data,
-        id: d.id,
-        photoUrl: normalizeImageUrl(data.photoUrl),
-        bannerUrl: data.bannerUrl ? normalizeImageUrl(data.bannerUrl) : ''
-      });
+      list.push(normalizeFirestoreArtist(d.id, d.data() as Partial<Artist>));
     });
     return list;
   } catch (err) {
@@ -1247,40 +1341,86 @@ export async function fetchArtistsFromFirestore(databaseInstance: Firestore = db
   }
 }
 
-export async function deleteArtistFromFirestore(databaseInstance: Firestore = db, artistId: string): Promise<boolean> {
+export async function deleteArtistFromFirestoreDetailed(databaseInstance: Firestore = db, artistId: string): Promise<FirestoreWriteResult> {
   try {
     await deleteDoc(doc(databaseInstance, 'artists', artistId));
-    return true;
+    return { success: true };
   } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, `artists/${artistId}`);
-    return false;
+    const info = handleFirestoreError(err, OperationType.DELETE, `artists/${artistId}`);
+    return {
+      success: false,
+      error: info.friendlyMessage,
+      code: info.code,
+      needsGoogleAuth: info.needsGoogleAuth
+    };
+  }
+}
+
+export async function deleteArtistFromFirestore(databaseInstance: Firestore = db, artistId: string): Promise<boolean> {
+  const res = await deleteArtistFromFirestoreDetailed(databaseInstance, artistId);
+  return res.success;
+}
+
+export async function syncArtbookToFirestoreDetailed(databaseInstance: Firestore, artbook: Artbook): Promise<FirestoreWriteResult> {
+  try {
+    const ref = doc(databaseInstance, 'artbooks', artbook.id);
+    const cleaned = cleanFirestoreObject({
+      ...artbook,
+      coverUrl: normalizeImageUrl(artbook.coverUrl),
+      alternateCoverUrl: artbook.alternateCoverUrl ? normalizeImageUrl(artbook.alternateCoverUrl) : '',
+      previewImages: Array.isArray(artbook.previewImages) ? artbook.previewImages.map(u => normalizeImageUrl(u)) : [],
+      tags: Array.isArray(artbook.tags) ? artbook.tags : [],
+      downloadUrl: artbook.downloadUrl ?? '',
+      pdfDownloadUrl: artbook.pdfDownloadUrl ?? '',
+      updatedAt: new Date().toISOString()
+    });
+    await setDoc(ref, cleaned, { merge: true });
+    return { success: true };
+  } catch (err) {
+    const info = handleFirestoreError(err, OperationType.WRITE, `artbooks/${artbook.id}`);
+    return {
+      success: false,
+      error: info.friendlyMessage,
+      code: info.code,
+      needsGoogleAuth: info.needsGoogleAuth
+    };
   }
 }
 
 export async function syncArtbookToFirestore(databaseInstance: Firestore, artbook: Artbook): Promise<boolean> {
+  const res = await syncArtbookToFirestoreDetailed(databaseInstance, artbook);
+  return res.success;
+}
+
+export async function deleteArtbookFromFirestoreDetailed(databaseInstance: Firestore = db, artbookId: string): Promise<FirestoreWriteResult> {
   try {
-    const ref = doc(databaseInstance, 'artbooks', artbook.id);
-    await setDoc(ref, {
-      ...artbook,
-      coverUrl: normalizeImageUrl(artbook.coverUrl),
-      alternateCoverUrl: artbook.alternateCoverUrl ? normalizeImageUrl(artbook.alternateCoverUrl) : undefined,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
-    return true;
+    await deleteDoc(doc(databaseInstance, 'artbooks', artbookId));
+    return { success: true };
   } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `artbooks/${artbook.id}`);
-    return false;
+    const info = handleFirestoreError(err, OperationType.DELETE, `artbooks/${artbookId}`);
+    return {
+      success: false,
+      error: info.friendlyMessage,
+      code: info.code,
+      needsGoogleAuth: info.needsGoogleAuth
+    };
   }
 }
 
 export async function deleteArtbookFromFirestore(databaseInstance: Firestore = db, artbookId: string): Promise<boolean> {
-  try {
-    await deleteDoc(doc(databaseInstance, 'artbooks', artbookId));
-    return true;
-  } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, `artbooks/${artbookId}`);
-    return false;
-  }
+  const res = await deleteArtbookFromFirestoreDetailed(databaseInstance, artbookId);
+  return res.success;
+}
+
+function normalizePreviewTuple(images: unknown): [string, string, string, string, string] {
+  const arr = Array.isArray(images) ? images : [];
+  return [
+    typeof arr[0] === 'string' ? normalizeImageUrl(arr[0]) : '',
+    typeof arr[1] === 'string' ? normalizeImageUrl(arr[1]) : '',
+    typeof arr[2] === 'string' ? normalizeImageUrl(arr[2]) : '',
+    typeof arr[3] === 'string' ? normalizeImageUrl(arr[3]) : '',
+    typeof arr[4] === 'string' ? normalizeImageUrl(arr[4]) : ''
+  ];
 }
 
 export async function fetchArtbooksFromFirestore(databaseInstance: Firestore = db): Promise<Artbook[] | null> {
@@ -1293,6 +1433,8 @@ export async function fetchArtbooksFromFirestore(databaseInstance: Firestore = d
       list.push({
         ...data,
         id: d.id,
+        tags: Array.isArray(data.tags) ? data.tags : [],
+        previewImages: normalizePreviewTuple(data.previewImages),
         coverUrl: normalizeImageUrl(data.coverUrl),
         alternateCoverUrl: data.alternateCoverUrl ? normalizeImageUrl(data.alternateCoverUrl) : undefined
       });
@@ -1304,21 +1446,15 @@ export async function fetchArtbooksFromFirestore(databaseInstance: Firestore = d
   }
 }
 
-export function subscribeToFirestoreArtists(onUpdate: (artists: Artist[]) => void): () => void {
+export function subscribeToFirestoreArtists(onUpdate: (artists: Artist[], meta?: { fromCache: boolean }) => void): () => void {
   try {
     const colRef = collection(db, 'artists');
     return onSnapshot(colRef, (snapshot) => {
       const list: Artist[] = [];
       snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as Artist;
-        list.push({
-          ...data,
-          id: docSnap.id,
-          photoUrl: normalizeImageUrl(data.photoUrl),
-          bannerUrl: data.bannerUrl ? normalizeImageUrl(data.bannerUrl) : ''
-        });
+        list.push(normalizeFirestoreArtist(docSnap.id, docSnap.data() as Partial<Artist>));
       });
-      onUpdate(list);
+      onUpdate(list, { fromCache: snapshot.metadata.fromCache });
     }, (err) => {
       console.warn('Firestore artists real-time subscription error:', err);
     });
@@ -1327,7 +1463,7 @@ export function subscribeToFirestoreArtists(onUpdate: (artists: Artist[]) => voi
   }
 }
 
-export function subscribeToFirestoreArtbooks(onUpdate: (artbooks: Artbook[]) => void): () => void {
+export function subscribeToFirestoreArtbooks(onUpdate: (artbooks: Artbook[], meta?: { fromCache: boolean }) => void): () => void {
   try {
     const colRef = collection(db, 'artbooks');
     return onSnapshot(colRef, (snapshot) => {
@@ -1337,11 +1473,13 @@ export function subscribeToFirestoreArtbooks(onUpdate: (artbooks: Artbook[]) => 
         list.push({
           ...data,
           id: docSnap.id,
+          tags: Array.isArray(data.tags) ? data.tags : [],
+          previewImages: normalizePreviewTuple(data.previewImages),
           coverUrl: normalizeImageUrl(data.coverUrl),
           alternateCoverUrl: data.alternateCoverUrl ? normalizeImageUrl(data.alternateCoverUrl) : undefined
         });
       });
-      onUpdate(list);
+      onUpdate(list, { fromCache: snapshot.metadata.fromCache });
     }, (err) => {
       console.warn('Firestore artbooks real-time subscription error:', err);
     });
@@ -1353,7 +1491,7 @@ export function subscribeToFirestoreArtbooks(onUpdate: (artbooks: Artbook[]) => 
 export async function syncAllArtistsToFirestore(
   databaseInstance: Firestore = db,
   artistsList: Artist[]
-): Promise<{ success: boolean; count: number; deletedCount: number; error?: unknown }> {
+): Promise<{ success: boolean; count: number; deletedCount: number; error?: unknown; errorMessage?: string; needsGoogleAuth?: boolean }> {
   try {
     let count = 0;
     let deletedCount = 0;
@@ -1376,6 +1514,17 @@ export async function syncAllArtistsToFirestore(
           ...artist,
           photoUrl: normalizeImageUrl(artist.photoUrl),
           bannerUrl: artist.bannerUrl ? normalizeImageUrl(artist.bannerUrl) : '',
+          bio: artist.bio ?? '',
+          country: artist.country ?? '',
+          specialties: Array.isArray(artist.specialties) ? artist.specialties : [],
+          artbookIds: Array.isArray(artist.artbookIds) ? artist.artbookIds : [],
+          featuredSeriesTitle: artist.featuredSeriesTitle ?? '',
+          socials: {
+            instagram: artist.socials?.instagram ?? '',
+            twitter: artist.socials?.twitter ?? '',
+            artstation: artist.socials?.artstation ?? '',
+            youtube: artist.socials?.youtube ?? ''
+          },
           updatedAt: new Date().toISOString()
         });
         await setDoc(doc(databaseInstance, 'artists', artist.id), cleaned, { merge: true });
@@ -1384,15 +1533,22 @@ export async function syncAllArtistsToFirestore(
     }
     return { success: true, count, deletedCount };
   } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, 'artists');
-    return { success: false, count: 0, deletedCount: 0, error: err };
+    const info = handleFirestoreError(err, OperationType.WRITE, 'artists');
+    return {
+      success: false,
+      count: 0,
+      deletedCount: 0,
+      error: err,
+      errorMessage: info.friendlyMessage,
+      needsGoogleAuth: info.needsGoogleAuth
+    };
   }
 }
 
 export async function syncAllArtbooksToFirestore(
   databaseInstance: Firestore = db,
   artbooksList: Artbook[]
-): Promise<{ success: boolean; count: number; deletedCount: number; error?: unknown }> {
+): Promise<{ success: boolean; count: number; deletedCount: number; error?: unknown; errorMessage?: string; needsGoogleAuth?: boolean }> {
   try {
     let count = 0;
     let deletedCount = 0;
@@ -1414,7 +1570,11 @@ export async function syncAllArtbooksToFirestore(
         const cleaned = cleanFirestoreObject({
           ...artbook,
           coverUrl: normalizeImageUrl(artbook.coverUrl),
-          alternateCoverUrl: artbook.alternateCoverUrl ? normalizeImageUrl(artbook.alternateCoverUrl) : undefined,
+          alternateCoverUrl: artbook.alternateCoverUrl ? normalizeImageUrl(artbook.alternateCoverUrl) : '',
+          previewImages: Array.isArray(artbook.previewImages) ? artbook.previewImages.map(u => normalizeImageUrl(u)) : [],
+          tags: Array.isArray(artbook.tags) ? artbook.tags : [],
+          downloadUrl: artbook.downloadUrl ?? '',
+          pdfDownloadUrl: artbook.pdfDownloadUrl ?? '',
           updatedAt: new Date().toISOString()
         });
         await setDoc(doc(databaseInstance, 'artbooks', artbook.id), cleaned, { merge: true });
@@ -1423,8 +1583,15 @@ export async function syncAllArtbooksToFirestore(
     }
     return { success: true, count, deletedCount };
   } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, 'artbooks');
-    return { success: false, count: 0, deletedCount: 0, error: err };
+    const info = handleFirestoreError(err, OperationType.WRITE, 'artbooks');
+    return {
+      success: false,
+      count: 0,
+      deletedCount: 0,
+      error: err,
+      errorMessage: info.friendlyMessage,
+      needsGoogleAuth: info.needsGoogleAuth
+    };
   }
 }
 

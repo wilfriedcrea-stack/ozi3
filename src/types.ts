@@ -433,6 +433,7 @@ export interface Artist {
   };
   featuredSeriesTitle?: string;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Artbook {

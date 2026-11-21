@@ -27,11 +27,29 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ activeTab, onNewSeries
     testFirebaseConnection, 
     adminUser, 
     logoutAdmin,
-    openPasswordModal 
+    openPasswordModal,
+    isFirebaseAdminConnected,
+    loginWithGoogle
   } = useData();
   const [syncing, setSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [downloadingLws, setDownloadingLws] = useState(false);
+  const [connectingGoogle, setConnectingGoogle] = useState(false);
+
+  const handleHeaderGoogleConnect = async () => {
+    setConnectingGoogle(true);
+    try {
+      const res = await loginWithGoogle();
+      if (res.success) {
+        setSyncFeedback('Compte Google Admin connecté (Cloud autorisé) !');
+      } else {
+        setSyncFeedback(res.message || 'Connexion Google annulée.');
+      }
+      setTimeout(() => setSyncFeedback(null), 4000);
+    } finally {
+      setConnectingGoogle(false);
+    }
+  };
 
   const handleDownloadLwsPack = async () => {
     if (downloadingLws) return;
@@ -110,10 +128,23 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ activeTab, onNewSeries
           <div className="flex items-center gap-2 text-xs text-zinc-400 font-body">
             <span>Studio Grand Écran</span>
             <span>•</span>
-            <div className="flex items-center gap-1.5 text-emerald-400 font-bold bg-emerald-950/40 border border-emerald-500/30 px-2 py-0.5 rounded-lg">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>⚡ Sync automatique Firestore active (Temps réel)</span>
-            </div>
+            {isFirebaseAdminConnected ? (
+              <div className="flex items-center gap-1.5 text-emerald-400 font-bold bg-emerald-950/40 border border-emerald-500/30 px-2 py-0.5 rounded-lg">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>⚡ Sync automatique Firestore active (Temps réel)</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={connectingGoogle}
+                onClick={handleHeaderGoogleConnect}
+                className="flex items-center gap-1.5 text-amber-300 hover:text-amber-200 font-bold bg-amber-950/60 hover:bg-amber-900/70 border border-amber-500/40 px-2.5 py-0.5 rounded-lg cursor-pointer transition-colors disabled:opacity-60"
+                title="Connectez wilfriedcrea@gmail.com via Google pour autoriser l'enregistrement Cloud Firestore"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                <span>{connectingGoogle ? 'Connexion Google...' : 'Cloud en lecture seule — Connecter Google Admin'}</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
