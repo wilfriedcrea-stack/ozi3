@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, ShoppingBag, Download } from 'lucide-react';
+import { ArrowLeft, ShoppingBag, Download, Youtube, Instagram, Twitter } from 'lucide-react';
 import { Artist, Artbook } from '../../types';
 import { useData } from '../../context/DataContext';
 
@@ -133,6 +133,43 @@ export const ArtistDetailPage: React.FC = () => {
   const FALLBACK_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80';
   const bannerImage = normalizeImageUrl(currentArtist.bannerUrl, FALLBACK_BANNER);
   const avatarImage = normalizeImageUrl(currentArtist.bannerAvatarUrl || currentArtist.photoUrl, FALLBACK_AVATAR);
+  const normalizeSocialUrl = (raw?: string): string => {
+    if (!raw || typeof raw !== 'string') return '';
+    const trimmed = raw.trim();
+    if (!trimmed) return '';
+    if (/^(javascript|data|vbscript):/i.test(trimmed)) return '';
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return `https://${trimmed.replace(/^\/+/, '')}`;
+  };
+
+  const youtubeUrl = normalizeSocialUrl(currentArtist.socials?.youtube);
+  const instagramUrl = normalizeSocialUrl(currentArtist.socials?.instagram);
+  const twitterUrl = normalizeSocialUrl(currentArtist.socials?.twitter);
+
+  const socialItems = [
+    {
+      key: 'youtube',
+      label: 'YouTube',
+      url: youtubeUrl,
+      icon: Youtube,
+      hoverClass: 'hover:bg-red-600 hover:border-red-500 hover:text-white',
+    },
+    {
+      key: 'instagram',
+      label: 'Instagram',
+      url: instagramUrl,
+      icon: Instagram,
+      hoverClass: 'hover:bg-pink-600 hover:border-pink-500 hover:text-white',
+    },
+    {
+      key: 'twitter',
+      label: 'Twitter / X',
+      url: twitterUrl,
+      icon: Twitter,
+      hoverClass: 'hover:bg-sky-500 hover:border-sky-400 hover:text-white',
+    },
+  ];
+
   const subtitleText =
     currentArtist.bio?.trim() ||
     currentArtist.featuredSeriesTitle?.trim() ||
@@ -203,6 +240,34 @@ export const ArtistDetailPage: React.FC = () => {
               <p className="text-sm sm:text-base lg:text-[17px] text-white/90 max-w-2xl mt-2.5 sm:mt-3 leading-relaxed font-sans font-normal drop-shadow-[0_2px_10px_rgba(0,0,0,0.6)] line-clamp-3">
                 {subtitleText}
               </p>
+
+              {/* Icônes réseaux sociaux (YouTube, Instagram, Twitter) sous la description */}
+              <div className="mt-4 flex items-center justify-center sm:justify-start gap-2.5">
+                {socialItems.map(({ key, label, url, icon: Icon, hoverClass }) =>
+                  url ? (
+                    <a
+                      key={key}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`${label} de ${currentArtist.name}`}
+                      title={label}
+                      className={`w-9 h-9 rounded-full bg-black/45 backdrop-blur-md border border-white/25 text-white flex items-center justify-center transition-all duration-200 hover:scale-105 shadow-md ${hoverClass}`}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </a>
+                  ) : (
+                    <span
+                      key={key}
+                      aria-label={`${label} (non renseigné)`}
+                      title={`${label} — à configurer dans le dashboard`}
+                      className="w-9 h-9 rounded-full bg-black/30 backdrop-blur-md border border-white/15 text-white/45 flex items-center justify-center cursor-default"
+                    >
+                      <Icon className="w-4 h-4" />
+                    </span>
+                  )
+                )}
+              </div>
             </div>
           </div>
         </div>
