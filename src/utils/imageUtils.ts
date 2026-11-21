@@ -36,5 +36,11 @@ export function normalizeImageUrl(url: string | undefined | null, fallback = '')
   }
 
   // Domain without scheme (e.g. "ozibd.net/banner/ban4.png" or "images.unsplash.com/...")
-  return `https://${trimmed}`;
+  const firstSegment = trimmed.split('/')[0] || '';
+  if (firstSegment.includes('.')) {
+    return `https://${trimmed}`;
+  }
+
+  // Relative asset path (e.g. "uploads/banners/ban4.webp")
+  return `/${trimmed}`;
 }

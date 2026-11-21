@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import JSZip from 'jszip';
 import { paystackRouter } from './server/routes/paystackRoutes';
+import { studioDataRouter } from './server/routes/studioDataRoutes';
 
 dotenv.config();
 
@@ -32,6 +33,7 @@ async function createServer() {
 
   // 1. JSON body parser with rawBody capture for Paystack Webhook HMAC verification
   app.use(express.json({
+    limit: '15mb',
     verify: (req: any, _res, buf) => {
       req.rawBody = buf;
     }
@@ -47,11 +49,13 @@ async function createServer() {
         paystack: true,
         subscriptions: true,
         premiumAccessControl: true,
+        studioDataPersistence: true,
       },
     });
   });
 
-  // 4. Mount Paystack & Premium Subscriptions Routes
+  // 4. Mount Studio Persistence & Paystack Routes
+  app.use('/api', studioDataRouter);
   app.use('/api/paystack', paystackRouter);
   app.use('/api/premium', paystackRouter);
   app.use('/api/artbooks', paystackRouter);

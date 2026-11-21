@@ -16,7 +16,6 @@ import {
   User, 
   Image as ImageIcon,
   ExternalLink,
-  ShieldCheck,
   Receipt,
   Phone,
   Mail,
@@ -38,18 +37,10 @@ import {
   Cloud,
   Upload,
   Loader2,
-  RotateCcw,
-  AlertTriangle
+  RotateCcw
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Artist, Artbook } from '../../types';
-import { 
-  syncArtistToFirestore,
-  syncArtistToFirestoreDetailed,
-  initializeFirebaseCustom, 
-  deleteArtistFromFirestore, 
-  syncAllArtistsToFirestore 
-} from '../../services/firebaseService';
 import { compressImageToWebP, uploadToLWS } from '../../services/lwsUploadService';
 import { normalizeImageUrl } from '../../utils/imageUtils';
 
@@ -72,11 +63,7 @@ export const AdminArtistsManager: React.FC = () => {
     isSyncingArtists,
     isSyncingArtbooks,
     addLwsFile,
-    isFirebaseAdminConnected,
-    firebaseAuthEmail,
-    loginWithGoogle,
-    lastCloudError,
-    clearLastCloudError
+    lastCloudError
   } = useData();
 
   const [activeSubTab, setActiveSubTab] = useState<'artists' | 'artbooks' | 'activity'>('artists');
@@ -134,48 +121,19 @@ export const AdminArtistsManager: React.FC = () => {
 
   const [syncingSingleArtistId, setSyncingSingleArtistId] = useState<string | null>(null);
 
-  const [isConnectingGoogle, setIsConnectingGoogle] = useState(false);
-
-  const handleConnectGoogleAdmin = async () => {
-    setIsConnectingGoogle(true);
-    try {
-      const res = await loginWithGoogle();
-      const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      if (res.success) {
-        clearLastCloudError();
-        setSyncStatusNotice({
-          success: true,
-          message: 'Compte Google Administrateur connecté ! Vous pouvez enregistrer et synchroniser vos fiches artistes dans le cloud.',
-          timestamp: now
-        });
-      } else {
-        setSyncStatusNotice({
-          success: false,
-          message: res.message || 'Impossible de connecter le compte Google Administrateur.',
-          timestamp: now
-        });
-      }
-    } finally {
-      setIsConnectingGoogle(false);
-    }
-  };
-
   const handleSyncSingleArtist = async (artist: Artist) => {
     setSyncingSingleArtistId(artist.id);
     try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        const res = await syncArtistToFirestoreDetailed(fb.db, artist);
-        if (res.success) {
-          setSaveNotice(`Artiste "${artist.name}" mis à jour avec succès sur tous les appareils !`);
-          setTimeout(() => setSaveNotice(null), 3500);
-        } else {
-          setSyncStatusNotice({
-            success: false,
-            message: res.error || `Erreur de mise à jour Firestore pour ${artist.name}`,
-            timestamp: new Date().toLocaleTimeString('fr-FR')
-          });
-        }
+      const ok = await updateArtist(artist.id, artist);
+      if (ok) {
+        setSaveNotice(`Artiste "${artist.name}" enregistré et mis à jour avec succès sur le site !`);
+        setTimeout(() => setSaveNotice(null), 3500);
+      } else {
+        setSyncStatusNotice({
+          success: false,
+          message: lastCloudError?.message || `Impossible de sauvegarder ${artist.name}.`,
+          timestamp: new Date().toLocaleTimeString('fr-FR')
+        });
       }
     } catch (err: any) {
       setSyncStatusNotice({
@@ -206,15 +164,10 @@ export const AdminArtistsManager: React.FC = () => {
   const handlePurgeDemos = async () => {
     setIsSyncingGlobal(true);
     try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        for (const dId of DEMO_IDS) {
-          try {
-            await deleteArtistFromFirestore(fb.db, dId);
-          } catch {}
+      for (const dId of DEMO_IDS) {
+        if (artists.some(a => a.id === dId)) {
+          await deleteArtist(dId);
         }
-        const cleaned = artists.filter(a => !DEMO_IDS.has(a.id));
-        await syncAllArtistsToFirestore(fb.db, cleaned);
       }
       setSyncStatusNotice({
         success: true,
@@ -420,6 +373,14 @@ export const AdminArtistsManager: React.FC = () => {
     setIsSavingArtist(true);
     setArtistSaveError(null);
 
+    const pendingSpec = newSpecialtyInput.trim();
+    const finalSpecialties = pendingSpec && !artistForm.specialties.includes(pendingSpec)
+      ? [...artistForm.specialties, pendingSpec]
+      : artistForm.specialties;
+    if (pendingSpec) {
+      setNewSpecialtyInput('');
+    }
+
     const normalizedPhotoUrl = normalizeImageUrl(artistForm.photoUrl);
     const normalizedBannerUrl = artistForm.bannerUrl.trim()
       ? normalizeImageUrl(artistForm.bannerUrl)
@@ -431,7 +392,7 @@ export const AdminArtistsManager: React.FC = () => {
       bannerUrl: normalizedBannerUrl,
       country: artistForm.country.trim(),
       bio: artistForm.bio.trim(),
-      specialties: artistForm.specialties,
+      specialties: finalSpecialties,
       featuredSeriesTitle: artistForm.featuredSeriesTitle.trim(),
       socials: {
         instagram: artistForm.instagram.trim(),
@@ -449,17 +410,15 @@ export const AdminArtistsManager: React.FC = () => {
       if (!ok) {
         setArtistSaveError(
           lastCloudError?.message ||
-          (!isFirebaseAdminConnected
-            ? 'Sauvegarde Cloud bloquée : connectez votre compte Google Administrateur (wilfriedcrea@gmail.com) ci-dessous pour enregistrer définitivement.'
-            : 'Impossible d\'enregistrer les modifications sur Firestore. Vérifiez la taille des images et votre connexion.')
+          'Session Studio expirée ou serveur indisponible. Veuillez vous reconnecter puis réessayer.'
         );
         return;
       }
 
       setSaveNotice(
         editingArtist
-          ? `Artiste "${artistForm.name}" mis à jour et enregistré dans le cloud.`
-          : `Nouvel artiste "${artistForm.name}" ajouté et enregistré dans le cloud.`
+          ? `Artiste "${artistForm.name}" mis à jour et enregistré sur le site.`
+          : `Nouvel artiste "${artistForm.name}" ajouté et enregistré sur le site.`
       );
       setArtistModalOpen(false);
       setTimeout(() => setSaveNotice(null), 3500);
@@ -471,22 +430,6 @@ export const AdminArtistsManager: React.FC = () => {
   const handleSaveArtist = async (e: React.FormEvent) => {
     e.preventDefault();
     await saveArtistFormToCloud();
-  };
-
-  const handleGoogleConnectAndSaveArtist = async () => {
-    setIsConnectingGoogle(true);
-    setArtistSaveError(null);
-    try {
-      const res = await loginWithGoogle();
-      if (!res.success) {
-        setArtistSaveError(res.message || 'Connexion Google annulée.');
-        return;
-      }
-      clearLastCloudError();
-      await saveArtistFormToCloud();
-    } finally {
-      setIsConnectingGoogle(false);
-    }
   };
 
   const handleOpenAddArtbook = (initialTab: 'general' | 'covers' | 'preview' | 'link' = 'general') => {
@@ -557,6 +500,14 @@ export const AdminArtistsManager: React.FC = () => {
     setIsSavingArtbook(true);
     setArtbookSaveError(null);
 
+    const pendingTag = newTagInput.trim();
+    const finalTags = pendingTag && !artbookForm.tags.includes(pendingTag)
+      ? [...artbookForm.tags, pendingTag]
+      : artbookForm.tags;
+    if (pendingTag) {
+      setNewTagInput('');
+    }
+
     const selectedArtObj = artists.find(a => a.id === artbookForm.artistId);
     const finalArtistName = selectedArtObj?.name || artbookForm.artistName || 'Artiste OZI';
     const cleanDownloadUrl = artbookForm.downloadUrl.trim();
@@ -567,14 +518,14 @@ export const AdminArtistsManager: React.FC = () => {
       artistName: finalArtistName,
       title: artbookForm.title.trim(),
       description: artbookForm.description.trim(),
-      coverUrl: artbookForm.coverUrl.trim(),
-      alternateCoverUrl: cleanAlternateCoverUrl,
+      coverUrl: normalizeImageUrl(artbookForm.coverUrl),
+      alternateCoverUrl: cleanAlternateCoverUrl ? normalizeImageUrl(cleanAlternateCoverUrl) : '',
       previewImages: artbookForm.previewImages,
       price: Number(artbookForm.price),
       isFree: Number(artbookForm.price) === 0,
       pageCount: Number(artbookForm.pageCount),
       releaseYear: Number(artbookForm.releaseYear),
-      tags: artbookForm.tags,
+      tags: finalTags,
       fileSizeFormatted: artbookForm.fileSizeFormatted.trim(),
       downloadUrl: cleanDownloadUrl,
       pdfDownloadUrl: cleanDownloadUrl,
@@ -589,16 +540,14 @@ export const AdminArtistsManager: React.FC = () => {
       if (!ok) {
         setArtbookSaveError(
           lastCloudError?.message ||
-          (!isFirebaseAdminConnected
-            ? 'Sauvegarde Cloud bloquée : connectez votre compte Google Administrateur (wilfriedcrea@gmail.com) pour enregistrer cet artbook.'
-            : 'Impossible d\'enregistrer cet artbook sur Firestore.')
+          'Session Studio expirée ou serveur indisponible. Veuillez vous reconnecter puis réessayer.'
         );
         return;
       }
 
       setSaveNotice(
         editingArtbook
-          ? `Artbook "${artbookForm.title}" mis à jour dans le cloud.`
+          ? `Artbook "${artbookForm.title}" mis à jour et enregistré sur le site.`
           : `Nouvel artbook "${artbookForm.title}" publié avec succès.`
       );
       setArtbookModalOpen(false);
@@ -611,22 +560,6 @@ export const AdminArtistsManager: React.FC = () => {
   const handleSaveArtbook = async (e: React.FormEvent) => {
     e.preventDefault();
     await saveArtbookFormToCloud();
-  };
-
-  const handleGoogleConnectAndSaveArtbook = async () => {
-    setIsConnectingGoogle(true);
-    setArtbookSaveError(null);
-    try {
-      const res = await loginWithGoogle();
-      if (!res.success) {
-        setArtbookSaveError(res.message || 'Connexion Google annulée.');
-        return;
-      }
-      clearLastCloudError();
-      await saveArtbookFormToCloud();
-    } finally {
-      setIsConnectingGoogle(false);
-    }
   };
 
   const handleConfirmDelete = async () => {
@@ -660,38 +593,13 @@ export const AdminArtistsManager: React.FC = () => {
   return (
     <div className="p-6 sm:p-8 space-y-8 bg-[#090a0f] min-h-screen text-slate-100">
       
-      {/* Firebase Admin Google Auth Guard Banner */}
-      {!isFirebaseAdminConnected ? (
-        <div className="p-4 rounded-2xl bg-amber-950/60 border border-amber-500/50 text-amber-100 text-xs sm:text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <div className="font-black text-amber-300">
-                Session Cloud non reliée à Google Admin ({firebaseAuthEmail ? `connecté en tant que ${firebaseAuthEmail}` : 'aucun compte Google actif'})
-              </div>
-              <p className="text-xs text-amber-100/85 mt-0.5">
-                Pour que vos photos, bannières, descriptions et artbooks soient enregistrés durablement sur Firestore et conservés après actualisation, connectez le compte Google Administrateur (wilfriedcrea@gmail.com).
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            disabled={isConnectingGoogle}
-            onClick={handleConnectGoogleAdmin}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black shrink-0 cursor-pointer transition-all shadow-md disabled:opacity-60"
-          >
-            {isConnectingGoogle ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-            <span>{isConnectingGoogle ? 'Connexion...' : 'Connecter Google Admin'}</span>
-          </button>
+      {/* Studio & LWS Active Persistence Indicator */}
+      <div className="px-4 py-2.5 rounded-2xl bg-emerald-950/35 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>Sauvegarde Studio & hébergeur LWS active — vos photos, bannières, descriptions et fichiers s'enregistrent directement sans compte externe.</span>
         </div>
-      ) : (
-        <div className="px-4 py-2.5 rounded-2xl bg-emerald-950/35 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>Écriture Cloud Firestore autorisée ({firebaseAuthEmail}) — toutes vos modifications restent enregistrées.</span>
-          </div>
-        </div>
-      )}
+      </div>
 
       {/* Top Notification */}
       {saveNotice && (
@@ -902,20 +810,17 @@ export const AdminArtistsManager: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
                   <span className="text-xs font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
-                    Synchronisation Firestore Active
-                  </span>
-                  <span className="text-[11px] font-mono text-purple-300 bg-purple-500/15 px-2.5 py-0.5 rounded-md border border-purple-500/25">
-                    Projet Cloud : euphoric-sector-gtvkm
+                    Sauvegarde & Diffusion Studio Active
                   </span>
                 </div>
 
                 <h3 className="text-lg sm:text-xl font-black text-white font-almodobar flex items-center gap-2.5">
                   <Cloud className="w-6 h-6 text-purple-400 shrink-0" />
-                  <span>Synchroniser les Artistes sur tous les appareils</span>
+                  <span>Synchroniser les Artistes sur le site</span>
                 </h3>
 
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Ce bouton met à jour en direct la collection <strong className="text-white">« artists »</strong> dans la base de données Firestore. Grâce à l'écoute réactive, tous les appareils (ordinateurs, tablettes, smartphones) reçoivent immédiatement les fiches d'artistes à jour sans rechargement.
+                  Toutes vos modifications (photos, bannières LWS, descriptions, artbooks) sont sauvegardées directement sur le serveur du Studio et diffusées immédiatement sur l'ensemble des appareils sans authentification Google requise.
                 </p>
 
                 {/* Compatibility Badges */}
@@ -1716,22 +1621,11 @@ export const AdminArtistsManager: React.FC = () => {
               </div>
 
               {artistSaveError && (
-                <div className="p-3.5 rounded-2xl bg-rose-950/70 border border-rose-500/60 text-rose-100 text-xs space-y-2.5">
+                <div className="p-3.5 rounded-2xl bg-rose-950/70 border border-rose-500/60 text-rose-100 text-xs">
                   <div className="flex items-start gap-2">
                     <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                     <span className="font-bold leading-relaxed">{artistSaveError}</span>
                   </div>
-                  {!isFirebaseAdminConnected && (
-                    <button
-                      type="button"
-                      disabled={isConnectingGoogle || isSavingArtist}
-                      onClick={handleGoogleConnectAndSaveArtist}
-                      className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black cursor-pointer transition-all"
-                    >
-                      {isConnectingGoogle ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-                      <span>{isConnectingGoogle ? 'Connexion Google...' : 'Connecter Google (wilfriedcrea@gmail.com) & Enregistrer'}</span>
-                    </button>
-                  )}
                 </div>
               )}
 
@@ -2402,22 +2296,11 @@ export const AdminArtistsManager: React.FC = () => {
               )}
 
               {artbookSaveError && (
-                <div className="p-3.5 rounded-2xl bg-rose-950/70 border border-rose-500/60 text-rose-100 text-xs space-y-2.5">
+                <div className="p-3.5 rounded-2xl bg-rose-950/70 border border-rose-500/60 text-rose-100 text-xs">
                   <div className="flex items-start gap-2">
                     <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                     <span className="font-bold leading-relaxed">{artbookSaveError}</span>
                   </div>
-                  {!isFirebaseAdminConnected && (
-                    <button
-                      type="button"
-                      disabled={isConnectingGoogle || isSavingArtbook}
-                      onClick={handleGoogleConnectAndSaveArtbook}
-                      className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black cursor-pointer transition-all"
-                    >
-                      {isConnectingGoogle ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-                      <span>{isConnectingGoogle ? 'Connexion Google...' : 'Connecter Google (wilfriedcrea@gmail.com) & Enregistrer'}</span>
-                    </button>
-                  )}
                 </div>
               )}
 

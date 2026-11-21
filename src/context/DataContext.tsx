@@ -120,8 +120,19 @@ import {
   verifyArtbookPurchaseInFirestore,
   fetchUsersFromFirestore
 } from '../services/firebaseService';
-import { signInWithPopup, onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { signInWithPopup, onAuthStateChanged, User, signOut } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
+import {
+  loginStudioServer,
+  logoutStudioServer,
+  checkStudioServerSession,
+  changeStudioServerPassword,
+  fetchStudioDataFromServer,
+  pushStudioDataPatch,
+  mergeEntitiesByRecency,
+  mergeIdSets,
+  hasInMemoryServerToken
+} from '../services/studioSyncService';
 import { 
   signInReaderWithGoogle, 
   signInReaderWithEmail, 
@@ -362,7 +373,9 @@ const STORAGE_KEYS = {
   DELETED_SERIES: 'ozi_deleted_series_ids_v1',
   HERO_SLIDES: 'ozi_hero_slides_v1',
   ARTISTS: 'ozi_artists_data_v1',
+  DELETED_ARTISTS: 'ozi_deleted_artists_ids_v1',
   ARTBOOKS: 'ozi_artbooks_data_v1',
+  DELETED_ARTBOOKS: 'ozi_deleted_artbooks_ids_v1',
   ARTBOOK_DOWNLOADS: 'ozi_artbook_downloads_v1',
   ARTBOOK_PURCHASES: 'ozi_artbook_purchases_v1'
 };
@@ -573,12 +586,37 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearLastCloudError = useCallback(() => setLastCloudError(null), []);
   const firebaseAuthEmail = currentUser?.email || null;
   const isFirebaseAdminConnected = Boolean(firebaseAuthEmail && firebaseAuthEmail.toLowerCase() === 'wilfriedcrea@gmail.com');
+  const isFirebaseAdminConnectedRef = useRef<boolean>(isFirebaseAdminConnected);
+  useEffect(() => { isFirebaseAdminConnectedRef.current = isFirebaseAdminConnected; }, [isFirebaseAdminConnected]);
+
+  const loadStoredIdSet = (key: string): Set<string> => {
+    try {
+      const raw = localStorage.getItem(key);
+      const parsed = raw ? JSON.parse(raw) : [];
+      const set = new Set<string>();
+      if (Array.isArray(parsed)) {
+        parsed.forEach((id) => {
+          if (id && typeof id === 'string') {
+            const trimmed = id.trim();
+            if (trimmed) {
+              set.add(trimmed);
+              set.add(trimmed.toLowerCase());
+            }
+          }
+        });
+      }
+      return set;
+    } catch {
+      return new Set<string>();
+    }
+  };
+
+  const deletedArtistIdsRef = useRef<Set<string>>(loadStoredIdSet(STORAGE_KEYS.DELETED_ARTISTS));
+  const deletedArtbookIdsRef = useRef<Set<string>>(loadStoredIdSet(STORAGE_KEYS.DELETED_ARTBOOKS));
+  const deletedSeriesIdsRef = useRef<Set<string>>(loadStoredIdSet(STORAGE_KEYS.DELETED_SERIES));
+
   const artistsRef = useRef<Artist[]>(artists);
   const artbooksRef = useRef<Artbook[]>(artbooks);
-  const hasPendingLocalArtistEditsRef = useRef<boolean>(false);
-  const hasSeenNonEmptyRemoteArtistsRef = useRef<boolean>(false);
-  const hasPendingLocalArtbookEditsRef = useRef<boolean>(false);
-  const hasSeenNonEmptyRemoteArtbooksRef = useRef<boolean>(false);
   useEffect(() => { artistsRef.current = artists; }, [artists]);
   useEffect(() => { artbooksRef.current = artbooks; }, [artbooks]);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
@@ -900,41 +938,43 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const addArtist = useCallback(async (artistData: Omit<Artist, 'id' | 'slug' | 'createdAt'>): Promise<boolean> => {
+    const nowIso = new Date().toISOString();
     const slug = artistData.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     const newArtist: Artist = {
       ...artistData,
+      photoUrl: normalizeImageUrl(artistData.photoUrl),
+      bannerUrl: artistData.bannerUrl ? normalizeImageUrl(artistData.bannerUrl) : '',
       id: `artist-${slug}-${Date.now().toString(36)}`,
       slug: slug || `artist-${Date.now().toString(36)}`,
-      createdAt: new Date().toISOString()
+      createdAt: nowIso,
+      updatedAt: nowIso
     };
     const nextArtists = [newArtist, ...artistsRef.current];
-    hasPendingLocalArtistEditsRef.current = true;
     persistArtistsLocally(nextArtists);
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        const res = await syncArtistToFirestoreDetailed(fb.db, newArtist);
-        if (!res.success) {
-          setLastCloudError({
-            message: res.error || 'Échec de l\'enregistrement de l\'artiste sur Firestore.',
-            needsGoogleAuth: Boolean(res.needsGoogleAuth),
-            code: res.code
-          });
-          return false;
-        }
-        hasPendingLocalArtistEditsRef.current = false;
-        setLastCloudError(null);
-        return true;
-      }
-    } catch (err: any) {
-      console.warn('Sync new artist to Firestore warning:', err);
+
+    const srvRes = await pushStudioDataPatch({
+      artists: nextArtists,
+      deletedArtistIds: Array.from(deletedArtistIdsRef.current)
+    });
+    if (srvRes.unauthorized) {
       setLastCloudError({
-        message: err?.message || 'Erreur réseau lors de l\'enregistrement Firestore.',
+        message: srvRes.error || 'Session Studio expirée. Veuillez vous reconnecter.',
         needsGoogleAuth: false
       });
       return false;
     }
-    return false;
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncArtistToFirestoreDetailed(fb.db, newArtist).catch(() => {});
+        }
+      } catch {}
+    }
+
+    setLastCloudError(null);
+    return true;
   }, [persistArtistsLocally]);
 
   const updateArtist = useCallback(async (id: string, updates: Partial<Artist>): Promise<boolean> => {
@@ -949,85 +989,107 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updatedArtist: Artist = {
       ...existing,
       ...updates,
+      photoUrl: normalizeImageUrl(updates.photoUrl !== undefined ? updates.photoUrl : existing.photoUrl),
+      bannerUrl: (updates.bannerUrl !== undefined ? updates.bannerUrl : existing.bannerUrl)
+        ? normalizeImageUrl(updates.bannerUrl !== undefined ? updates.bannerUrl : existing.bannerUrl)
+        : '',
       updatedAt: new Date().toISOString()
     };
     const nextArtists = artistsRef.current.map(a => (a.id === id ? updatedArtist : a));
-    hasPendingLocalArtistEditsRef.current = true;
     persistArtistsLocally(nextArtists);
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        const res = await syncArtistToFirestoreDetailed(fb.db, updatedArtist);
-        if (!res.success) {
-          setLastCloudError({
-            message: res.error || 'Échec de la mise à jour de l\'artiste sur Firestore.',
-            needsGoogleAuth: Boolean(res.needsGoogleAuth),
-            code: res.code
-          });
-          return false;
-        }
-        hasPendingLocalArtistEditsRef.current = false;
-        setLastCloudError(null);
-        return true;
-      }
-    } catch (err: any) {
-      console.warn('Sync update artist warning:', err);
+
+    const srvRes = await pushStudioDataPatch({
+      artists: nextArtists,
+      deletedArtistIds: Array.from(deletedArtistIdsRef.current)
+    });
+    if (srvRes.unauthorized) {
       setLastCloudError({
-        message: err?.message || 'Erreur réseau lors de la mise à jour Firestore.',
+        message: srvRes.error || 'Session Studio expirée. Veuillez vous reconnecter.',
         needsGoogleAuth: false
       });
       return false;
     }
-    return false;
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncArtistToFirestoreDetailed(fb.db, updatedArtist).catch(() => {});
+        }
+      } catch {}
+    }
+
+    setLastCloudError(null);
+    return true;
   }, [persistArtistsLocally]);
 
   const deleteArtist = useCallback(async (id: string): Promise<boolean> => {
+    const target = artistsRef.current.find(a => a.id === id);
+    deletedArtistIdsRef.current.add(id);
+    deletedArtistIdsRef.current.add(id.toLowerCase());
+    if (target?.slug) {
+      deletedArtistIdsRef.current.add(target.slug);
+      deletedArtistIdsRef.current.add(target.slug.toLowerCase());
+    }
+    const deletedArr = Array.from(deletedArtistIdsRef.current);
+    try {
+      localStorage.setItem(STORAGE_KEYS.DELETED_ARTISTS, JSON.stringify(deletedArr));
+    } catch {}
+
     const nextArtists = artistsRef.current.filter(a => a.id !== id);
     persistArtistsLocally(nextArtists);
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        const res = await deleteArtistFromFirestoreDetailed(fb.db, id);
-        if (!res.success) {
-          setLastCloudError({
-            message: res.error || 'Échec de la suppression de l\'artiste sur Firestore.',
-            needsGoogleAuth: Boolean(res.needsGoogleAuth),
-            code: res.code
-          });
-          return false;
-        }
-        setLastCloudError(null);
-        return true;
-      }
-    } catch (err: any) {
-      console.warn('Delete artist warning:', err);
+
+    const srvRes = await pushStudioDataPatch({
+      artists: nextArtists,
+      deletedArtistIds: deletedArr
+    });
+    if (srvRes.unauthorized) {
       setLastCloudError({
-        message: err?.message || 'Erreur lors de la suppression Firestore.',
+        message: srvRes.error || 'Session Studio expirée. Veuillez vous reconnecter.',
         needsGoogleAuth: false
       });
       return false;
     }
-    return false;
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await deleteArtistFromFirestoreDetailed(fb.db, id).catch(() => {});
+        }
+      } catch {}
+    }
+
+    setLastCloudError(null);
+    return true;
   }, [persistArtistsLocally]);
 
   const addArtbook = useCallback(async (artbookData: Omit<Artbook, 'id' | 'slug' | 'downloadsCount' | 'createdAt'>): Promise<boolean> => {
+    const nowIso = new Date().toISOString();
     const slug = artbookData.title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     const newArtbook: Artbook = {
       ...artbookData,
+      coverUrl: normalizeImageUrl(artbookData.coverUrl),
+      alternateCoverUrl: artbookData.alternateCoverUrl ? normalizeImageUrl(artbookData.alternateCoverUrl) : '',
       id: `artbook-${slug}-${Date.now().toString(36)}`,
       slug: slug || `artbook-${Date.now().toString(36)}`,
       downloadsCount: 0,
-      createdAt: new Date().toISOString()
+      createdAt: nowIso,
+      updatedAt: nowIso
     };
     const nextArtbooks = [newArtbook, ...artbooksRef.current];
-    hasPendingLocalArtbookEditsRef.current = true;
     persistArtbooksLocally(nextArtbooks);
 
     let updatedLinkedArtist: Artist | null = null;
+    let nextArtists = artistsRef.current;
     if (newArtbook.artistId) {
-      const nextArtists = artistsRef.current.map(a => {
+      nextArtists = artistsRef.current.map(a => {
         if (a.id === newArtbook.artistId && !(a.artbookIds || []).includes(newArtbook.id)) {
-          updatedLinkedArtist = { ...a, artbookIds: [...(a.artbookIds || []), newArtbook.id] };
+          updatedLinkedArtist = {
+            ...a,
+            artbookIds: [...(a.artbookIds || []), newArtbook.id],
+            updatedAt: nowIso
+          };
           return updatedLinkedArtist;
         }
         return a;
@@ -1036,34 +1098,38 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         persistArtistsLocally(nextArtists);
       }
     }
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        if (updatedLinkedArtist) {
-          await syncArtistToFirestoreDetailed(fb.db, updatedLinkedArtist).catch(() => {});
-        }
-        const res = await syncArtbookToFirestoreDetailed(fb.db, newArtbook);
-        if (!res.success) {
-          setLastCloudError({
-            message: res.error || 'Échec de l\'enregistrement de l\'artbook sur Firestore.',
-            needsGoogleAuth: Boolean(res.needsGoogleAuth),
-            code: res.code
-          });
-          return false;
-        }
-        hasPendingLocalArtbookEditsRef.current = false;
-        setLastCloudError(null);
-        return true;
-      }
-    } catch (err: any) {
-      console.warn('Sync new artbook to Firestore warning:', err);
+
+    const patch: Record<string, unknown> = {
+      artbooks: nextArtbooks,
+      deletedArtbookIds: Array.from(deletedArtbookIdsRef.current)
+    };
+    if (updatedLinkedArtist) {
+      patch.artists = nextArtists;
+    }
+
+    const srvRes = await pushStudioDataPatch(patch);
+    if (srvRes.unauthorized) {
       setLastCloudError({
-        message: err?.message || 'Erreur lors de la synchronisation de l\'artbook.',
+        message: srvRes.error || 'Session Studio expirée. Veuillez vous reconnecter.',
         needsGoogleAuth: false
       });
       return false;
     }
-    return false;
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          if (updatedLinkedArtist) {
+            await syncArtistToFirestoreDetailed(fb.db, updatedLinkedArtist).catch(() => {});
+          }
+          await syncArtbookToFirestoreDetailed(fb.db, newArtbook).catch(() => {});
+        }
+      } catch {}
+    }
+
+    setLastCloudError(null);
+    return true;
   }, [persistArtbooksLocally, persistArtistsLocally]);
 
   const updateArtbook = useCallback(async (id: string, updates: Partial<Artbook>): Promise<boolean> => {
@@ -1078,45 +1144,61 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updatedArtbook: Artbook = {
       ...existing,
       ...updates,
+      coverUrl: normalizeImageUrl(updates.coverUrl !== undefined ? updates.coverUrl : existing.coverUrl),
+      alternateCoverUrl: (updates.alternateCoverUrl !== undefined ? updates.alternateCoverUrl : existing.alternateCoverUrl)
+        ? normalizeImageUrl(updates.alternateCoverUrl !== undefined ? updates.alternateCoverUrl : existing.alternateCoverUrl)
+        : '',
       updatedAt: new Date().toISOString()
     };
     const nextArtbooks = artbooksRef.current.map(a => (a.id === id ? updatedArtbook : a));
-    hasPendingLocalArtbookEditsRef.current = true;
     persistArtbooksLocally(nextArtbooks);
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        const res = await syncArtbookToFirestoreDetailed(fb.db, updatedArtbook);
-        if (!res.success) {
-          setLastCloudError({
-            message: res.error || 'Échec de la mise à jour de l\'artbook sur Firestore.',
-            needsGoogleAuth: Boolean(res.needsGoogleAuth),
-            code: res.code
-          });
-          return false;
-        }
-        hasPendingLocalArtbookEditsRef.current = false;
-        setLastCloudError(null);
-        return true;
-      }
-    } catch (err: any) {
-      console.warn('Sync update artbook warning:', err);
+
+    const srvRes = await pushStudioDataPatch({
+      artbooks: nextArtbooks,
+      deletedArtbookIds: Array.from(deletedArtbookIdsRef.current)
+    });
+    if (srvRes.unauthorized) {
       setLastCloudError({
-        message: err?.message || 'Erreur lors de la mise à jour de l\'artbook.',
+        message: srvRes.error || 'Session Studio expirée. Veuillez vous reconnecter.',
         needsGoogleAuth: false
       });
       return false;
     }
-    return false;
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncArtbookToFirestoreDetailed(fb.db, updatedArtbook).catch(() => {});
+        }
+      } catch {}
+    }
+
+    setLastCloudError(null);
+    return true;
   }, [persistArtbooksLocally]);
 
   const deleteArtbook = useCallback(async (id: string): Promise<boolean> => {
+    const target = artbooksRef.current.find(a => a.id === id);
+    deletedArtbookIdsRef.current.add(id);
+    deletedArtbookIdsRef.current.add(id.toLowerCase());
+    if (target?.slug) {
+      deletedArtbookIdsRef.current.add(target.slug);
+      deletedArtbookIdsRef.current.add(target.slug.toLowerCase());
+    }
+    const deletedAbArr = Array.from(deletedArtbookIdsRef.current);
+    try {
+      localStorage.setItem(STORAGE_KEYS.DELETED_ARTBOOKS, JSON.stringify(deletedAbArr));
+    } catch {}
+
     const nextArtbooks = artbooksRef.current.filter(a => a.id !== id);
     persistArtbooksLocally(nextArtbooks);
+
     let updatedArtist: Artist | null = null;
+    const nowIso = new Date().toISOString();
     const nextArtists = artistsRef.current.map(a => {
       if (a.artbookIds?.includes(id)) {
-        updatedArtist = { ...a, artbookIds: a.artbookIds.filter(abId => abId !== id) };
+        updatedArtist = { ...a, artbookIds: a.artbookIds.filter(abId => abId !== id), updatedAt: nowIso };
         return updatedArtist;
       }
       return a;
@@ -1124,33 +1206,38 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (updatedArtist) {
       persistArtistsLocally(nextArtists);
     }
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        if (updatedArtist) {
-          await syncArtistToFirestoreDetailed(fb.db, updatedArtist).catch(() => {});
-        }
-        const res = await deleteArtbookFromFirestoreDetailed(fb.db, id);
-        if (!res.success) {
-          setLastCloudError({
-            message: res.error || 'Échec de la suppression de l\'artbook sur Firestore.',
-            needsGoogleAuth: Boolean(res.needsGoogleAuth),
-            code: res.code
-          });
-          return false;
-        }
-        setLastCloudError(null);
-        return true;
-      }
-    } catch (err: any) {
-      console.warn('Delete artbook warning:', err);
+
+    const patch: Record<string, unknown> = {
+      artbooks: nextArtbooks,
+      deletedArtbookIds: deletedAbArr
+    };
+    if (updatedArtist) {
+      patch.artists = nextArtists;
+    }
+
+    const srvRes = await pushStudioDataPatch(patch);
+    if (srvRes.unauthorized) {
       setLastCloudError({
-        message: err?.message || 'Erreur lors de la suppression de l\'artbook.',
+        message: srvRes.error || 'Session Studio expirée. Veuillez vous reconnecter.',
         needsGoogleAuth: false
       });
       return false;
     }
-    return false;
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          if (updatedArtist) {
+            await syncArtistToFirestoreDetailed(fb.db, updatedArtist).catch(() => {});
+          }
+          await deleteArtbookFromFirestoreDetailed(fb.db, id).catch(() => {});
+        }
+      } catch {}
+    }
+
+    setLastCloudError(null);
+    return true;
   }, [persistArtbooksLocally, persistArtistsLocally]);
 
   // Sync artists & artbooks to localStorage
@@ -1178,7 +1265,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {}
   }, [artbookPurchases]);
 
-  // Cross-device real-time synchronization for Artists & Artbooks via Firestore
+  // Cross-device synchronization for Artists & Artbooks (Server/LWS primary + timestamp-merged Firestore)
   useEffect(() => {
     const DEMO_ARTIST_IDS = new Set([
       'artist-kofi-mensah',
@@ -1206,58 +1293,96 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       'artbook-dakar-racers-garage'
     ]);
 
-    // 1. Initial baseline fetch from Firestore
+    const filterUserArtists = (list: Artist[]) =>
+      list.filter(a => a && a.id && !DEMO_ARTIST_IDS.has(a.id));
+
+    const filterUserArtbooks = (list: Artbook[]) =>
+      list.filter(ab => ab && ab.id && !DEMO_AB_IDS.has(ab.id));
+
+    // 1. Initial baseline fetch from Server/LWS and Firestore merged strictly by recency
     const initRemoteArtistsAndArtbooks = async () => {
       try {
-        const [remoteArtists, remoteArtbooks] = await Promise.all([
+        const [serverData, remoteArtists, remoteArtbooks] = await Promise.all([
+          fetchStudioDataFromServer(),
           fetchArtistsFromFirestore(),
           fetchArtbooksFromFirestore()
         ]);
 
-        if (remoteArtists && !hasPendingLocalArtistEditsRef.current) {
-          const userOnly = remoteArtists.filter(a => a && a.id && !DEMO_ARTIST_IDS.has(a.id));
-          if (userOnly.length > 0) {
-            hasSeenNonEmptyRemoteArtistsRef.current = true;
-            persistArtistsLocally(userOnly);
+        if (serverData) {
+          if (Array.isArray(serverData.deletedArtistIds)) {
+            deletedArtistIdsRef.current = mergeIdSets(deletedArtistIdsRef.current, serverData.deletedArtistIds);
+            try {
+              localStorage.setItem(STORAGE_KEYS.DELETED_ARTISTS, JSON.stringify(Array.from(deletedArtistIdsRef.current)));
+            } catch {}
+          }
+          if (Array.isArray(serverData.deletedArtbookIds)) {
+            deletedArtbookIdsRef.current = mergeIdSets(deletedArtbookIdsRef.current, serverData.deletedArtbookIds);
+            try {
+              localStorage.setItem(STORAGE_KEYS.DELETED_ARTBOOKS, JSON.stringify(Array.from(deletedArtbookIdsRef.current)));
+            } catch {}
+          }
+
+          if (Array.isArray(serverData.artists)) {
+            const mergedSrvArtists = mergeEntitiesByRecency(
+              filterUserArtists(artistsRef.current),
+              filterUserArtists(serverData.artists),
+              deletedArtistIdsRef.current
+            );
+            persistArtistsLocally(mergedSrvArtists);
+          }
+
+          if (Array.isArray(serverData.artbooks)) {
+            const mergedSrvArtbooks = mergeEntitiesByRecency(
+              filterUserArtbooks(artbooksRef.current),
+              filterUserArtbooks(serverData.artbooks),
+              deletedArtbookIdsRef.current
+            );
+            persistArtbooksLocally(mergedSrvArtbooks);
           }
         }
 
-        if (remoteArtbooks && !hasPendingLocalArtbookEditsRef.current) {
-          const userOnlyAb = remoteArtbooks.filter(ab => ab && ab.id && !DEMO_AB_IDS.has(ab.id));
-          if (userOnlyAb.length > 0) {
-            hasSeenNonEmptyRemoteArtbooksRef.current = true;
-            persistArtbooksLocally(userOnlyAb);
-          }
+        if (remoteArtists && remoteArtists.length > 0) {
+          const mergedFbArtists = mergeEntitiesByRecency(
+            filterUserArtists(artistsRef.current),
+            filterUserArtists(remoteArtists),
+            deletedArtistIdsRef.current
+          );
+          persistArtistsLocally(mergedFbArtists);
+        }
+
+        if (remoteArtbooks && remoteArtbooks.length > 0) {
+          const mergedFbArtbooks = mergeEntitiesByRecency(
+            filterUserArtbooks(artbooksRef.current),
+            filterUserArtbooks(remoteArtbooks),
+            deletedArtbookIdsRef.current
+          );
+          persistArtbooksLocally(mergedFbArtbooks);
         }
       } catch (err) {
-        console.warn('Initial artists/artbooks Firestore sync notice:', err);
+        console.warn('Initial artists/artbooks sync notice:', err);
       }
     };
     initRemoteArtistsAndArtbooks();
 
-    // 2. Persistent real-time onSnapshot listener: immediately updates state on ALL devices
-    const unsubscribeArtists = subscribeToFirestoreArtists((liveArtists, meta) => {
-      if (!liveArtists) return;
-      if (hasPendingLocalArtistEditsRef.current) return;
-      const userOnly = liveArtists.filter(a => a && a.id && !DEMO_ARTIST_IDS.has(a.id));
-      if (userOnly.length > 0) {
-        hasSeenNonEmptyRemoteArtistsRef.current = true;
-        persistArtistsLocally(userOnly);
-      } else if (hasSeenNonEmptyRemoteArtistsRef.current && !meta?.fromCache) {
-        persistArtistsLocally([]);
-      }
+    // 2. Persistent real-time onSnapshot listener: merges by recency so stale Firestore never wipes local/LWS edits
+    const unsubscribeArtists = subscribeToFirestoreArtists((liveArtists) => {
+      if (!liveArtists || liveArtists.length === 0) return;
+      const merged = mergeEntitiesByRecency(
+        filterUserArtists(artistsRef.current),
+        filterUserArtists(liveArtists),
+        deletedArtistIdsRef.current
+      );
+      persistArtistsLocally(merged);
     });
 
-    const unsubscribeArtbooks = subscribeToFirestoreArtbooks((liveArtbooks, meta) => {
-      if (!liveArtbooks) return;
-      if (hasPendingLocalArtbookEditsRef.current) return;
-      const userOnlyAb = liveArtbooks.filter(ab => ab && ab.id && !DEMO_AB_IDS.has(ab.id));
-      if (userOnlyAb.length > 0) {
-        hasSeenNonEmptyRemoteArtbooksRef.current = true;
-        persistArtbooksLocally(userOnlyAb);
-      } else if (hasSeenNonEmptyRemoteArtbooksRef.current && !meta?.fromCache) {
-        persistArtbooksLocally([]);
-      }
+    const unsubscribeArtbooks = subscribeToFirestoreArtbooks((liveArtbooks) => {
+      if (!liveArtbooks || liveArtbooks.length === 0) return;
+      const merged = mergeEntitiesByRecency(
+        filterUserArtbooks(artbooksRef.current),
+        filterUserArtbooks(liveArtbooks),
+        deletedArtbookIdsRef.current
+      );
+      persistArtbooksLocally(merged);
     });
 
     return () => {
@@ -1354,8 +1479,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         window.localStorage.removeItem('ozi_series_data_v1');
         window.localStorage.removeItem('ozi_series_data');
         window.localStorage.removeItem('ozi_series_data_v2');
-        window.localStorage.removeItem('ozi_deleted_series_ids_v1');
-        window.localStorage.removeItem(STORAGE_KEYS.DELETED_SERIES);
       }
 
       const saved = localStorage.getItem(STORAGE_KEYS.SERIES);
@@ -1461,11 +1584,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const teasersRef = useRef<Teaser[]>(teasers);
   const pressReleasesRef = useRef<PressRelease[]>(pressReleases);
   const articlesRef = useRef<Article[]>(articles);
+  const heroSlidesRef = useRef<HomeHeroSlide[]>(heroSlides);
   const appVersionRef = useRef<AppVersionInfo>(appVersion);
   useEffect(() => { seriesRef.current = series; }, [series]);
   useEffect(() => { teasersRef.current = teasers; }, [teasers]);
   useEffect(() => { pressReleasesRef.current = pressReleases; }, [pressReleases]);
   useEffect(() => { articlesRef.current = articles; }, [articles]);
+  useEffect(() => { heroSlidesRef.current = heroSlides; }, [heroSlides]);
   useEffect(() => { appVersionRef.current = appVersion; }, [appVersion]);
 
   const [analytics, setAnalytics] = useState<AnalyticsOverview>(() => {
@@ -1574,6 +1699,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!res.valid) {
         console.warn('OZI Security Guard - Session signature rejected:', res.reason);
         if (isMounted) {
+          setIsAuthenticated(false);
+          sessionStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
+          localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
+        }
+        return;
+      }
+
+      if (isAuthenticated && !hasInMemoryServerToken()) {
+        const srvSession = await checkStudioServerSession();
+        if (srvSession.reachable && !srvSession.authenticated && isMounted) {
           setIsAuthenticated(false);
           sessionStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
           localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
@@ -1752,14 +1887,82 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
-  // Real-time Firestore sync listener (keeps Web and APK synchronized immediately)
+  // Real-time Server/LWS + Firestore sync listener (keeps Web and APK synchronized without overwriting newer edits)
   useEffect(() => {
-    // 1. Fetch immediately on launch to ensure latest catalog is active
+    let hasServerBanner = false;
+
     const fetchInitial = async () => {
       try {
+        const serverData = await fetchStudioDataFromServer();
+        if (serverData) {
+          if (Array.isArray(serverData.deletedSeriesIds)) {
+            deletedSeriesIdsRef.current = mergeIdSets(deletedSeriesIdsRef.current, serverData.deletedSeriesIds);
+            try {
+              localStorage.setItem(STORAGE_KEYS.DELETED_SERIES, JSON.stringify(Array.from(deletedSeriesIdsRef.current)));
+            } catch {}
+          }
+          if (typeof serverData.siteBannerUrl === 'string' && serverData.siteBannerUrl.trim()) {
+            hasServerBanner = true;
+            const normBanner = normalizeImageUrl(serverData.siteBannerUrl);
+            setSiteBannerUrl(normBanner);
+            try {
+              localStorage.setItem(STORAGE_KEYS.SITE_BANNER, normBanner);
+            } catch {}
+          }
+          if (Array.isArray(serverData.heroSlides) && serverData.heroSlides.length > 0) {
+            const normSlides = serverData.heroSlides.map((s, idx) => ({
+              ...s,
+              imageUrl: normalizeImageUrl(s.imageUrl),
+              logoUrl: s.logoUrl ? normalizeImageUrl(s.logoUrl) : '',
+              order: s.order ?? (idx + 1)
+            }));
+            heroSlidesRef.current = normSlides;
+            setHeroSlides(normSlides);
+            try {
+              localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(normSlides));
+            } catch {}
+          }
+          if (Array.isArray(serverData.series) && serverData.series.length > 0) {
+            const cleanedSrv = serverData.series.map(s => cleanSeries(s));
+            const mergedSrv = mergeEntitiesByRecency(seriesRef.current, cleanedSrv, deletedSeriesIdsRef.current);
+            const { deduplicated } = deduplicateSeries(mergedSrv);
+            seriesRef.current = deduplicated;
+            setSeries(deduplicated);
+            try {
+              localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(deduplicated));
+            } catch {}
+          }
+          if (Array.isArray(serverData.articles) && serverData.articles.length > 0) {
+            const mergedArticles = mergeEntitiesByRecency(articlesRef.current, serverData.articles);
+            articlesRef.current = mergedArticles;
+            setArticles(mergedArticles);
+            try {
+              localStorage.setItem(STORAGE_KEYS.ARTICLES, JSON.stringify(mergedArticles));
+            } catch {}
+          }
+          if (Array.isArray(serverData.teasers) && serverData.teasers.length > 0) {
+            const mergedTeasers = mergeEntitiesByRecency(teasersRef.current, serverData.teasers);
+            teasersRef.current = mergedTeasers;
+            setTeasers(mergedTeasers);
+            try {
+              localStorage.setItem(STORAGE_KEYS.TEASERS, JSON.stringify(mergedTeasers));
+            } catch {}
+          }
+          if (Array.isArray(serverData.pressReleases) && serverData.pressReleases.length > 0) {
+            const mergedPress = mergeEntitiesByRecency(pressReleasesRef.current, serverData.pressReleases);
+            pressReleasesRef.current = mergedPress;
+            setPressReleases(mergedPress);
+            try {
+              localStorage.setItem(STORAGE_KEYS.PRESS, JSON.stringify(mergedPress));
+            } catch {}
+          }
+          if (serverData.appVersion && serverData.appVersion.version) {
+            setAppVersion(prev => ({ ...prev, ...serverData.appVersion }));
+          }
+        }
+
         const fb = initializeFirebaseCustom();
         if (fb.db) {
-          // Cloud sync admin credentials from Firestore
           try {
             const remoteSec = await fetchAdminSecurityFromFirestore(fb.db);
             if (remoteSec && remoteSec.passwordHash) {
@@ -1776,72 +1979,72 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 return updated;
               });
             }
-          } catch (secErr) {
-            console.warn('Initial admin security fetch note:', secErr);
+          } catch {}
+
+          if (!hasServerBanner) {
+            try {
+              const remoteSettings = await fetchSiteSettingsFromFirestore(fb.db);
+              if (remoteSettings && remoteSettings.headerBannerUrl && !localStorage.getItem(STORAGE_KEYS.SITE_BANNER)) {
+                setSiteBannerUrl(remoteSettings.headerBannerUrl);
+                try {
+                  localStorage.setItem(STORAGE_KEYS.SITE_BANNER, remoteSettings.headerBannerUrl);
+                } catch {}
+              }
+            } catch {}
           }
 
-          // Cloud sync Site Header Banner from Firestore
-          try {
-            const remoteSettings = await fetchSiteSettingsFromFirestore(fb.db);
-            if (remoteSettings && remoteSettings.headerBannerUrl) {
-              setSiteBannerUrl(remoteSettings.headerBannerUrl);
-              try {
-                localStorage.setItem(STORAGE_KEYS.SITE_BANNER, remoteSettings.headerBannerUrl);
-              } catch {}
-            }
-          } catch (bannerErr) {
-            console.warn('Initial site settings banner fetch note:', bannerErr);
-          }
-
-          // Cloud sync Hero Slides from Firestore (for all devices)
           try {
             const remoteSlides = await fetchHeroSlidesFromFirestore(fb.db);
             if (remoteSlides && remoteSlides.length > 0) {
-              setHeroSlides(remoteSlides);
+              const mergedSlides = mergeEntitiesByRecency(heroSlidesRef.current, remoteSlides);
+              heroSlidesRef.current = mergedSlides;
+              setHeroSlides(mergedSlides);
               try {
-                localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(remoteSlides));
+                localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(mergedSlides));
               } catch {}
             }
-          } catch (slideErr) {
-            console.warn('Initial hero slides fetch note:', slideErr);
-          }
+          } catch {}
 
           const initialData = await fetchFirestoreSeriesNow(fb.db);
           if (initialData && initialData.length > 0) {
-            setSeries(() => {
-              const cleaned = initialData.map(s => cleanSeries(s));
-              const { deduplicated, duplicateIds } = deduplicateSeries(cleaned);
-              if (duplicateIds.length > 0 && fb.db) {
-                duplicateIds.forEach(id => deleteSeriesFromFirestore(fb.db!, id).catch(() => {}));
-              }
-              try {
-                localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(deduplicated));
-              } catch {}
-              return deduplicated;
-            });
+            const cleanedRemote = initialData.map(s => cleanSeries(s));
+            const mergedSeries = mergeEntitiesByRecency(seriesRef.current, cleanedRemote, deletedSeriesIdsRef.current);
+            const { deduplicated } = deduplicateSeries(mergedSeries);
+            seriesRef.current = deduplicated;
+            setSeries(deduplicated);
+            try {
+              localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(deduplicated));
+            } catch {}
           }
         }
+
         const remoteArticles = await fetchArticlesFromFirestore();
         if (remoteArticles && remoteArticles.length > 0) {
-          setArticles(remoteArticles);
+          const mergedArticles = mergeEntitiesByRecency(articlesRef.current, remoteArticles);
+          articlesRef.current = mergedArticles;
+          setArticles(mergedArticles);
           try {
-            localStorage.setItem(STORAGE_KEYS.ARTICLES, JSON.stringify(remoteArticles));
+            localStorage.setItem(STORAGE_KEYS.ARTICLES, JSON.stringify(mergedArticles));
           } catch {}
         }
 
         const remoteTeasers = await fetchTeasersFromFirestore();
         if (remoteTeasers && remoteTeasers.length > 0) {
-          setTeasers(remoteTeasers);
+          const mergedTeasers = mergeEntitiesByRecency(teasersRef.current, remoteTeasers);
+          teasersRef.current = mergedTeasers;
+          setTeasers(mergedTeasers);
           try {
-            localStorage.setItem(STORAGE_KEYS.TEASERS, JSON.stringify(remoteTeasers));
+            localStorage.setItem(STORAGE_KEYS.TEASERS, JSON.stringify(mergedTeasers));
           } catch {}
         }
 
         const remotePress = await fetchPressFromFirestore();
         if (remotePress && remotePress.length > 0) {
-          setPressReleases(remotePress);
+          const mergedPress = mergeEntitiesByRecency(pressReleasesRef.current, remotePress);
+          pressReleasesRef.current = mergedPress;
+          setPressReleases(mergedPress);
           try {
-            localStorage.setItem(STORAGE_KEYS.PRESS, JSON.stringify(remotePress));
+            localStorage.setItem(STORAGE_KEYS.PRESS, JSON.stringify(mergedPress));
           } catch {}
         }
 
@@ -1866,43 +2069,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               return merged;
             });
           }
-        } catch (usersErr) {
-          console.warn('Initial users fetch note:', usersErr);
-        }
+        } catch {}
       } catch (err) {
-        console.warn('Initial Firestore fetch note:', err);
+        console.warn('Initial catalog fetch note:', err);
       }
     };
     fetchInitial();
 
-    // 2. Real-time persistent onSnapshot listener
+    // 2. Real-time persistent onSnapshot listener (merges strictly by recency)
     const unsubscribeArticles = subscribeToFirestoreArticles((remoteArticles) => {
       if (remoteArticles && remoteArticles.length > 0) {
-        setArticles(remoteArticles);
+        const merged = mergeEntitiesByRecency(articlesRef.current, remoteArticles);
+        articlesRef.current = merged;
+        setArticles(merged);
         try {
-          localStorage.setItem(STORAGE_KEYS.ARTICLES, JSON.stringify(remoteArticles));
+          localStorage.setItem(STORAGE_KEYS.ARTICLES, JSON.stringify(merged));
         } catch {}
       }
     });
 
     const unsubscribeSeries = subscribeToFirestoreSeries((firestoreSeries) => {
       if (firestoreSeries && firestoreSeries.length > 0) {
-        setSeries(() => {
-          const cleaned = firestoreSeries.map(s => cleanSeries(s));
-          const { deduplicated, duplicateIds } = deduplicateSeries(cleaned);
-          if (duplicateIds.length > 0) {
-            try {
-              const fb = initializeFirebaseCustom();
-              if (fb.db) {
-                duplicateIds.forEach(id => deleteSeriesFromFirestore(fb.db!, id).catch(() => {}));
-              }
-            } catch {}
-          }
-          try {
-            localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(deduplicated));
-          } catch {}
-          return deduplicated;
-        });
+        const cleanedRemote = firestoreSeries.map(s => cleanSeries(s));
+        const merged = mergeEntitiesByRecency(seriesRef.current, cleanedRemote, deletedSeriesIdsRef.current);
+        const { deduplicated } = deduplicateSeries(merged);
+        seriesRef.current = deduplicated;
+        setSeries(deduplicated);
+        try {
+          localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(deduplicated));
+        } catch {}
       }
     });
 
@@ -1913,7 +2108,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     const unsubscribeBanner = subscribeToFirestoreSiteSettings((settings) => {
-      if (settings?.headerBannerUrl) {
+      if (settings?.headerBannerUrl && !hasServerBanner && !localStorage.getItem(STORAGE_KEYS.SITE_BANNER)) {
         setSiteBannerUrl(settings.headerBannerUrl);
         try {
           localStorage.setItem(STORAGE_KEYS.SITE_BANNER, settings.headerBannerUrl);
@@ -1923,27 +2118,33 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const unsubscribeHeroSlides = subscribeToFirestoreHeroSlides((remoteSlides) => {
       if (remoteSlides && remoteSlides.length > 0) {
-        setHeroSlides(remoteSlides);
+        const merged = mergeEntitiesByRecency(heroSlidesRef.current, remoteSlides);
+        heroSlidesRef.current = merged;
+        setHeroSlides(merged);
         try {
-          localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(remoteSlides));
+          localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(merged));
         } catch {}
       }
     });
 
     const unsubscribeTeasers = subscribeToFirestoreTeasers((remoteTeasers) => {
       if (remoteTeasers && remoteTeasers.length > 0) {
-        setTeasers(remoteTeasers);
+        const merged = mergeEntitiesByRecency(teasersRef.current, remoteTeasers);
+        teasersRef.current = merged;
+        setTeasers(merged);
         try {
-          localStorage.setItem(STORAGE_KEYS.TEASERS, JSON.stringify(remoteTeasers));
+          localStorage.setItem(STORAGE_KEYS.TEASERS, JSON.stringify(merged));
         } catch {}
       }
     });
 
     const unsubscribePress = subscribeToFirestorePress((remotePress) => {
       if (remotePress && remotePress.length > 0) {
-        setPressReleases(remotePress);
+        const merged = mergeEntitiesByRecency(pressReleasesRef.current, remotePress);
+        pressReleasesRef.current = merged;
+        setPressReleases(merged);
         try {
-          localStorage.setItem(STORAGE_KEYS.PRESS, JSON.stringify(remotePress));
+          localStorage.setItem(STORAGE_KEYS.PRESS, JSON.stringify(merged));
         } catch {}
       }
     });
@@ -2070,7 +2271,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           success: false, 
           isLocked: true, 
           remainingSeconds: rateCheck.remainingLockoutSeconds,
-          message: `Console administrative temporairement verrouillée par mesure de sécurité. Veuillez patienter ${rateCheck.remainingLockoutSeconds}s ou utiliser votre compte Google ou la clé principale.` 
+          message: `Console administrative temporairement verrouillée par mesure de sécurité. Veuillez patienter ${rateCheck.remainingLockoutSeconds}s ou utiliser le mot de passe administrateur principal.` 
         };
       }
     }
@@ -2098,10 +2299,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
 
-    // 3. Cryptographic Verification
-    const isPassValid = await verifyPassword(cleanPass, adminCredentials.passwordHash);
+    // 3. Cryptographic & Server Verification
+    const [isPassValid, srvRes] = await Promise.all([
+      verifyPassword(cleanPass, adminCredentials.passwordHash),
+      loginStudioServer(cleanUser, cleanPass)
+    ]);
 
-    if (!isPassValid) {
+    if (!isPassValid && !srvRes.success) {
       const failed = recordFailedLoginAttempt();
       const remainingTries = Math.max(0, 5 - failed.failedAttempts);
       return { 
@@ -2116,6 +2320,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 4. Success: Reset rate limiter and generate cryptographically signed session
     resetFailedLoginAttempts();
+    setLastCloudError(null);
 
     const durationMs = rememberMe ? 24 * 60 * 60 * 1000 : 2 * 60 * 60 * 1000;
     const sessionPayload = await generateAdminSessionToken(cleanUser, adminCredentials.passwordHash, durationMs);
@@ -2135,19 +2340,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
     }
 
-    // Bridge Firebase Auth session for wilfriedcrea@gmail.com so Firestore rules recognize admin
-    if (!auth.currentUser || auth.currentUser.email?.toLowerCase() !== 'wilfriedcrea@gmail.com') {
-      try {
-        await signInWithEmailAndPassword(auth, 'wilfriedcrea@gmail.com', cleanPass);
-      } catch (fbErr: any) {
-        if (fbErr?.code === 'auth/user-not-found' || fbErr?.code === 'auth/invalid-credential') {
-          try {
-            await createUserWithEmailAndPassword(auth, 'wilfriedcrea@gmail.com', cleanPass);
-          } catch {}
-        }
-      }
-    }
-
     // Audit log
     setModerationLogs(prev => [
       {
@@ -2157,7 +2349,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         targetType: 'user',
         targetId: cleanUser,
         timestamp: now,
-        details: `Session sécurisée active (Jeton cryptographique v3 pour ${cleanUser})`
+        details: `Session sécurisée active (Studio & LWS authentifiés pour ${cleanUser})`
       },
       ...prev
     ]);
@@ -2211,6 +2403,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       sessionStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
       localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
+      await logoutStudioServer();
       if (auth.currentUser && auth.currentUser.email?.toLowerCase() === 'wilfriedcrea@gmail.com') {
         await signOut(auth);
       }
@@ -2233,7 +2426,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!currentPass) {
         return { success: false, message: "Veuillez renseigner votre mot de passe actuel." };
       }
-      // Constant-time check of current password
       const isCurrentValid = await verifyPassword(currentPass, adminCredentials.passwordHash);
 
       if (!isCurrentValid) {
@@ -2253,25 +2445,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(STORAGE_KEYS.ADMIN_CREDENTIALS, JSON.stringify(updatedCreds));
     } catch {}
 
-    // Cloud sync to Firestore config/admin_security
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        await syncAdminSecurityToFirestore(fb.db, {
-          passwordHash: newHash,
-          allowedUsernames: updatedCreds.allowedUsernames,
-          lastChangedAt: updatedCreds.lastChangedAt
-        });
+    await changeStudioServerPassword(newHash).catch(() => false);
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncAdminSecurityToFirestore(fb.db, {
+            passwordHash: newHash,
+            allowedUsernames: updatedCreds.allowedUsernames,
+            lastChangedAt: updatedCreds.lastChangedAt
+          });
+        }
+      } catch (syncErr) {
+        console.warn("Could not sync updated credentials to Firestore:", syncErr);
       }
-    } catch (syncErr) {
-      console.warn("Could not sync updated credentials to Firestore:", syncErr);
     }
 
     resetFailedLoginAttempts();
     const updatedSession = await generateAdminSessionToken(adminUser.email, newHash);
     localStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, updatedSession.token);
 
-    return { success: true, message: "Mot de passe administrateur renouvelé avec succès ! Synchronisé avec le Cloud Firestore." };
+    return { success: true, message: "Mot de passe administrateur renouvelé avec succès !" };
   }, [adminCredentials, adminUser.email]);
 
   const setAdminUser = useCallback((user: AdminUser) => {
@@ -2346,7 +2541,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const id = `series-${Date.now()}`;
     const slug = newSeriesData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     const nowIso = new Date().toISOString();
-    const nowDate = nowIso.split('T')[0];
     const newSeries: Series = {
       ...newSeriesData,
       id,
@@ -2356,46 +2550,49 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       rating: 5.0,
       reviewsCount: 1,
       createdAt: nowIso,
-      updatedAt: nowDate,
+      updatedAt: nowIso,
       chapters: newSeriesData.chapters || []
     } as any;
 
-    setSeries(prev => {
-      // Remove any existing series with identical slug or title so mock duplicates are superseded
-      const filtered = prev.filter(s => {
-        const sameSlug = (s.slug || '').trim().toLowerCase() === slug;
-        const sameTitle = (s.title || '').trim().toLowerCase() === newSeriesData.title.trim().toLowerCase();
-        if (sameSlug || sameTitle) {
-          if (s.id !== id) {
-            try {
-              const fb = initializeFirebaseCustom();
-              if (fb.db) deleteSeriesFromFirestore(fb.db, s.id);
-            } catch {}
-          }
-          return false;
-        }
-        return s.id !== id;
-      });
-      return [newSeries, ...filtered];
+    const replacedIds: string[] = [];
+    const filtered = seriesRef.current.filter(s => {
+      const sameSlug = (s.slug || '').trim().toLowerCase() === slug;
+      const sameTitle = (s.title || '').trim().toLowerCase() === newSeriesData.title.trim().toLowerCase();
+      if (sameSlug || sameTitle) {
+        if (s.id !== id) replacedIds.push(s.id);
+        return false;
+      }
+      return s.id !== id;
     });
+    const nextSeries = [newSeries, ...filtered];
+    seriesRef.current = nextSeries;
+    setSeries(nextSeries);
+    try {
+      localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(nextSeries));
+    } catch {}
     setAnalytics(prev => ({ ...prev, seriesCount: prev.seriesCount + 1 }));
 
-    // Firebase background sync with robust fallback
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        await syncSeriesToFirestore(fb.db, newSeries);
-      }
-    } catch (syncErr) {
-      console.warn('Sync new series to Firestore warning:', syncErr);
+    await pushStudioDataPatch({
+      series: nextSeries,
+      deletedSeriesIds: Array.from(deletedSeriesIdsRef.current)
+    });
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          replacedIds.forEach(rId => deleteSeriesFromFirestore(fb.db!, rId).catch(() => {}));
+          await syncSeriesToFirestore(fb.db, newSeries).catch(() => {});
+        }
+      } catch {}
     }
   }, []);
 
   const updateSeries = useCallback(async (id: string, updates: Partial<Series>): Promise<boolean> => {
     const existing = seriesRef.current.find(s => s.id === id);
     if (!existing) return false;
-    const nowDate = new Date().toISOString().split('T')[0];
-    const targetUpdated: Series = { ...existing, ...updates, updatedAt: nowDate };
+    const nowIso = new Date().toISOString();
+    const targetUpdated: Series = { ...existing, ...updates, updatedAt: nowIso };
     const nextSeries = seriesRef.current.map(s => (s.id === id ? targetUpdated : s));
     seriesRef.current = nextSeries;
     setSeries(nextSeries);
@@ -2403,48 +2600,50 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(nextSeries));
     } catch {}
 
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        const res = await syncSeriesToFirestore(fb.db, targetUpdated);
-        if (!res.success) {
-          setLastCloudError({
-            message: (res as any).errorMessage || 'Échec de la mise à jour de la série sur Firestore.',
-            needsGoogleAuth: Boolean((res as any).needsGoogleAuth),
-            code: (res as any).errorCode
-          });
-          return false;
-        }
-        setLastCloudError(null);
-        return true;
-      }
-    } catch (syncErr: any) {
-      console.warn('Sync updated series to Firestore warning:', syncErr);
+    const srvRes = await pushStudioDataPatch({
+      series: nextSeries,
+      deletedSeriesIds: Array.from(deletedSeriesIdsRef.current)
+    });
+    if (srvRes.unauthorized) {
       setLastCloudError({
-        message: syncErr?.message || 'Erreur réseau lors de la synchronisation Firestore.',
+        message: srvRes.error || 'Session Studio expirée. Veuillez vous reconnecter.',
         needsGoogleAuth: false
       });
       return false;
     }
-    return false;
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncSeriesToFirestore(fb.db, targetUpdated).catch(() => {});
+        }
+      } catch {}
+    }
+
+    setLastCloudError(null);
+    return true;
   }, []);
 
   const deleteSeries = useCallback(async (id: string) => {
-    // Find target before deletion to record id, slug, and title
-    const target = series.find(s => s.id === id || s.slug === id);
+    const target = seriesRef.current.find(s => s.id === id || s.slug === id);
     const slug = target?.slug;
     const title = target?.title;
     const titleSlug = title ? title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : '';
 
-    // Record in deleted set to permanently prevent rebirth from any source
+    deletedSeriesIdsRef.current.add(id);
+    deletedSeriesIdsRef.current.add(id.toLowerCase());
+    if (slug) {
+      deletedSeriesIdsRef.current.add(slug);
+      deletedSeriesIdsRef.current.add(slug.toLowerCase());
+    }
+    if (titleSlug) {
+      deletedSeriesIdsRef.current.add(titleSlug);
+      deletedSeriesIdsRef.current.add(titleSlug.toLowerCase());
+    }
+    const deletedArr = Array.from(deletedSeriesIdsRef.current);
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.DELETED_SERIES);
-      const set = new Set<string>(raw ? JSON.parse(raw) : []);
-      set.add(id);
-      if (slug) set.add(slug);
-      if (titleSlug) set.add(titleSlug);
-      KNOWN_DELETED_SERIES_IDS.forEach(kid => set.add(kid));
-      localStorage.setItem(STORAGE_KEYS.DELETED_SERIES, JSON.stringify(Array.from(set)));
+      localStorage.setItem(STORAGE_KEYS.DELETED_SERIES, JSON.stringify(deletedArr));
     } catch {}
 
     const updatedList = seriesRef.current.filter(s => {
@@ -2460,33 +2659,36 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {}
     setAnalytics(prev => ({ ...prev, seriesCount: Math.max(0, prev.seriesCount - 1) }));
 
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        // Record in Firestore settings FIRST so any concurrent listeners immediately block it
-        const toRecord = [id];
-        if (slug && slug !== id) toRecord.push(slug);
-        if (titleSlug && titleSlug !== id && titleSlug !== slug) toRecord.push(titleSlug);
-        await recordDeletedSeriesToFirestore(fb.db, ...toRecord);
+    await pushStudioDataPatch({
+      series: updatedList,
+      deletedSeriesIds: deletedArr
+    });
 
-        // Purge documents from Firestore across all collections and subcollections
-        await deleteSeriesFromFirestore(fb.db, id, slug, title);
-      }
-    } catch (delErr) {
-      console.warn('Delete series from Firestore warning:', delErr);
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          const toRecord = [id];
+          if (slug && slug !== id) toRecord.push(slug);
+          if (titleSlug && titleSlug !== id && titleSlug !== slug) toRecord.push(titleSlug);
+          await recordDeletedSeriesToFirestore(fb.db, ...toRecord).catch(() => {});
+          await deleteSeriesFromFirestore(fb.db, id, slug, title).catch(() => {});
+        }
+      } catch {}
     }
-  }, [series]);
+  }, []);
 
   // Chapters CRUD
   const addChapter = useCallback(async (seriesId: string, chapterData: Omit<Chapter, 'id' | 'seriesId' | 'releaseDate' | 'likesCount'>) => {
     const target = seriesRef.current.find(s => s.id === seriesId);
     if (!target) return;
     const chapterId = `ch-${Date.now()}`;
+    const nowIso = new Date().toISOString();
     const newChapter: Chapter = {
       ...chapterData,
       id: chapterId,
       seriesId,
-      releaseDate: new Date().toISOString().split('T')[0],
+      releaseDate: nowIso.split('T')[0],
       likesCount: 0
     };
     const updatedChapters = [...(target.chapters || []), newChapter];
@@ -2494,39 +2696,46 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...target,
       chapters: updatedChapters,
       chaptersCount: updatedChapters.length,
-      updatedAt: new Date().toISOString().split('T')[0]
+      updatedAt: nowIso
     };
     const nextSeries = seriesRef.current.map(s => (s.id === seriesId ? updatedSeries : s));
     seriesRef.current = nextSeries;
     setSeries(nextSeries);
+    try { localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(nextSeries)); } catch {}
     setAnalytics(prev => ({ ...prev, chaptersPublished: prev.chaptersPublished + 1 }));
 
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        await syncSeriesToFirestore(fb.db, updatedSeries);
-      }
-    } catch (err) {
-      console.warn('Sync new chapter to Firestore warning:', err);
+    await pushStudioDataPatch({ series: nextSeries });
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncSeriesToFirestore(fb.db, updatedSeries).catch(() => {});
+        }
+      } catch {}
     }
   }, []);
 
   const updateChapter = useCallback(async (seriesId: string, chapterId: string, updates: Partial<Chapter>) => {
     const target = seriesRef.current.find(s => s.id === seriesId);
     if (!target || !target.chapters) return;
+    const nowIso = new Date().toISOString();
     const updatedChapters = target.chapters.map(c => c.id === chapterId ? { ...c, ...updates } : c);
-    const updatedSeries: Series = { ...target, chapters: updatedChapters, updatedAt: new Date().toISOString().split('T')[0] };
+    const updatedSeries: Series = { ...target, chapters: updatedChapters, updatedAt: nowIso };
     const nextSeries = seriesRef.current.map(s => (s.id === seriesId ? updatedSeries : s));
     seriesRef.current = nextSeries;
     setSeries(nextSeries);
+    try { localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(nextSeries)); } catch {}
 
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        await syncSeriesToFirestore(fb.db, updatedSeries);
-      }
-    } catch (err) {
-      console.warn('Sync updated chapter to Firestore warning:', err);
+    await pushStudioDataPatch({ series: nextSeries });
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncSeriesToFirestore(fb.db, updatedSeries).catch(() => {});
+        }
+      } catch {}
     }
   }, []);
 
@@ -2534,18 +2743,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const target = seriesRef.current.find(s => s.id === seriesId);
     if (!target || !target.chapters) return;
     const updatedChapters = target.chapters.filter(c => c.id !== chapterId);
-    const updatedSeries: Series = { ...target, chapters: updatedChapters, chaptersCount: updatedChapters.length };
+    const updatedSeries: Series = { ...target, chapters: updatedChapters, chaptersCount: updatedChapters.length, updatedAt: new Date().toISOString() };
     const nextSeries = seriesRef.current.map(s => (s.id === seriesId ? updatedSeries : s));
     seriesRef.current = nextSeries;
     setSeries(nextSeries);
+    try { localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(nextSeries)); } catch {}
 
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        await syncSeriesToFirestore(fb.db, updatedSeries);
-      }
-    } catch (err) {
-      console.warn('Sync delete chapter to Firestore warning:', err);
+    await pushStudioDataPatch({ series: nextSeries });
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncSeriesToFirestore(fb.db, updatedSeries).catch(() => {});
+        }
+      } catch {}
     }
   }, []);
 
@@ -2561,13 +2773,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     teasersRef.current = nextTeasers;
     setTeasers(nextTeasers);
 
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        await syncTeaserToFirestore(fb.db, newTeaser);
-      }
-    } catch (err) {
-      console.warn('Sync teaser to Firestore warning:', err);
+    await pushStudioDataPatch({ teasers: nextTeasers });
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncTeaserToFirestore(fb.db, newTeaser).catch(() => {});
+        }
+      } catch {}
     }
   }, []);
 
@@ -2579,13 +2793,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     teasersRef.current = nextTeasers;
     setTeasers(nextTeasers);
 
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        await syncTeaserToFirestore(fb.db, updatedTeaser);
-      }
-    } catch (err) {
-      console.warn('Sync update teaser to Firestore warning:', err);
+    await pushStudioDataPatch({ teasers: nextTeasers });
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncTeaserToFirestore(fb.db, updatedTeaser).catch(() => {});
+        }
+      } catch {}
     }
   }, []);
 
@@ -2593,13 +2809,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const nextTeasers = teasersRef.current.filter(t => t.id !== id);
     teasersRef.current = nextTeasers;
     setTeasers(nextTeasers);
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        await deleteTeaserFromFirestore(fb.db, id);
-      }
-    } catch (err) {
-      console.warn('Delete teaser from Firestore warning:', err);
+
+    await pushStudioDataPatch({ teasers: nextTeasers });
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await deleteTeaserFromFirestore(fb.db, id).catch(() => {});
+        }
+      } catch {}
     }
   }, []);
 
@@ -2616,13 +2835,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     pressReleasesRef.current = nextPress;
     setPressReleases(nextPress);
 
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        await syncPressToFirestore(fb.db, newPress);
-      }
-    } catch (err) {
-      console.warn('Sync press release to Firestore warning:', err);
+    await pushStudioDataPatch({ pressReleases: nextPress });
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncPressToFirestore(fb.db, newPress).catch(() => {});
+        }
+      } catch {}
     }
   }, []);
 
@@ -2634,13 +2855,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     pressReleasesRef.current = nextPress;
     setPressReleases(nextPress);
 
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        await syncPressToFirestore(fb.db, updatedPress);
-      }
-    } catch (err) {
-      console.warn('Sync update press release to Firestore warning:', err);
+    await pushStudioDataPatch({ pressReleases: nextPress });
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncPressToFirestore(fb.db, updatedPress).catch(() => {});
+        }
+      } catch {}
     }
   }, []);
 
@@ -2648,13 +2871,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const nextPress = pressReleasesRef.current.filter(p => p.id !== id);
     pressReleasesRef.current = nextPress;
     setPressReleases(nextPress);
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        await deletePressFromFirestore(fb.db, id);
-      }
-    } catch (err) {
-      console.warn('Delete press release from Firestore warning:', err);
+
+    await pushStudioDataPatch({ pressReleases: nextPress });
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await deletePressFromFirestore(fb.db, id).catch(() => {});
+        }
+      } catch {}
     }
   }, []);
 
@@ -2673,13 +2899,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     articlesRef.current = nextArticles;
     setArticles(nextArticles);
 
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        await syncArticleToFirestore(fb.db, newArticle);
-      }
-    } catch (err) {
-      console.warn('Sync new article to Firestore error:', err);
+    await pushStudioDataPatch({ articles: nextArticles });
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncArticleToFirestore(fb.db, newArticle).catch(() => {});
+        }
+      } catch {}
     }
   }, []);
 
@@ -2691,13 +2919,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     articlesRef.current = nextArticles;
     setArticles(nextArticles);
 
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        await syncArticleToFirestore(fb.db, updatedArticle);
-      }
-    } catch (err) {
-      console.warn('Sync update article error:', err);
+    await pushStudioDataPatch({ articles: nextArticles });
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncArticleToFirestore(fb.db, updatedArticle).catch(() => {});
+        }
+      } catch {}
     }
   }, []);
 
@@ -2705,13 +2935,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const nextArticles = articlesRef.current.filter(a => a.id !== id);
     articlesRef.current = nextArticles;
     setArticles(nextArticles);
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        await deleteArticleFromFirestore(fb.db, id);
-      }
-    } catch (err) {
-      console.warn('Delete article error:', err);
+
+    await pushStudioDataPatch({ articles: nextArticles });
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await deleteArticleFromFirestore(fb.db, id).catch(() => {});
+        }
+      } catch {}
     }
   }, []);
 
@@ -2721,13 +2954,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     appVersionRef.current = targetUpdated;
     setAppVersion(targetUpdated);
 
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        await syncAppVersionToFirestore(fb.db, targetUpdated);
-      }
-    } catch (err) {
-      console.warn('Sync app version warning:', err);
+    await pushStudioDataPatch({ appVersion: targetUpdated });
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncAppVersionToFirestore(fb.db, targetUpdated).catch(() => {});
+        }
+      } catch {}
     }
   }, []);
 
@@ -3122,80 +3357,98 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const updateSiteBannerUrl = useCallback(async (newUrl: string): Promise<boolean> => {
-    const trimmed = newUrl.trim();
+    const trimmed = normalizeImageUrl(newUrl.trim());
     if (!trimmed) return false;
     setSiteBannerUrl(trimmed);
     try {
       localStorage.setItem(STORAGE_KEYS.SITE_BANNER, trimmed);
     } catch {}
 
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        await syncSiteSettingsToFirestore(fb.db, { headerBannerUrl: trimmed });
-      }
-      return true;
-    } catch (err) {
-      console.warn('Error syncing site banner to Firestore:', err);
+    const srvRes = await pushStudioDataPatch({ siteBannerUrl: trimmed });
+    if (srvRes.unauthorized) {
+      setLastCloudError({
+        message: srvRes.error || 'Session Studio expirée. Veuillez vous reconnecter.',
+        needsGoogleAuth: false
+      });
       return false;
     }
+
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          await syncSiteSettingsToFirestore(fb.db, { headerBannerUrl: trimmed }).catch(() => {});
+        }
+      } catch {}
+    }
+
+    setLastCloudError(null);
+    return true;
   }, []);
 
   const triggerManualSync = useCallback(async () => {
     setFirebaseConfig(prev => ({ ...prev, syncState: 'syncing' }));
     try {
-      const fb = initializeFirebaseCustom({
-        projectId: firebaseConfig.projectId,
-        databaseId: firebaseConfig.databaseId
-      });
-      if (fb.success && fb.db) {
-        // Deduplicate series first so no ghost/mock copies are pushed
-        const { deduplicated: cleanSeriesList, duplicateIds } = deduplicateSeries(series);
-        if (duplicateIds.length > 0) {
-          for (const dId of duplicateIds) {
-            try {
-              await deleteSeriesFromFirestore(fb.db, dId);
-            } catch {}
-          }
-          setSeries(cleanSeriesList);
-        }
-
-        // Sync all deduplicated series securely with individual error trapping
-        const seriesResults = await Promise.allSettled(cleanSeriesList.map(s => syncSeriesToFirestore(fb.db!, s)));
-        seriesResults.forEach((res, idx) => {
-          if (res.status === 'rejected') {
-            console.warn(`Sync failed for series ${cleanSeriesList[idx]?.id}:`, res.reason);
-          }
-        });
-
-        // Sync header banner & site settings
-        const deletedRaw = localStorage.getItem(STORAGE_KEYS.DELETED_SERIES);
-        const currentDeleted = deletedRaw ? JSON.parse(deletedRaw) : [];
-        await syncSiteSettingsToFirestore(fb.db, { 
-          headerBannerUrl: siteBannerUrl,
-          deletedSeriesIds: currentDeleted
-        });
-
-        await syncAllArticlesToFirestore(fb.db, articles);
-        await syncAppVersionToFirestore(fb.db, appVersion);
-        await Promise.allSettled(pressReleases.map(p => syncPressToFirestore(fb.db!, p)));
-        await Promise.allSettled(teasers.map(t => syncTeaserToFirestore(fb.db!, t)));
-
-        // Sync Artists & Artbooks directly to Firestore so all mobile/desktop devices are updated
-        await syncAllArtistsToFirestore(fb.db, artists);
-        await syncAllArtbooksToFirestore(fb.db, artbooks);
-        
-        setFirebaseConfig(prev => ({
-          ...prev,
-          syncState: 'synced',
-          isConnected: true,
-          lastSyncedAt: new Date().toISOString()
-        }));
+      const { deduplicated: cleanSeriesList, duplicateIds } = deduplicateSeries(seriesRef.current);
+      if (duplicateIds.length > 0) {
+        seriesRef.current = cleanSeriesList;
+        setSeries(cleanSeriesList);
       }
+
+      const deletedSeriesArr = Array.from(deletedSeriesIdsRef.current);
+      const deletedArtistArr = Array.from(deletedArtistIdsRef.current);
+      const deletedArtbookArr = Array.from(deletedArtbookIdsRef.current);
+
+      const srvRes = await pushStudioDataPatch({
+        artists: artistsRef.current,
+        deletedArtistIds: deletedArtistArr,
+        artbooks: artbooksRef.current,
+        deletedArtbookIds: deletedArtbookArr,
+        series: cleanSeriesList,
+        deletedSeriesIds: deletedSeriesArr,
+        heroSlides: heroSlidesRef.current,
+        articles: articlesRef.current,
+        teasers: teasersRef.current,
+        pressReleases: pressReleasesRef.current,
+        siteBannerUrl,
+        appVersion: appVersionRef.current
+      });
+
+      if (isFirebaseAdminConnectedRef.current) {
+        const fb = initializeFirebaseCustom({
+          projectId: firebaseConfig.projectId,
+          databaseId: firebaseConfig.databaseId
+        });
+        if (fb.success && fb.db) {
+          if (duplicateIds.length > 0) {
+            for (const dId of duplicateIds) {
+              try { await deleteSeriesFromFirestore(fb.db, dId); } catch {}
+            }
+          }
+          await Promise.allSettled(cleanSeriesList.map(s => syncSeriesToFirestore(fb.db!, s)));
+          await syncSiteSettingsToFirestore(fb.db, {
+            headerBannerUrl: siteBannerUrl,
+            deletedSeriesIds: deletedSeriesArr
+          }).catch(() => {});
+          await syncAllArticlesToFirestore(fb.db, articlesRef.current).catch(() => {});
+          await syncAppVersionToFirestore(fb.db, appVersionRef.current).catch(() => {});
+          await Promise.allSettled(pressReleasesRef.current.map(p => syncPressToFirestore(fb.db!, p)));
+          await Promise.allSettled(teasersRef.current.map(t => syncTeaserToFirestore(fb.db!, t)));
+          await syncAllArtistsToFirestore(fb.db, artistsRef.current).catch(() => {});
+          await syncAllArtbooksToFirestore(fb.db, artbooksRef.current).catch(() => {});
+        }
+      }
+
+      setFirebaseConfig(prev => ({
+        ...prev,
+        syncState: srvRes.unauthorized ? 'error' : 'synced',
+        isConnected: !srvRes.unauthorized,
+        lastSyncedAt: new Date().toISOString()
+      }));
     } catch {
       setFirebaseConfig(prev => ({ ...prev, syncState: 'error', errorMessage: 'Échec de synchronisation globale' }));
     }
-  }, [firebaseConfig, series, articles, appVersion, pressReleases, teasers, siteBannerUrl, artists, artbooks]);
+  }, [firebaseConfig, siteBannerUrl]);
 
   const [isSyncingArtists, setIsSyncingArtists] = useState(false);
   const [isSyncingArtbooks, setIsSyncingArtbooks] = useState(false);
@@ -3203,123 +3456,139 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const syncAllArtistsToFirestoreNow = useCallback(async (): Promise<{ success: boolean; message: string }> => {
     setIsSyncingArtists(true);
     try {
-      const fb = initializeFirebaseCustom();
-      if (!fb.db) {
-        return { success: false, message: 'Client Firestore indisponible.' };
-      }
-      const res = await syncAllArtistsToFirestore(fb.db, artistsRef.current);
-      if (res.success) {
-        hasPendingLocalArtistEditsRef.current = false;
-        setLastCloudError(null);
-        return {
-          success: true,
-          message: `Synchronisation réussie ! Les ${res.count} artistes sont maintenant à jour et visibles sur tous les appareils.`
-        };
-      } else {
-        const errMsg = res.errorMessage || 'Erreur lors de la synchronisation des artistes.';
-        setLastCloudError({
-          message: errMsg,
-          needsGoogleAuth: Boolean(res.needsGoogleAuth)
-        });
+      const normalized = artistsRef.current.map(a => ({
+        ...a,
+        photoUrl: normalizeImageUrl(a.photoUrl),
+        bannerUrl: a.bannerUrl ? normalizeImageUrl(a.bannerUrl) : '',
+        updatedAt: a.updatedAt || new Date().toISOString()
+      }));
+      persistArtistsLocally(normalized);
+
+      const srvRes = await pushStudioDataPatch({
+        artists: normalized,
+        deletedArtistIds: Array.from(deletedArtistIdsRef.current)
+      });
+      if (srvRes.unauthorized) {
+        const errMsg = srvRes.error || 'Session Studio expirée. Veuillez vous reconnecter.';
+        setLastCloudError({ message: errMsg, needsGoogleAuth: false });
         return { success: false, message: errMsg };
       }
+
+      if (isFirebaseAdminConnectedRef.current) {
+        try {
+          const fb = initializeFirebaseCustom();
+          if (fb.db) {
+            await syncAllArtistsToFirestore(fb.db, normalized).catch(() => {});
+          }
+        } catch {}
+      }
+
+      setLastCloudError(null);
+      return {
+        success: true,
+        message: `Mise à jour réussie ! Les ${normalized.length} artiste(s) sont enregistrés et visibles sur le site.`
+      };
     } catch (err: any) {
       return { success: false, message: err?.message || 'Erreur lors de la synchronisation des artistes.' };
     } finally {
       setIsSyncingArtists(false);
     }
-  }, []);
+  }, [persistArtistsLocally]);
 
   const syncAllArtbooksToFirestoreNow = useCallback(async (): Promise<{ success: boolean; message: string }> => {
     setIsSyncingArtbooks(true);
     try {
-      const fb = initializeFirebaseCustom();
-      if (!fb.db) {
-        return { success: false, message: 'Client Firestore indisponible.' };
-      }
-      const res = await syncAllArtbooksToFirestore(fb.db, artbooksRef.current);
-      if (res.success) {
-        hasPendingLocalArtbookEditsRef.current = false;
-        setLastCloudError(null);
-        return {
-          success: true,
-          message: `Synchronisation réussie ! Les ${res.count} artbooks sont maintenant à jour et accessibles au téléchargement sur tous les appareils.`
-        };
-      } else {
-        const errMsg = res.errorMessage || 'Erreur lors de la synchronisation des artbooks.';
-        setLastCloudError({
-          message: errMsg,
-          needsGoogleAuth: Boolean(res.needsGoogleAuth)
-        });
+      const normalized = artbooksRef.current.map(ab => ({
+        ...ab,
+        coverUrl: normalizeImageUrl(ab.coverUrl),
+        alternateCoverUrl: ab.alternateCoverUrl ? normalizeImageUrl(ab.alternateCoverUrl) : '',
+        updatedAt: ab.updatedAt || new Date().toISOString()
+      }));
+      persistArtbooksLocally(normalized);
+
+      const srvRes = await pushStudioDataPatch({
+        artbooks: normalized,
+        deletedArtbookIds: Array.from(deletedArtbookIdsRef.current)
+      });
+      if (srvRes.unauthorized) {
+        const errMsg = srvRes.error || 'Session Studio expirée. Veuillez vous reconnecter.';
+        setLastCloudError({ message: errMsg, needsGoogleAuth: false });
         return { success: false, message: errMsg };
       }
+
+      if (isFirebaseAdminConnectedRef.current) {
+        try {
+          const fb = initializeFirebaseCustom();
+          if (fb.db) {
+            await syncAllArtbooksToFirestore(fb.db, normalized).catch(() => {});
+          }
+        } catch {}
+      }
+
+      setLastCloudError(null);
+      return {
+        success: true,
+        message: `Mise à jour réussie ! Les ${normalized.length} artbook(s) sont enregistrés et visibles sur le site.`
+      };
     } catch (err: any) {
       return { success: false, message: err?.message || 'Erreur lors de la synchronisation des artbooks.' };
     } finally {
       setIsSyncingArtbooks(false);
     }
-  }, []);
+  }, [persistArtbooksLocally]);
 
   const [isSyncingArticlesCloud, setIsSyncingArticlesCloud] = useState(false);
 
   const syncAllArticlesToFirestoreNow = useCallback(async (): Promise<{ success: boolean; message: string; count?: number }> => {
     setIsSyncingArticlesCloud(true);
     try {
-      const fb = initializeFirebaseCustom();
-      if (!fb.db) {
-        return { success: false, message: 'Client Firestore indisponible.' };
+      const currentArticles = articlesRef.current;
+      const srvRes = await pushStudioDataPatch({ articles: currentArticles });
+      if (srvRes.unauthorized) {
+        return { success: false, message: srvRes.error || 'Session Studio expirée.' };
       }
-      const res = await syncAllArticlesToFirestore(fb.db, articles);
-      if (res.success) {
-        return {
-          success: true,
-          count: res.count,
-          message: `Synchronisation réussie ! Les ${res.count} articles sont maintenant à jour et visibles sur tous les appareils.`
-        };
-      } else {
-        return { success: false, message: 'Erreur lors de la synchronisation des articles vers Firestore.' };
+
+      if (isFirebaseAdminConnectedRef.current) {
+        try {
+          const fb = initializeFirebaseCustom();
+          if (fb.db) {
+            await syncAllArticlesToFirestore(fb.db, currentArticles).catch(() => {});
+          }
+        } catch {}
       }
+
+      return {
+        success: true,
+        count: currentArticles.length,
+        message: `Synchronisation réussie ! Les ${currentArticles.length} articles sont enregistrés.`
+      };
     } catch (err: any) {
       return { success: false, message: err?.message || 'Erreur lors de la synchronisation des articles.' };
     } finally {
       setIsSyncingArticlesCloud(false);
     }
-  }, [articles]);
+  }, []);
 
   const cleanupDuplicates = useCallback(async (): Promise<{ cleaned: number; message: string }> => {
     let cleanedCount = 0;
     try {
-      const fb = initializeFirebaseCustom();
-      // 1. Deduplicate local series
-      const { deduplicated: cleanLocal, duplicateIds: localDupIds } = deduplicateSeries(series);
+      const { deduplicated: cleanLocal, duplicateIds: localDupIds } = deduplicateSeries(seriesRef.current);
+      seriesRef.current = cleanLocal;
       setSeries(cleanLocal);
       try {
         localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(cleanLocal));
       } catch {}
 
-      // 2. Scan and purge duplicates from Firestore
-      if (fb.db) {
-        for (const dId of localDupIds) {
-          try {
-            await deleteSeriesFromFirestore(fb.db, dId);
-            cleanedCount++;
-          } catch {}
-        }
+      cleanedCount = localDupIds.length;
+      await pushStudioDataPatch({ series: cleanLocal });
 
-        const remoteSeries = await fetchFirestoreSeriesNow(fb.db);
-        const { deduplicated: cleanRemote, duplicateIds: remoteDupIds } = deduplicateSeries(remoteSeries);
-        for (const rId of remoteDupIds) {
-          try {
-            await deleteSeriesFromFirestore(fb.db, rId);
-            cleanedCount++;
-          } catch {}
+      if (isFirebaseAdminConnectedRef.current) {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          for (const dId of localDupIds) {
+            try { await deleteSeriesFromFirestore(fb.db, dId); } catch {}
+          }
         }
-        setSeries(cleanRemote);
-        try {
-          localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(cleanRemote));
-        } catch {}
-      } else {
-        cleanedCount = localDupIds.length;
       }
 
       return {
@@ -3331,28 +3600,40 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err: any) {
       return { cleaned: 0, message: err?.message || 'Erreur lors du nettoyage des doublons.' };
     }
-  }, [series]);
+  }, []);
 
   const refreshCatalogueFromFirestore = useCallback(async () => {
     setIsRefreshingCatalogue(true);
     try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        const latestSeries = await fetchFirestoreSeriesNow(fb.db);
-        if (latestSeries && latestSeries.length > 0) {
-          setSeries(() => {
-            const cleaned = latestSeries.map(s => cleanSeries(s));
-            const { deduplicated, duplicateIds } = deduplicateSeries(cleaned);
-            if (duplicateIds.length > 0 && fb.db) {
-              duplicateIds.forEach(id => deleteSeriesFromFirestore(fb.db!, id).catch(() => {}));
-            }
-            try {
-              localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(deduplicated));
-            } catch {}
-            return deduplicated;
-          });
-        }
+      const [serverData, fbSeries] = await Promise.all([
+        fetchStudioDataFromServer(),
+        (async () => {
+          const fb = initializeFirebaseCustom();
+          return fb.db ? fetchFirestoreSeriesNow(fb.db) : [];
+        })()
+      ]);
+
+      if (serverData && Array.isArray(serverData.deletedSeriesIds)) {
+        deletedSeriesIdsRef.current = mergeIdSets(deletedSeriesIdsRef.current, serverData.deletedSeriesIds);
+        try {
+          localStorage.setItem(STORAGE_KEYS.DELETED_SERIES, JSON.stringify(Array.from(deletedSeriesIdsRef.current)));
+        } catch {}
       }
+
+      let nextList = seriesRef.current;
+      if (serverData && Array.isArray(serverData.series) && serverData.series.length > 0) {
+        nextList = mergeEntitiesByRecency(nextList, serverData.series.map(s => cleanSeries(s)), deletedSeriesIdsRef.current);
+      }
+      if (fbSeries && fbSeries.length > 0) {
+        nextList = mergeEntitiesByRecency(nextList, fbSeries.map(s => cleanSeries(s)), deletedSeriesIdsRef.current);
+      }
+
+      const { deduplicated } = deduplicateSeries(nextList);
+      seriesRef.current = deduplicated;
+      setSeries(deduplicated);
+      try {
+        localStorage.setItem(STORAGE_KEYS.SERIES, JSON.stringify(deduplicated));
+      } catch {}
       return true;
     } catch {
       return false;
@@ -3370,76 +3651,85 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logoUrl: s.logoUrl ? normalizeImageUrl(s.logoUrl) : '',
       order: s.order ?? (idx + 1)
     }));
+    heroSlidesRef.current = normalized;
     setHeroSlides(normalized);
     try {
       localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(normalized));
     } catch (e) {
       console.warn('Erreur sauvegarde hero slides:', e);
     }
-    // Auto-sync in background to Firestore so changes propagate across all devices
-    try {
-      const fb = initializeFirebaseCustom();
-      if (fb.db) {
-        syncHeroSlidesToFirestore(fb.db, normalized).catch(err => {
-          console.warn('Auto sync hero slides to Firestore note:', err);
-        });
-      }
-    } catch {}
+    pushStudioDataPatch({ heroSlides: normalized }).catch(() => {});
+    if (isFirebaseAdminConnectedRef.current) {
+      try {
+        const fb = initializeFirebaseCustom();
+        if (fb.db) {
+          syncHeroSlidesToFirestore(fb.db, normalized).catch(() => {});
+        }
+      } catch {}
+    }
   }, []);
 
   const syncHeroSlidesToFirestoreNow = useCallback(async (): Promise<{ success: boolean; message: string }> => {
     setIsSyncingHeroSlides(true);
     try {
-      const fb = initializeFirebaseCustom();
-      if (!fb.db) {
-        return { success: false, message: 'Client Firestore indisponible.' };
-      }
-      const normalized = heroSlides.map((s, idx) => ({
+      const normalized = heroSlidesRef.current.map((s, idx) => ({
         ...s,
         imageUrl: normalizeImageUrl(s.imageUrl),
         logoUrl: s.logoUrl ? normalizeImageUrl(s.logoUrl) : '',
         order: s.order ?? (idx + 1)
       }));
-      const res = await syncHeroSlidesToFirestore(fb.db, normalized);
-      if (res.success) {
-        setHeroSlides(normalized);
-        try {
-          localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(normalized));
-        } catch {}
-        return { 
-          success: true, 
-          message: `Synchronisation réussie ! Les ${normalized.length} bannières sont maintenant actives et visibles sur tous les appareils.` 
-        };
-      } else {
-        return { success: false, message: 'Erreur lors de la synchronisation Firestore.' };
+      heroSlidesRef.current = normalized;
+      setHeroSlides(normalized);
+      try {
+        localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(normalized));
+      } catch {}
+
+      const srvRes = await pushStudioDataPatch({ heroSlides: normalized });
+      if (srvRes.unauthorized) {
+        return { success: false, message: srvRes.error || 'Session Studio expirée.' };
       }
+
+      if (isFirebaseAdminConnectedRef.current) {
+        try {
+          const fb = initializeFirebaseCustom();
+          if (fb.db) {
+            await syncHeroSlidesToFirestore(fb.db, normalized).catch(() => {});
+          }
+        } catch {}
+      }
+
+      return { 
+        success: true, 
+        message: `Synchronisation réussie ! Les ${normalized.length} bannières sont maintenant actives et visibles sur tous les appareils.` 
+      };
     } catch (err: any) {
       return { success: false, message: err?.message || 'Erreur lors de la synchronisation.' };
     } finally {
       setIsSyncingHeroSlides(false);
     }
-  }, [heroSlides]);
+  }, []);
 
   const addHeroSlide = useCallback((slideData: Omit<HomeHeroSlide, 'id' | 'createdAt'>) => {
     const newSlide: HomeHeroSlide = {
       ...slideData,
       id: `slide-${Date.now()}`,
-      order: slideData.order ?? (heroSlides.length + 1),
+      order: slideData.order ?? (heroSlidesRef.current.length + 1),
       createdAt: new Date().toISOString()
     };
-    const updated = [newSlide, ...heroSlides];
+    const updated = [newSlide, ...heroSlidesRef.current];
     saveHeroSlides(updated);
-  }, [heroSlides, saveHeroSlides]);
+  }, [saveHeroSlides]);
 
   const updateHeroSlide = useCallback((id: string, updates: Partial<HomeHeroSlide>) => {
-    const updated = heroSlides.map(s => s.id === id ? { ...s, ...updates, updatedAt: new Date().toISOString() } : s);
+    const nowIso = new Date().toISOString();
+    const updated = heroSlidesRef.current.map(s => s.id === id ? { ...s, ...updates, updatedAt: nowIso } : s);
     saveHeroSlides(updated);
-  }, [heroSlides, saveHeroSlides]);
+  }, [saveHeroSlides]);
 
   const deleteHeroSlide = useCallback((id: string) => {
-    const updated = heroSlides.filter(s => s.id !== id);
+    const updated = heroSlidesRef.current.filter(s => s.id !== id);
     saveHeroSlides(updated);
-  }, [heroSlides, saveHeroSlides]);
+  }, [saveHeroSlides]);
 
   const reorderHeroSlides = useCallback((newOrder: HomeHeroSlide[]) => {
     const reordered = newOrder.map((s, idx) => ({ ...s, order: idx + 1 }));

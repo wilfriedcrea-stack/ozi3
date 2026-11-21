@@ -57,18 +57,16 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
   let friendlyMessage = rawMessage;
   if (isPermissionDenied) {
-    friendlyMessage = email
-      ? `Permission Firestore refusée pour le compte « ${email} ». Connectez le compte Google Administrateur (wilfriedcrea@gmail.com) pour enregistrer dans le cloud.`
-      : `Connexion Google Admin requise (wilfriedcrea@gmail.com) : Firestore refuse l'écriture sans session Google autorisée.`;
+    friendlyMessage = 'Synchronisation Firestore ignorée en mode Studio standard (les données sont enregistrées sur le serveur LWS).';
   } else if (isSizeExceeded) {
-    friendlyMessage = `Les images envoyées sont trop lourdes pour un seul document Firestore (limite 1 Mo). Utilisez des images plus légères ou une URL directe.`;
+    friendlyMessage = 'Les images envoyées sont trop lourdes pour un seul document Firestore (limite 1 Mo). Utilisez des images plus légères ou une URL directe.';
   }
 
   const errInfo: FirestoreErrorInfo = {
     error: rawMessage,
     code,
     friendlyMessage,
-    needsGoogleAuth: isPermissionDenied,
+    needsGoogleAuth: false,
     operationType,
     path,
     timestamp: new Date().toISOString(),

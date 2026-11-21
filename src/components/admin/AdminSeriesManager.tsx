@@ -16,7 +16,6 @@ import {
   Layers,
   Image as ImageIcon,
   RefreshCw,
-  AlertTriangle,
   Quote
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
@@ -99,8 +98,9 @@ export const AdminSeriesManager: React.FC = () => {
     if (editingSeries) {
       const ok = await updateSeries(editingSeries.id, data);
       if (!ok) {
-        setSeriesSaveNotice('Modifications enregistrées localement uniquement : connectez le compte Google Admin (en haut) pour les enregistrer dans Firestore.');
-        setTimeout(() => setSeriesSaveNotice(null), 7000);
+        setSeriesSaveNotice('Session Studio expirée : veuillez vous reconnecter pour enregistrer sur le serveur.');
+        setTimeout(() => setSeriesSaveNotice(null), 5000);
+        return;
       }
     } else {
       await addSeries(data as any);
@@ -160,8 +160,7 @@ export const AdminSeriesManager: React.FC = () => {
   return (
     <div className="p-6 sm:p-8 flex flex-col gap-6 max-w-7xl mx-auto w-full">
       {seriesSaveNotice && (
-        <div className="p-3.5 rounded-2xl bg-amber-950/70 border border-amber-500/50 text-amber-200 text-xs font-bold flex items-center gap-2.5">
-          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+        <div className="p-3.5 rounded-2xl bg-rose-950/70 border border-rose-500/50 text-rose-200 text-xs font-bold flex items-center gap-2.5">
           <span>{seriesSaveNotice}</span>
         </div>
       )}

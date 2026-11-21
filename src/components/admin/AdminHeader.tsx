@@ -1,12 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Layers, 
-  ExternalLink, 
   RefreshCw, 
-  ShieldCheck, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Database,
   Eye,
   Plus,
   LogOut,
@@ -22,34 +17,14 @@ interface AdminHeaderProps {
 export const AdminHeader: React.FC<AdminHeaderProps> = ({ activeTab, onNewSeriesClick }) => {
   const { 
     setViewMode, 
-    firebaseConfig, 
     triggerManualSync, 
-    testFirebaseConnection, 
     adminUser, 
     logoutAdmin,
-    openPasswordModal,
-    isFirebaseAdminConnected,
-    loginWithGoogle
+    openPasswordModal
   } = useData();
   const [syncing, setSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [downloadingLws, setDownloadingLws] = useState(false);
-  const [connectingGoogle, setConnectingGoogle] = useState(false);
-
-  const handleHeaderGoogleConnect = async () => {
-    setConnectingGoogle(true);
-    try {
-      const res = await loginWithGoogle();
-      if (res.success) {
-        setSyncFeedback('Compte Google Admin connecté (Cloud autorisé) !');
-      } else {
-        setSyncFeedback(res.message || 'Connexion Google annulée.');
-      }
-      setTimeout(() => setSyncFeedback(null), 4000);
-    } finally {
-      setConnectingGoogle(false);
-    }
-  };
 
   const handleDownloadLwsPack = async () => {
     if (downloadingLws) return;
@@ -89,13 +64,13 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ activeTab, onNewSeries
 
   const handleSyncClick = async () => {
     setSyncing(true);
-    setSyncFeedback('Synchronisation en cours avec Firestore...');
+    setSyncFeedback('Sauvegarde globale en cours...');
     await triggerManualSync();
     setTimeout(() => {
       setSyncing(false);
-      setSyncFeedback('Base de données Firestore synchronisée en direct !');
+      setSyncFeedback('Studio & serveur LWS synchronisés !');
       setTimeout(() => setSyncFeedback(null), 4000);
-    }, 1000);
+    }, 600);
   };
 
   const getTabTitle = () => {
@@ -128,23 +103,10 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ activeTab, onNewSeries
           <div className="flex items-center gap-2 text-xs text-zinc-400 font-body">
             <span>Studio Grand Écran</span>
             <span>•</span>
-            {isFirebaseAdminConnected ? (
-              <div className="flex items-center gap-1.5 text-emerald-400 font-bold bg-emerald-950/40 border border-emerald-500/30 px-2 py-0.5 rounded-lg">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>⚡ Sync automatique Firestore active (Temps réel)</span>
-              </div>
-            ) : (
-              <button
-                type="button"
-                disabled={connectingGoogle}
-                onClick={handleHeaderGoogleConnect}
-                className="flex items-center gap-1.5 text-amber-300 hover:text-amber-200 font-bold bg-amber-950/60 hover:bg-amber-900/70 border border-amber-500/40 px-2.5 py-0.5 rounded-lg cursor-pointer transition-colors disabled:opacity-60"
-                title="Connectez wilfriedcrea@gmail.com via Google pour autoriser l'enregistrement Cloud Firestore"
-              >
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                <span>{connectingGoogle ? 'Connexion Google...' : 'Cloud en lecture seule — Connecter Google Admin'}</span>
-              </button>
-            )}
+            <div className="flex items-center gap-1.5 text-emerald-400 font-bold bg-emerald-950/40 border border-emerald-500/30 px-2 py-0.5 rounded-lg">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>⚡ Sauvegarde Studio & LWS active</span>
+            </div>
           </div>
         </div>
       </div>
@@ -157,16 +119,16 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ activeTab, onNewSeries
           </span>
         )}
 
-        {/* Sync with Firestore button */}
+        {/* Sync Studio & LWS button */}
         <button
           id="admin-header-sync-btn"
           onClick={handleSyncClick}
           disabled={syncing}
           className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#12121c] hover:bg-[#1c1c2b] text-zinc-200 border border-[#242436] text-xs font-bold transition-colors disabled:opacity-50 font-heading"
-          title="Synchroniser immédiatement toutes les données vers Firestore"
+          title="Synchroniser immédiatement toutes les données sur le serveur Studio & LWS"
         >
           <RefreshCw className={`w-3.5 h-3.5 text-orange-400 ${syncing ? 'animate-spin' : ''}`} />
-          <span className="hidden sm:inline">{syncing ? 'Sync...' : 'Sync Firestore'}</span>
+          <span className="hidden sm:inline">{syncing ? 'Sync...' : 'Synchroniser'}</span>
         </button>
 
         {activeTab === 'series' && (

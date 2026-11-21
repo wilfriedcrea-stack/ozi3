@@ -33,7 +33,7 @@ if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
 }
 
 $category = isset($_POST['category']) ? trim($_POST['category']) : 'covers';
-$allowedCategories = ['covers', 'banners', 'chapters', 'audio'];
+$allowedCategories = ['covers', 'banners', 'chapters', 'audio', 'authors', 'articles', 'shop'];
 if (!in_array($category, $allowedCategories)) {
     $category = 'covers';
 }
