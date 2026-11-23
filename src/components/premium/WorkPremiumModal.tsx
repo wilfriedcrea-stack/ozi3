@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { Series } from '../../types';
 import { useData } from '../../context/DataContext';
-import { initiateWorkSubscription, simulateWorkSubscription } from '../../services/paystackClientService';
+import { initiateWorkSubscription } from '../../services/paystackClientService';
 
 interface WorkPremiumModalProps {
   series: Series;
@@ -60,22 +60,8 @@ export const WorkPremiumModal: React.FC<WorkPremiumModalProps> = ({
       });
 
       if (res.success && res.authorizationUrl) {
-        // If simulation sandbox mode
-        if (res.authorizationUrl.includes('paystack_simulated=1')) {
-          const simRes = await simulateWorkSubscription(currentUser.uid, series.id, series.title);
-          if (simRes.success) {
-            setSuccessInfo('Abonnement Premium de 30 jours validé avec succès (Mode Sandbox Paystack) !');
-            setTimeout(() => {
-              if (onSuccess) onSuccess();
-              onClose();
-            }, 2500);
-          } else {
-            setErrorMessage(simRes.message || 'Échec de la simulation.');
-          }
-        } else {
-          // Open official Paystack Checkout portal
-          window.location.href = res.authorizationUrl;
-        }
+        // Open official Paystack Checkout portal
+        window.location.href = res.authorizationUrl;
       } else {
         setErrorMessage(res.message || 'Impossible d\'initialiser le paiement Paystack.');
       }

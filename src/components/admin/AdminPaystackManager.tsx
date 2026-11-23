@@ -20,14 +20,23 @@ import {
   Layers,
   DollarSign,
   Coins,
-  Palette
+  Palette,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Save,
+  ShieldCheck,
+  Link2
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { SubscriptionRecord } from '../../types';
 import { 
   fetchAdminSubscriptions, 
   fetchAdminSubscriptionStats, 
+  fetchAdminPaystackConfig,
+  saveAdminPaystackConfig,
   AdminStatsData,
+  PaystackAdminConfig,
   simulateWorkSubscription 
 } from '../../services/paystackClientService';
 
@@ -35,6 +44,14 @@ export const AdminPaystackManager: React.FC = () => {
   const { series, currentUser } = useData();
   const [subscriptions, setSubscriptions] = useState<SubscriptionRecord[]>([]);
   const [stats, setStats] = useState<AdminStatsData | null>(null);
+  const [paystackConfig, setPaystackConfig] = useState<PaystackAdminConfig | null>(null);
+  const [secretKeyInput, setSecretKeyInput] = useState<string>('');
+  const [publicKeyInput, setPublicKeyInput] = useState<string>('');
+  const [showSecretInput, setShowSecretInput] = useState<boolean>(false);
+  const [isSavingKeys, setIsSavingKeys] = useState<boolean>(false);
+  const [keysFeedback, setKeysFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [copiedWebhook, setCopiedWebhook] = useState<boolean>(false);
+
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'expired' | 'pending'>('all');
@@ -46,12 +63,17 @@ export const AdminPaystackManager: React.FC = () => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [subs, st] = await Promise.all([
+      const [subs, st, cfgRes] = await Promise.all([
         fetchAdminSubscriptions(),
-        fetchAdminSubscriptionStats()
+        fetchAdminSubscriptionStats(),
+        fetchAdminPaystackConfig()
       ]);
       setSubscriptions(subs);
       setStats(st);
+      if (cfgRes.success && cfgRes.config) {
+        setPaystackConfig(cfgRes.config);
+        setPublicKeyInput(cfgRes.config.publicKey || '');
+      }
     } catch (err) {
       console.error('[AdminPaystackManager] Error loading data:', err);
     } finally {
@@ -62,6 +84,61 @@ export const AdminPaystackManager: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleSavePaystackKeys = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setKeysFeedback(null);
+
+    const trimmedSecret = secretKeyInput.trim();
+    const trimmedPublic = publicKeyInput.trim();
+
+    if (!trimmedSecret && !paystackConfig?.hasSecretKey && !trimmedPublic) {
+      setKeysFeedback({
+        type: 'error',
+        message: 'Collez d\'abord votre clé secrète Paystack (sk_live_... ou sk_test_...) avant d\'enregistrer.'
+      });
+      return;
+    }
+
+    setIsSavingKeys(true);
+    try {
+      const res = await saveAdminPaystackConfig({
+        secretKey: trimmedSecret || undefined,
+        publicKey: trimmedPublic,
+      });
+
+      if (res.success && res.config) {
+        setPaystackConfig(res.config);
+        setSecretKeyInput('');
+        setPublicKeyInput(res.config.publicKey || '');
+        setKeysFeedback({
+          type: 'success',
+          message: res.config.mode === 'live'
+            ? 'Clés Paystack enregistrées ! Les vrais paiements Mobile Money & Carte sont maintenant activés sur votre site.'
+            : 'Clés de Test Paystack enregistrées ! Vous pouvez maintenant tester les paiements en toute sécurité.'
+        });
+      } else {
+        setKeysFeedback({
+          type: 'error',
+          message: res.error || 'Impossible d\'enregistrer les clés Paystack.'
+        });
+      }
+    } catch (err: any) {
+      setKeysFeedback({
+        type: 'error',
+        message: err?.message || 'Erreur lors de l\'enregistrement.'
+      });
+    } finally {
+      setIsSavingKeys(false);
+    }
+  };
+
+  const handleCopyWebhook = () => {
+    const url = paystackConfig?.webhookUrlSuggested || `${window.location.origin}/api/paystack.php?action=webhook`;
+    navigator.clipboard.writeText(url);
+    setCopiedWebhook(true);
+    setTimeout(() => setCopiedWebhook(false), 2500);
+  };
 
   const handleCopy = (ref: string) => {
     navigator.clipboard.writeText(ref);
@@ -200,6 +277,179 @@ export const AdminPaystackManager: React.FC = () => {
         </div>
 
         <div className="absolute top-0 right-0 w-96 h-full bg-amber-500/5 blur-3xl pointer-events-none" />
+      </div>
+
+      {/* Paystack API Keys & Webhook Direct Configuration Card */}
+      <div className="rounded-3xl bg-zinc-900/95 border border-zinc-800 p-6 sm:p-7 shadow-xl">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-zinc-800/80">
+          <div className="flex items-start gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+              <KeyRound className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h3 className="text-base sm:text-lg font-black text-white font-heading">
+                  Connexion Paystack (Clés API)
+                </h3>
+                {paystackConfig?.configured ? (
+                  paystackConfig.mode === 'live' ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 text-[11px] font-bold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Actif • Mode Réel (Live)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[11px] font-bold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                      Actif • Mode Test
+                    </span>
+                  )
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/40 text-rose-300 text-[11px] font-bold">
+                    <AlertCircle className="w-3 h-3" />
+                    Non configuré (Paiements bloqués)
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-zinc-400 mt-1 leading-relaxed max-w-2xl">
+                Collez simplement vos clés depuis votre compte <strong className="text-zinc-200">dashboard.paystack.com</strong> (menu <strong className="text-zinc-200">Settings → API Keys & Webhooks</strong>). Vos clés restent protégées sur votre hébergement LWS.
+              </p>
+            </div>
+          </div>
+
+          <a
+            href="https://dashboard.paystack.com/#/settings/developers"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-bold text-zinc-200 transition-colors shrink-0 self-start lg:self-auto"
+          >
+            <span>Ouvrir mon compte Paystack</span>
+            <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
+          </a>
+        </div>
+
+        <form onSubmit={handleSavePaystackKeys} className="mt-5 space-y-5">
+          {keysFeedback && (
+            <div
+              className={`p-3.5 rounded-2xl border text-xs sm:text-sm font-semibold flex items-center gap-2.5 ${
+                keysFeedback.type === 'success'
+                  ? 'bg-emerald-950/70 border-emerald-500/40 text-emerald-300'
+                  : 'bg-rose-950/70 border-rose-500/40 text-rose-200'
+              }`}
+            >
+              {keysFeedback.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              )}
+              <span>{keysFeedback.message}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Clé Secrète */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-bold text-zinc-200">
+                  Clé Secrète Paystack (Secret Key) <span className="text-amber-400">*</span>
+                </label>
+                {paystackConfig?.hasSecretKey && (
+                  <span className="text-[11px] font-mono text-emerald-400">
+                    Enregistrée : {paystackConfig.secretKeyMasked}
+                  </span>
+                )}
+              </div>
+              <div className="relative">
+                <input
+                  type={showSecretInput ? 'text' : 'password'}
+                  value={secretKeyInput}
+                  onChange={(e) => setSecretKeyInput(e.target.value)}
+                  placeholder={
+                    paystackConfig?.hasSecretKey
+                      ? 'Déjà enregistrée (collez une nouvelle clé pour remplacer)'
+                      : 'Ex : sk_live_... ou sk_test_...'
+                  }
+                  autoComplete="off"
+                  className="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-amber-500 text-xs sm:text-sm text-white placeholder-zinc-500 font-mono focus:outline-none transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSecretInput(!showSecretInput)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-white cursor-pointer"
+                  aria-label="Afficher ou masquer la clé secrète"
+                >
+                  {showSecretInput ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[11px] text-zinc-500 mt-1">
+                Commence par <code className="text-zinc-300">sk_live_</code> (paiements réels) ou <code className="text-zinc-300">sk_test_</code> (tests gratuits).
+              </p>
+            </div>
+
+            {/* Clé Publique */}
+            <div>
+              <label className="block text-xs font-bold text-zinc-200 mb-1.5">
+                Clé Publique Paystack (Public Key)
+              </label>
+              <input
+                type="text"
+                value={publicKeyInput}
+                onChange={(e) => setPublicKeyInput(e.target.value)}
+                placeholder="Ex : pk_live_... ou pk_test_..."
+                autoComplete="off"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-amber-500 text-xs sm:text-sm text-white placeholder-zinc-500 font-mono focus:outline-none transition-colors"
+              />
+              <p className="text-[11px] text-zinc-500 mt-1">
+                Commence par <code className="text-zinc-300">pk_live_</code> ou <code className="text-zinc-300">pk_test_</code>.
+              </p>
+            </div>
+          </div>
+
+          {/* Adresse Webhook à copier dans Paystack */}
+          <div className="p-4 rounded-2xl bg-zinc-950/80 border border-zinc-800/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-200 mb-1">
+                <Link2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>Lien Webhook à coller dans Paystack (case « Webhook URL ») :</span>
+              </div>
+              <div className="text-xs font-mono text-amber-300 truncate">
+                {paystackConfig?.webhookUrlSuggested || (typeof window !== 'undefined' ? `${window.location.origin}/api/paystack.php?action=webhook` : 'https://ozibd.net/api/paystack.php?action=webhook')}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleCopyWebhook}
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-bold text-white shrink-0 cursor-pointer transition-colors"
+            >
+              {copiedWebhook ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-emerald-400">Lien copié !</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5 text-zinc-300" />
+                  <span>Copier le lien Webhook</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+            <div className="flex items-center gap-2 text-[11px] text-zinc-400">
+              <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>La clé secrète est stockée uniquement côté serveur et n'est jamais renvoyée aux visiteurs.</span>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSavingKeys}
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 font-black text-xs sm:text-sm shadow-lg shadow-amber-500/20 transition-all cursor-pointer disabled:opacity-50 font-heading shrink-0"
+            >
+              <Save className="w-4 h-4" />
+              <span>{isSavingKeys ? 'Enregistrement...' : 'Enregistrer mes clés Paystack'}</span>
+            </button>
+          </div>
+        </form>
       </div>
 
       {/* Action Notice */}

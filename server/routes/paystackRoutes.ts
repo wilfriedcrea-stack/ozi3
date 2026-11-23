@@ -1,25 +1,82 @@
 import { Router, Request, Response } from 'express';
-import { 
-  initializePaystackTransaction, 
+import {
+  initializePaystackTransaction,
   verifyPaystackSignature,
-  verifyPaystackTransaction
+  verifyPaystackTransaction,
+  getPaystackConfigSummary,
+  savePaystackConfig,
 } from '../services/paystackServerService';
-import { 
-  createPendingSubscription, 
-  activateSubscription, 
-  hasValidAccess, 
+import {
+  createPendingSubscription,
+  activateSubscription,
+  hasValidAccess,
   getUserSubscriptions,
   getAllSubscriptions,
   getSubscriptionStats,
   activateArtbookPurchase,
   hasArtbookAccess,
   getUserArtbookPurchases,
-  getAllArtbookPurchases,
   activateCoinPackPurchase,
-  getAllCoinTransactions
 } from '../services/subscriptionService';
+import { isAdminAuthorized, readStudioDataFile } from './studioDataRoutes';
 
 export const paystackRouter = Router();
+
+function getRequestOrigin(req: Request): string {
+  const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0].trim();
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000').split(',')[0].trim();
+  return `${proto}://${host}`;
+}
+
+function resolveAuthoritativePrice(paymentType: string, targetId: string, fallbackAmount: number): number {
+  if (paymentType === 'artbook_purchase') {
+    const studioData = readStudioDataFile();
+    const artbooks = Array.isArray(studioData.artbooks) ? (studioData.artbooks as any[]) : [];
+    const found = artbooks.find(a => a && (a.id === targetId || a.slug === targetId));
+    if (found && typeof found.price === 'number' && found.price > 0) {
+      return Math.round(found.price);
+    }
+  }
+  return Math.max(100, Math.round(fallbackAmount));
+}
+
+/**
+ * GET /api/paystack/admin/config
+ * Admin-only: returns masked Paystack status & public key (never raw secret key)
+ */
+paystackRouter.get('/admin/config', (req: Request, res: Response) => {
+  if (!isAdminAuthorized(req)) {
+    return res.status(401).json({ success: false, error: 'Session administrateur requise.' });
+  }
+  return res.status(200).json({
+    success: true,
+    config: getPaystackConfigSummary(getRequestOrigin(req)),
+  });
+});
+
+/**
+ * POST /api/paystack/admin/config
+ * Admin-only: saves Paystack secret/public keys securely on server
+ */
+paystackRouter.post('/admin/config', (req: Request, res: Response) => {
+  if (!isAdminAuthorized(req)) {
+    return res.status(401).json({ success: false, error: 'Session administrateur requise.' });
+  }
+
+  const secretKey = typeof req.body?.secretKey === 'string' ? req.body.secretKey : undefined;
+  const publicKey = typeof req.body?.publicKey === 'string' ? req.body.publicKey : undefined;
+  const clearSecret = Boolean(req.body?.clearSecret);
+
+  const result = savePaystackConfig({ secretKey, publicKey, clearSecret });
+  if (!result.success) {
+    return res.status(400).json({ success: false, error: result.error });
+  }
+
+  return res.status(200).json({
+    success: true,
+    config: getPaystackConfigSummary(getRequestOrigin(req)),
+  });
+});
 
 /**
  * POST /api/paystack/initialize
@@ -30,22 +87,21 @@ export const paystackRouter = Router();
  */
 paystackRouter.post('/initialize', async (req: Request, res: Response) => {
   try {
-    const { 
-      uid, 
+    const {
+      uid,
       paymentType: rawPaymentType,
       targetId: rawTargetId,
-      workId, 
-      workTitle, 
+      workId,
+      workTitle,
       artbookId,
       artbookTitle,
       artistName,
       packId,
-      packName,
       coinsAmount,
-      email, 
-      amount, 
-      currency, 
-      callbackUrl 
+      email,
+      amount,
+      currency,
+      callbackUrl,
     } = req.body;
 
     const paymentType = rawPaymentType || (artbookId ? 'artbook_purchase' : (packId ? 'coin_pack' : 'work_pass'));
@@ -58,18 +114,18 @@ paystackRouter.post('/initialize', async (req: Request, res: Response) => {
       });
     }
 
-    const cleanEmail = (email || '').trim() || `${uid.slice(0, 10)}@reader.ozibd.net`;
-    const numericAmount = Number(amount) || (paymentType === 'work_pass' ? 2000 : 3500);
+    const cleanEmail = (email || '').trim() || `${String(uid).slice(0, 10)}@reader.ozibd.net`;
+    const fallbackAmount = Number(amount) || (paymentType === 'work_pass' ? 2000 : 3500);
+    const numericAmount = resolveAuthoritativePrice(paymentType, String(targetId), fallbackAmount);
     const validCurrency = (currency || 'XOF').toUpperCase();
 
-    // 1. Call Paystack API
     const initResult = await initializePaystackTransaction({
       email: cleanEmail,
       amount: numericAmount,
       currency: validCurrency,
-      uid,
+      uid: String(uid),
       paymentType,
-      targetId,
+      targetId: String(targetId),
       workId,
       workTitle,
       artbookId,
@@ -78,17 +134,17 @@ paystackRouter.post('/initialize', async (req: Request, res: Response) => {
       packId,
       coinsAmount: Number(coinsAmount) || 0,
       callbackUrl,
+      originUrl: getRequestOrigin(req),
     });
 
     if (!initResult.success || !initResult.reference) {
       return res.status(400).json(initResult);
     }
 
-    // 2. Stage pending subscription if work_pass
     if (paymentType === 'work_pass') {
       await createPendingSubscription({
-        uid,
-        workId: targetId,
+        uid: String(uid),
+        workId: String(targetId),
         workTitle,
         amount: numericAmount,
         currency: validCurrency,
@@ -109,26 +165,22 @@ paystackRouter.post('/initialize', async (req: Request, res: Response) => {
 
 /**
  * POST /api/paystack/webhook
- * Secure Paystack Webhook endpoint
  * Validates x-paystack-signature using HMAC SHA512, parses event, and activates purchase
  */
 paystackRouter.post('/webhook', async (req: Request, res: Response) => {
   try {
     const signature = req.headers['x-paystack-signature'] as string;
-    
-    // Pristine raw body buffer from express.json verify hook
-    const rawBody = (req as any).rawBody || (Buffer.isBuffer(req.body) 
-      ? req.body 
+
+    const rawBody = (req as any).rawBody || (Buffer.isBuffer(req.body)
+      ? req.body
       : (typeof req.body === 'string' ? Buffer.from(req.body) : Buffer.from(JSON.stringify(req.body || {}))));
 
-    // 1. Signature Verification
     const isValid = verifyPaystackSignature(rawBody, signature);
     if (!isValid) {
-      console.warn('[paystackRouter] ⚠️ Invalid Paystack Webhook signature received!');
+      console.warn('[paystackRouter] Invalid Paystack Webhook signature received');
       return res.status(401).json({ status: 'error', message: 'Signature Paystack invalide' });
     }
 
-    // 2. Parse event payload
     let eventPayload: any;
     try {
       eventPayload = JSON.parse(rawBody.toString('utf8'));
@@ -137,9 +189,7 @@ paystackRouter.post('/webhook', async (req: Request, res: Response) => {
     }
 
     const eventName = eventPayload?.event;
-    console.log(`[paystackRouter] 🔔 Paystack Webhook received event: "${eventName}"`);
 
-    // 3. Process charge.success
     if (eventName === 'charge.success') {
       const data = eventPayload.data;
       const metadata = data?.metadata || {};
@@ -147,7 +197,7 @@ paystackRouter.post('/webhook', async (req: Request, res: Response) => {
       const uid = metadata.uid;
       const paymentType = metadata.paymentType || (metadata.artbookId ? 'artbook_purchase' : (metadata.packId ? 'coin_pack' : 'work_pass'));
       const reference = data?.reference;
-      const rawAmount = data?.amount || 200000;
+      const rawAmount = data?.amount || 0;
       const amount = Math.round(rawAmount / 100);
       const currency = data?.currency || 'XOF';
       const customerEmail = data?.customer?.email || metadata.email || '';
@@ -165,7 +215,6 @@ paystackRouter.post('/webhook', async (req: Request, res: Response) => {
             currency,
             customerEmail,
           });
-          console.log(`[paystackRouter] 🎨 Webhook activated Artbook "${artbookId}" for user "${uid}"`);
         }
       } else if (paymentType === 'coin_pack') {
         const packId = metadata.packId || metadata.targetId;
@@ -180,13 +229,11 @@ paystackRouter.post('/webhook', async (req: Request, res: Response) => {
             currency,
             customerEmail,
           });
-          console.log(`[paystackRouter] 🪙 Webhook credited coins pack "${packId}" for user "${uid}"`);
         }
       } else {
-        // Default: work_pass (Pass 30 jours)
         const workId = metadata.workId || metadata.targetId;
         if (uid && workId) {
-          const activeSub = await activateSubscription({
+          await activateSubscription({
             paystackReference: reference || `ref_${Date.now()}`,
             uid,
             workId,
@@ -195,12 +242,10 @@ paystackRouter.post('/webhook', async (req: Request, res: Response) => {
             customerEmail,
             workTitle: metadata.workTitle || metadata.title,
           });
-          console.log(`[paystackRouter] ✅ Webhook activated Subscription for "${uid}" on work "${workId}". Expires: ${activeSub.expirationDate}`);
         }
       }
     }
 
-    // Always acknowledge 200 OK to Paystack
     return res.status(200).json({ status: 'success' });
   } catch (err: any) {
     console.error('[paystackRouter] Webhook handling error:', err);
@@ -210,7 +255,7 @@ paystackRouter.post('/webhook', async (req: Request, res: Response) => {
 
 /**
  * GET /api/paystack/verify/:reference
- * Verifies a transaction reference after client redirect and activates purchase
+ * Verifies a transaction reference strictly against Paystack API and activates purchase
  */
 paystackRouter.get('/verify/:reference', async (req: Request, res: Response) => {
   try {
@@ -225,74 +270,93 @@ paystackRouter.get('/verify/:reference', async (req: Request, res: Response) => 
 
     const verifyResult = await verifyPaystackTransaction(reference);
 
-    const uid = verifyResult.uid || queryUid;
-    const paymentType = verifyResult.paymentType || queryType || (reference.includes('art') ? 'artbook_purchase' : (reference.includes('coin') ? 'coin_pack' : 'work_pass'));
-    const targetId = verifyResult.targetId || queryTarget || verifyResult.workId || verifyResult.artbookId || verifyResult.packId;
-
-    if (verifyResult.success && uid && targetId) {
-      if (paymentType === 'artbook_purchase') {
-        const purchase = await activateArtbookPurchase({
-          paystackReference: reference,
-          uid,
-          artbookId: targetId,
-          artbookTitle: verifyResult.artbookTitle,
-          artistName: verifyResult.artistName,
-          amount: verifyResult.amount || 3500,
-          currency: verifyResult.currency || 'XOF',
-          customerEmail: verifyResult.customerEmail || '',
-        });
-        return res.status(200).json({
-          success: true,
-          verified: true,
-          paymentType: 'artbook_purchase',
-          purchase,
-          message: 'Artbook débloqué avec succès ! Téléchargement et galerie HD disponibles.'
-        });
-      } else if (paymentType === 'coin_pack') {
-        const coinTx = await activateCoinPackPurchase({
-          paystackReference: reference,
-          uid,
-          packId: targetId,
-          packName: verifyResult.workTitle,
-          coinsAmount: verifyResult.coinsAmount || 50,
-          amount: verifyResult.amount || 1000,
-          currency: verifyResult.currency || 'XOF',
-          customerEmail: verifyResult.customerEmail || '',
-        });
-        return res.status(200).json({
-          success: true,
-          verified: true,
-          paymentType: 'coin_pack',
-          coinTx,
-          message: 'Pack de Coins crédité avec succès !'
-        });
-      } else {
-        const activeSub = await activateSubscription({
-          paystackReference: reference,
-          uid,
-          workId: targetId,
-          amount: verifyResult.amount || 2000,
-          currency: verifyResult.currency || 'XOF',
-          customerEmail: verifyResult.customerEmail || '',
-          workTitle: verifyResult.workTitle || '',
-        });
-
-        return res.status(200).json({
-          success: true,
-          verified: true,
-          paymentType: 'work_pass',
-          subscription: activeSub,
-          message: 'Abonnement 30 jours confirmé et actif !',
-        });
-      }
+    if (!verifyResult.success) {
+      return res.status(200).json({
+        success: false,
+        verified: false,
+        status: verifyResult.status,
+        message: verifyResult.status === 'unconfigured'
+          ? 'Passerelle Paystack non configurée.'
+          : 'Paiement non encore validé ou en attente.',
+      });
     }
 
-    return res.status(200).json({
-      success: verifyResult.success,
-      verified: verifyResult.status === 'success',
-      status: verifyResult.status,
-      message: verifyResult.success ? 'Paiement vérifié avec succès' : 'Paiement non finalisé ou en attente',
-    });
+    const uid = verifyResult.uid || queryUid;
+    const paymentType = verifyResult.paymentType || queryType;
+    const targetId = verifyResult.targetId || queryTarget || verifyResult.workId || verifyResult.artbookId || verifyResult.packId;
+
+    if (!uid || !targetId || !paymentType) {
+      return res.status(400).json({
+        success: false,
+        verified: false,
+        message: 'Métadonnées de transaction incomplètes.',
+      });
+    }
+
+    const expectedPrice = resolveAuthoritativePrice(paymentType, targetId, verifyResult.amount || 0);
+    if ((verifyResult.amount || 0) < expectedPrice) {
+      return res.status(400).json({
+        success: false,
+        verified: false,
+        message: 'Montant réglé insuffisant pour cet article.',
+      });
+    }
+
+    if (paymentType === 'artbook_purchase') {
+      const purchase = await activateArtbookPurchase({
+        paystackReference: reference,
+        uid,
+        artbookId: targetId,
+        artbookTitle: verifyResult.artbookTitle,
+        artistName: verifyResult.artistName,
+        amount: verifyResult.amount || expectedPrice,
+        currency: verifyResult.currency || 'XOF',
+        customerEmail: verifyResult.customerEmail || '',
+      });
+      return res.status(200).json({
+        success: true,
+        verified: true,
+        paymentType: 'artbook_purchase',
+        purchase,
+        message: 'Artbook débloqué avec succès !',
+      });
+    } else if (paymentType === 'coin_pack') {
+      const coinTx = await activateCoinPackPurchase({
+        paystackReference: reference,
+        uid,
+        packId: targetId,
+        packName: verifyResult.workTitle,
+        coinsAmount: verifyResult.coinsAmount || 50,
+        amount: verifyResult.amount || 1000,
+        currency: verifyResult.currency || 'XOF',
+        customerEmail: verifyResult.customerEmail || '',
+      });
+      return res.status(200).json({
+        success: true,
+        verified: true,
+        paymentType: 'coin_pack',
+        coinTx,
+        message: 'Pack de Coins crédité avec succès !',
+      });
+    } else {
+      const activeSub = await activateSubscription({
+        paystackReference: reference,
+        uid,
+        workId: targetId,
+        amount: verifyResult.amount || 2000,
+        currency: verifyResult.currency || 'XOF',
+        customerEmail: verifyResult.customerEmail || '',
+        workTitle: verifyResult.workTitle || '',
+      });
+
+      return res.status(200).json({
+        success: true,
+        verified: true,
+        paymentType: 'work_pass',
+        subscription: activeSub,
+        message: 'Abonnement 30 jours confirmé et actif !',
+      });
+    }
   } catch (err: any) {
     console.error('[paystackRouter] Error in /verify/:reference:', err);
     return res.status(500).json({ success: false, message: err.message });
@@ -301,17 +365,22 @@ paystackRouter.get('/verify/:reference', async (req: Request, res: Response) => 
 
 /**
  * GET /api/artbooks/check-access & /api/paystack/artbooks/check-access
- * Authoritative Server Check: hasArtbookAccess(uid, artbookId)
  */
 paystackRouter.get(['/artbooks/check-access', '/check-access'], async (req: Request, res: Response) => {
   try {
     const uid = (req.query.uid as string) || (req.headers['x-reader-uid'] as string);
     const artbookId = req.query.artbookId as string;
+    const workId = req.query.workId as string;
+
+    if (workId && uid) {
+      const workRes = await hasValidAccess(uid, workId);
+      return res.status(200).json(workRes);
+    }
 
     if (!uid || !artbookId) {
       return res.status(400).json({
         hasAccess: false,
-        message: 'Paramètres uid et artbookId requis.'
+        message: 'Paramètres uid et artbookId requis.',
       });
     }
 
@@ -325,7 +394,6 @@ paystackRouter.get(['/artbooks/check-access', '/check-access'], async (req: Requ
 
 /**
  * GET /api/artbooks/user-purchases/:uid & /api/paystack/artbooks/user-purchases/:uid
- * Returns all paid artbooks for a reader
  */
 paystackRouter.get(['/artbooks/user-purchases/:uid', '/user-purchases/:uid'], async (req: Request, res: Response) => {
   try {
@@ -341,7 +409,6 @@ paystackRouter.get(['/artbooks/user-purchases/:uid', '/user-purchases/:uid'], as
 
 /**
  * GET /api/premium/user-subscriptions/:uid
- * Returns all active & past subscriptions for a reader
  */
 paystackRouter.get('/user-subscriptions/:uid', async (req: Request, res: Response) => {
   try {
@@ -354,7 +421,7 @@ paystackRouter.get('/user-subscriptions/:uid', async (req: Request, res: Respons
     return res.status(200).json({
       success: true,
       subscriptions,
-      serverTime: new Date().toISOString()
+      serverTime: new Date().toISOString(),
     });
   } catch (err: any) {
     console.error('[paystackRouter] Error in /user-subscriptions:', err);
@@ -364,9 +431,13 @@ paystackRouter.get('/user-subscriptions/:uid', async (req: Request, res: Respons
 
 /**
  * POST /api/paystack/simulate-success
- * Development sandbox helper to simulate a successful 30-day subscription activation
+ * Admin-only sandbox helper to test a 30-day subscription entry in dashboard
  */
 paystackRouter.post('/simulate-success', async (req: Request, res: Response) => {
+  if (!isAdminAuthorized(req)) {
+    return res.status(401).json({ success: false, error: 'Action réservée à l\'administrateur connecté.' });
+  }
+
   try {
     const { uid, workId, workTitle, amount } = req.body;
     if (!uid || !workId) {
@@ -380,13 +451,13 @@ paystackRouter.post('/simulate-success', async (req: Request, res: Response) => 
       workId,
       amount: Number(amount) || 2000,
       currency: 'XOF',
-      workTitle: workTitle || 'Œuvre OZI'
+      workTitle: workTitle || 'Œuvre OZI',
     });
 
     return res.status(200).json({
       success: true,
       subscription: sub,
-      message: 'Abonnement 30 jours activé en simulation !'
+      message: 'Abonnement test activé côté admin.',
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -395,16 +466,19 @@ paystackRouter.post('/simulate-success', async (req: Request, res: Response) => 
 
 /**
  * GET /api/paystack/admin/subscriptions
- * Back-Office Admin: returns all subscription records across the platform
+ * Admin-only: returns all subscription records across the platform
  */
-paystackRouter.get('/admin/subscriptions', async (_req: Request, res: Response) => {
+paystackRouter.get('/admin/subscriptions', async (req: Request, res: Response) => {
+  if (!isAdminAuthorized(req)) {
+    return res.status(401).json({ success: false, error: 'Session administrateur requise.' });
+  }
   try {
     const subscriptions = await getAllSubscriptions();
     return res.status(200).json({
       success: true,
       subscriptions,
       count: subscriptions.length,
-      serverTime: new Date().toISOString()
+      serverTime: new Date().toISOString(),
     });
   } catch (err: any) {
     console.error('[paystackRouter] Error in /admin/subscriptions:', err);
@@ -414,19 +488,21 @@ paystackRouter.get('/admin/subscriptions', async (_req: Request, res: Response) 
 
 /**
  * GET /api/paystack/admin/stats
- * Back-Office Admin: returns aggregated financial stats (revenue, active/expired, by work, by month)
+ * Admin-only: returns aggregated financial stats
  */
-paystackRouter.get('/admin/stats', async (_req: Request, res: Response) => {
+paystackRouter.get('/admin/stats', async (req: Request, res: Response) => {
+  if (!isAdminAuthorized(req)) {
+    return res.status(401).json({ success: false, error: 'Session administrateur requise.' });
+  }
   try {
     const stats = await getSubscriptionStats();
     return res.status(200).json({
       success: true,
       stats,
-      serverTime: new Date().toISOString()
+      serverTime: new Date().toISOString(),
     });
   } catch (err: any) {
     console.error('[paystackRouter] Error in /admin/stats:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
-

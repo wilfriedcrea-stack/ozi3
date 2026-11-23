@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DATA_DIR = path.resolve(__dirname, '..', 'data');
+export const DATA_DIR = path.resolve(__dirname, '..', 'data');
 const DATA_FILE = path.resolve(DATA_DIR, 'studio-data.json');
 const AUTH_FILE = path.resolve(DATA_DIR, 'studio-auth.json');
 const SECRET_FILE = path.resolve(DATA_DIR, 'studio-secret.key');
@@ -55,13 +55,13 @@ const ALLOWED_KEYS = [
   'appVersion',
 ] as const;
 
-function ensureDataDir(): void {
+export function ensureDataDir(): void {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
 }
 
-function safeResolveInDataDir(targetPath: string): string {
+export function safeResolveInDataDir(targetPath: string): string {
   const resolved = path.resolve(targetPath);
   if (!resolved.startsWith(DATA_DIR + path.sep)) {
     throw new Error('Invalid storage path boundary');
@@ -182,7 +182,7 @@ function isSameOriginValid(req: Request): boolean {
   }
 }
 
-function isAdminAuthorized(req: Request): boolean {
+export function isAdminAuthorized(req: Request): boolean {
   const authHeader = String(req.headers.authorization || '');
   if (authHeader.toLowerCase().startsWith('bearer ')) {
     const bearerToken = authHeader.slice(7).trim();
@@ -198,7 +198,7 @@ function isAdminAuthorized(req: Request): boolean {
   return false;
 }
 
-function readStudioDataFile(): Record<string, unknown> {
+export function readStudioDataFile(): Record<string, unknown> {
   try {
     const file = safeResolveInDataDir(DATA_FILE);
     if (fs.existsSync(file)) {

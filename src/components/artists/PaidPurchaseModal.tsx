@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   CreditCard, 
@@ -11,12 +11,13 @@ import {
   RefreshCw,
   Sparkles,
   ArrowRight,
-  Receipt
+  Receipt,
+  ExternalLink
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Artbook } from '../../types';
 import { useData } from '../../context/DataContext';
-import { initiateArtbookPurchase } from '../../services/paystackClientService';
+import { initiateArtbookPurchase, verifyPaystackPayment } from '../../services/paystackClientService';
 
 interface PaidPurchaseModalProps {
   artbook: Artbook;
@@ -58,22 +59,38 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
   const [phone, setPhone] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [transactionRef, setTransactionRef] = useState('');
+  const [paymentAuthUrl, setPaymentAuthUrl] = useState('');
+  const [checkoutUid, setCheckoutUid] = useState('');
   const [downloadAuthorized, setDownloadAuthorized] = useState(false);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Pre-fill user details if logged in
+  const stopPolling = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  };
+
+  // Pre-fill user details if logged in and clear polling on close/unmount
   useEffect(() => {
     if (isOpen) {
+      stopPolling();
       setStep('details');
       setErrorMsg('');
       setDownloadAuthorized(false);
       setTransactionRef('');
+      setPaymentAuthUrl('');
+      setCheckoutUid('');
       if (readerProfile?.displayName || currentUser?.displayName) {
         setName(readerProfile?.displayName || currentUser?.displayName || '');
       }
       if (currentUser?.email) {
         setEmail(currentUser.email);
       }
+    } else {
+      stopPolling();
     }
+    return () => stopPolling();
   }, [isOpen, currentUser, readerProfile]);
 
   if (!isOpen) return null;
@@ -81,6 +98,7 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
   const handleStartPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+    stopPolling();
 
     if (!name.trim()) {
       setErrorMsg('Veuillez renseigner votre nom complet.');
@@ -92,15 +110,12 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
       return;
     }
     const cleanPhone = phone.trim().replace(/[\s-]/g, '');
-    if (!cleanPhone || cleanPhone.length < 8) {
-      setErrorMsg('Veuillez renseigner un numéro de téléphone valide.');
-      return;
-    }
 
     setStep('processing');
 
     try {
       const uid = currentUser?.uid || `guest_${Date.now()}`;
+      setCheckoutUid(uid);
 
       // 1. Initialisation réelle de la transaction Paystack (Mobile Money / Carte)
       const initResult = await initiateArtbookPurchase({
@@ -121,9 +136,10 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
       }
 
       setTransactionRef(initResult.reference);
+      setPaymentAuthUrl(initResult.authorizationUrl || '');
       const purchaseId = `purchase-${Date.now()}`;
 
-      // 2. Enregistrer l'initiation dans Firestore localement
+      // 2. Enregistrer l'initiation en attente localement
       await recordArtbookPurchase({
         id: purchaseId,
         artbookId: artbook.id,
@@ -144,22 +160,22 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
       // 3. Ouvrir le guichet sécurisé Paystack si URL fournie
       if (initResult.authorizationUrl) {
         try {
-          window.open(initResult.authorizationUrl, '_blank', 'width=540,height=720');
+          window.open(initResult.authorizationUrl, '_blank', 'noopener,noreferrer,width=540,height=720');
         } catch {
-          // If popup is blocked, the user can click the manual button in step processing
+          // Si le navigateur bloque la fenêtre, l'utilisateur clique sur le bouton manuel dans l'étape processing
         }
       }
 
-      // 4. Polling actif de vérification auprès du serveur Paystack
+      // 4. Polling actif de vérification auprès du serveur (Node ou PHP LWS)
       let checkAttempts = 0;
-      const checkInterval = setInterval(async () => {
+      const activeRef = initResult.reference;
+      pollIntervalRef.current = setInterval(async () => {
         checkAttempts++;
         try {
-          const verifyRes = await fetch(`/api/paystack/verify/${encodeURIComponent(initResult.reference!)}?type=artbook_purchase&target=${encodeURIComponent(artbook.id)}&uid=${encodeURIComponent(uid)}`);
-          const verifyData = await verifyRes.json();
+          const verifyData = await verifyPaystackPayment(activeRef, uid, artbook.id, 'artbook_purchase');
 
           if (verifyData.success && (verifyData.verified || verifyData.status === 'success')) {
-            clearInterval(checkInterval);
+            stopPolling();
             setDownloadAuthorized(true);
             setStep('confirmed');
 
@@ -174,7 +190,7 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
               onOpenFormatChoice({
                 userName: name.trim(),
                 userEmail: email.trim().toLowerCase(),
-                transactionRef: initResult.reference || ''
+                transactionRef: activeRef
               });
             }
           }
@@ -184,11 +200,12 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
 
         // Arrêt après 60 tentatives (3 minutes)
         if (checkAttempts >= 60) {
-          clearInterval(checkInterval);
+          stopPolling();
         }
       }, 3000);
 
     } catch (err: any) {
+      stopPolling();
       setStep('failed');
       setErrorMsg(err.message || 'Erreur lors de la communication avec la passerelle Paystack.');
     }
@@ -293,11 +310,10 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
 
                 <div>
                   <label className="block text-xs font-bold text-zinc-300 mb-1">
-                    Numéro Mobile / Compte <span className="text-[#ff8679]">*</span>
+                    Téléphone Mobile (optionnel)
                   </label>
                   <input
                     type="tel"
-                    required
                     value={phone}
                     onChange={e => setPhone(e.target.value)}
                     placeholder="Ex : +225 05 00 00 00 00"
@@ -392,32 +408,46 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
               Nous traitons votre paiement via le guichet sécurisé Paystack. Validez la transaction sur votre téléphone ou carte bancaire.
             </p>
 
-            <div className="px-4 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs font-mono text-zinc-400 mb-4">
+            <div className="px-4 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs font-mono text-zinc-400 mb-5">
               Réf Paystack : {transactionRef || 'Génération...'}
             </div>
 
-            <button
-              type="button"
-              onClick={async () => {
-                if (!transactionRef) return;
-                try {
-                  const uid = currentUser?.uid || '';
-                  const res = await fetch(`/api/paystack/verify/${encodeURIComponent(transactionRef)}?type=artbook_purchase&target=${encodeURIComponent(artbook.id)}&uid=${encodeURIComponent(uid)}`);
-                  const data = await res.json();
-                  if (data.success && (data.verified || data.status === 'success')) {
-                    setDownloadAuthorized(true);
-                    setStep('confirmed');
-                    confetti({ particleCount: 100, spread: 80 });
+            <div className="flex flex-col gap-3 w-full max-w-xs">
+              {paymentAuthUrl && (
+                <a
+                  href={paymentAuthUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-3 rounded-xl bg-gradient-to-r from-[#ff8679] to-[#fb923c] hover:from-[#eb6e60] hover:to-[#ea580c] text-white font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#ff8679]/20 transition-all font-heading"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Ouvrir la page de paiement Paystack</span>
+                </a>
+              )}
+
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!transactionRef) return;
+                  try {
+                    const uid = checkoutUid || currentUser?.uid || '';
+                    const data = await verifyPaystackPayment(transactionRef, uid, artbook.id, 'artbook_purchase');
+                    if (data.success && (data.verified || data.status === 'success')) {
+                      stopPolling();
+                      setDownloadAuthorized(true);
+                      setStep('confirmed');
+                      confetti({ particleCount: 100, spread: 80 });
+                    }
+                  } catch (e) {
+                    console.warn(e);
                   }
-                } catch (e) {
-                  console.warn(e);
-                }
-              }}
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 font-black text-xs flex items-center gap-2 shadow-md transition-all cursor-pointer font-heading"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>J'ai validé sur mon téléphone / Re-vérifier</span>
-            </button>
+                }}
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 font-black text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer font-heading"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>J'ai validé mon paiement / Vérifier</span>
+              </button>
+            </div>
           </div>
         )}
 
