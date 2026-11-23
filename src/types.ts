@@ -455,6 +455,7 @@ export interface Artbook {
   fileSizeFormatted: string;
   downloadUrl?: string;
   pdfDownloadUrl?: string;
+  epubDownloadUrl?: string;
   downloadsCount: number;
   rating?: number;
   createdAt?: string;
@@ -468,7 +469,7 @@ export interface ArtbookDownloadRecord {
   artistName: string;
   userName: string;
   userEmail: string;
-  userPhone: string;
+  userPhone?: string;
   consentedAt: string;
   downloadedAt: string;
   userId?: string;

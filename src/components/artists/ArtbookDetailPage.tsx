@@ -8,7 +8,6 @@ import {
   ChevronRight, 
   Maximize2, 
   X, 
-  FileText, 
   Calendar, 
   Share2, 
   Check, 
@@ -16,15 +15,14 @@ import {
   Star,
   BookOpen,
   CheckCircle2,
-  MessageSquare,
-  Loader2
+  MessageSquare
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { FreeDownloadModal } from './FreeDownloadModal';
 import { PaidPurchaseModal } from './PaidPurchaseModal';
+import { DownloadFormatModal } from './DownloadFormatModal';
 import { ArtbookReviewsSection } from './ArtbookReviewsSection';
 import { checkArtbookAccess } from '../../services/paystackClientService';
-import { generateAndDownloadArtbookPdf } from '../../utils/pdfGenerator';
 import { normalizeImageUrl } from '../../utils/imageUtils';
 
 export const ArtbookDetailPage: React.FC = () => {
@@ -56,6 +54,13 @@ export const ArtbookDetailPage: React.FC = () => {
   const [isZoomModalOpen, setIsZoomModalOpen] = useState<boolean>(false);
   const [isFreeModalOpen, setIsFreeModalOpen] = useState<boolean>(false);
   const [isPaidModalOpen, setIsPaidModalOpen] = useState<boolean>(false);
+  const [isFormatModalOpen, setIsFormatModalOpen] = useState<boolean>(false);
+  const [downloadLead, setDownloadLead] = useState<{
+    userName?: string;
+    userEmail?: string;
+    isPaid?: boolean;
+    transactionRef?: string;
+  }>({});
   const [copiedLink, setCopiedLink] = useState(false);
 
   // Touch gesture support for mobile swiping
@@ -63,7 +68,6 @@ export const ArtbookDetailPage: React.FC = () => {
   const touchEndX = useRef<number | null>(null);
 
   const [hasPurchasedAccess, setHasPurchasedAccess] = useState(false);
-  const [isDownloadingDirect, setIsDownloadingDirect] = useState(false);
   const [reviewStats, setReviewStats] = useState<{
     averageRating: number | null;
     ratedCount: number;
@@ -125,23 +129,13 @@ export const ArtbookDetailPage: React.FC = () => {
       ? currentArtbook.rating
       : null;
 
-  const handleDirectUnlockedDownload = async () => {
-    const directUrl = (currentArtbook.downloadUrl || currentArtbook.pdfDownloadUrl || '').trim();
-    if (directUrl) {
-      window.open(directUrl, '_blank');
-      return;
-    }
-    setIsDownloadingDirect(true);
-    try {
-      await generateAndDownloadArtbookPdf({
-        artbook: currentArtbook,
-        userName: currentUser?.displayName || 'Lecteur OZI',
-        userEmail: currentUser?.email || '',
-        isPaid: true
-      });
-    } finally {
-      setIsDownloadingDirect(false);
-    }
+  const handleDirectUnlockedDownload = () => {
+    setDownloadLead({
+      userName: currentUser?.displayName || 'Lecteur OZI',
+      userEmail: currentUser?.email || '',
+      isPaid: true,
+    });
+    setIsFormatModalOpen(true);
   };
 
   const handlePrevImage = () => {
@@ -322,22 +316,14 @@ export const ArtbookDetailPage: React.FC = () => {
                 {currentArtbook.description}
               </p>
 
-              {/* Specs Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+              {/* Specs Grid (without format info) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
                 <div className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200 text-left">
                   <div className="flex items-center gap-1.5 text-xs text-zinc-600 mb-1">
                     <BookOpen className="w-3.5 h-3.5 text-[#e14f41]" />
                     <span>Pages</span>
                   </div>
                   <div className="text-sm font-bold text-zinc-950 tabular-nums">{currentArtbook.pageCount} pages HD</div>
-                </div>
-
-                <div className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200 text-left">
-                  <div className="flex items-center gap-1.5 text-xs text-zinc-600 mb-1">
-                    <FileText className="w-3.5 h-3.5 text-orange-600" />
-                    <span>Format</span>
-                  </div>
-                  <div className="text-sm font-bold text-zinc-950">PDF ({currentArtbook.fileSizeFormatted})</div>
                 </div>
 
                 <div className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200 text-left">
@@ -375,11 +361,10 @@ export const ArtbookDetailPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleDirectUnlockedDownload}
-                    disabled={isDownloadingDirect}
-                    className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-sm inline-flex items-center gap-2 transition-all cursor-pointer disabled:opacity-60"
+                    className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-sm inline-flex items-center gap-2 transition-all cursor-pointer"
                   >
-                    {isDownloadingDirect ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                    <span>{isDownloadingDirect ? 'Téléchargement en cours...' : 'Télécharger mon Artbook (PDF)'}</span>
+                    <Download className="w-4 h-4" />
+                    <span>Télécharger mon Artbook</span>
                   </button>
                 ) : currentArtbook.isFree ? (
                   <button
@@ -525,11 +510,10 @@ export const ArtbookDetailPage: React.FC = () => {
                   </div>
                   <button
                     onClick={handleDirectUnlockedDownload}
-                    disabled={isDownloadingDirect}
-                    className="w-full py-4 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-base shadow-sm flex items-center justify-center gap-3 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer font-almodobar disabled:opacity-60"
+                    className="w-full py-4 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-base shadow-sm flex items-center justify-center gap-3 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer font-almodobar"
                   >
-                    {isDownloadingDirect ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
-                    <span>{isDownloadingDirect ? 'Téléchargement en cours...' : 'Télécharger à nouveau mon Artbook (PDF)'}</span>
+                    <Download className="w-5 h-5" />
+                    <span>Télécharger à nouveau mon Artbook</span>
                   </button>
                 </div>
               ) : currentArtbook.isFree ? (
@@ -558,7 +542,7 @@ export const ArtbookDetailPage: React.FC = () => {
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
                 <span>
                   {currentArtbook.isFree 
-                    ? 'Aucun paiement requis • Fichier PDF haute définition officiel'
+                    ? 'Aucun paiement requis • Édition haute définition officielle'
                     : 'Paiement sécurisé Wave, Orange, MTN, Moov & Carte • Accès immédiat'}
                 </span>
               </p>
@@ -673,6 +657,10 @@ export const ArtbookDetailPage: React.FC = () => {
         artbook={currentArtbook}
         isOpen={isFreeModalOpen}
         onClose={() => setIsFreeModalOpen(false)}
+        onFormCompleted={({ userName, userEmail }) => {
+          setDownloadLead({ userName, userEmail, isPaid: false });
+          setIsFormatModalOpen(true);
+        }}
       />
 
       {/* PAID PURCHASE MODAL */}
@@ -680,6 +668,21 @@ export const ArtbookDetailPage: React.FC = () => {
         artbook={currentArtbook}
         isOpen={isPaidModalOpen}
         onClose={() => setIsPaidModalOpen(false)}
+        onOpenFormatChoice={({ userName, userEmail, transactionRef }) => {
+          setDownloadLead({ userName, userEmail, isPaid: true, transactionRef });
+          setIsFormatModalOpen(true);
+        }}
+      />
+
+      {/* FORMAT SELECTION MODAL (1. PDF / 2. EPUB) */}
+      <DownloadFormatModal
+        artbook={currentArtbook}
+        isOpen={isFormatModalOpen}
+        onClose={() => setIsFormatModalOpen(false)}
+        userName={downloadLead.userName}
+        userEmail={downloadLead.userEmail}
+        isPaid={downloadLead.isPaid}
+        transactionRef={downloadLead.transactionRef}
       />
     </div>
   );

@@ -361,6 +361,7 @@ export const AdminArtistsManager: React.FC = () => {
     tags: string[];
     fileSizeFormatted: string;
     downloadUrl: string;
+    epubDownloadUrl: string;
     rating: number;
   }>({
     artistId: artists[0]?.id || '',
@@ -383,6 +384,7 @@ export const AdminArtistsManager: React.FC = () => {
     tags: ['Artbook', 'Concept Art'],
     fileSizeFormatted: '45 Mo',
     downloadUrl: '',
+    epubDownloadUrl: '',
     rating: 4.9
   });
 
@@ -535,6 +537,7 @@ export const AdminArtistsManager: React.FC = () => {
       tags: ['Artbook', 'Concept Art'],
       fileSizeFormatted: '45 Mo',
       downloadUrl: '',
+      epubDownloadUrl: '',
       rating: 4.9
     });
     setArtbookSaveError(null);
@@ -567,6 +570,7 @@ export const AdminArtistsManager: React.FC = () => {
       tags: artbook.tags || [],
       fileSizeFormatted: artbook.fileSizeFormatted,
       downloadUrl: artbook.downloadUrl || artbook.pdfDownloadUrl || '',
+      epubDownloadUrl: artbook.epubDownloadUrl || '',
       rating: artbook.rating || 4.9
     });
     setArtbookModalOpen(true);
@@ -588,6 +592,7 @@ export const AdminArtistsManager: React.FC = () => {
     const selectedArtObj = artists.find(a => a.id === artbookForm.artistId);
     const finalArtistName = selectedArtObj?.name || artbookForm.artistName || 'Artiste OZI';
     const cleanDownloadUrl = artbookForm.downloadUrl.trim();
+    const cleanEpubUrl = artbookForm.epubDownloadUrl.trim();
     const cleanAlternateCoverUrl = artbookForm.alternateCoverUrl.trim();
 
     const payload = {
@@ -606,6 +611,7 @@ export const AdminArtistsManager: React.FC = () => {
       fileSizeFormatted: artbookForm.fileSizeFormatted.trim(),
       downloadUrl: cleanDownloadUrl,
       pdfDownloadUrl: cleanDownloadUrl,
+      epubDownloadUrl: cleanEpubUrl,
       rating: Number(artbookForm.rating)
     };
 
@@ -1385,7 +1391,7 @@ export const AdminArtistsManager: React.FC = () => {
                         <td className="p-3 font-semibold text-white">{d.artbookTitle}</td>
                         <td className="p-3">{d.userName}</td>
                         <td className="p-3 text-slate-400">{d.userEmail}</td>
-                        <td className="p-3 font-mono">{d.userPhone}</td>
+                        <td className="p-3 font-mono">{d.userPhone || '—'}</td>
                         <td className="p-3 text-[11px] text-slate-500">{new Date(d.downloadedAt).toLocaleDateString('fr-FR')}</td>
                       </tr>
                     ))}
@@ -2400,19 +2406,19 @@ export const AdminArtistsManager: React.FC = () => {
                   <div className="p-4 rounded-2xl bg-purple-950/40 border border-purple-800/60 text-purple-200 text-xs leading-relaxed flex items-start gap-3">
                     <Sparkles className="w-5 h-5 text-purple-400 shrink-0 mt-0.5" />
                     <div>
-                      <div className="font-bold text-white mb-1">Configuration du Lien de Téléchargement Direct</div>
+                      <div className="font-bold text-white mb-1">Configuration des Liens de Téléchargement (PDF & EPUB)</div>
                       <span>
-                        Ajoutez ici l'URL directe du fichier de l'artbook (PDF haute résolution, lien direct Google Drive, Dropbox, Mega ou hébergement LWS CDN). Lorsque l'utilisateur cliquera sur <strong>« Télécharger »</strong>, il lui sera demandé de remplir son <strong>e-mail et numéro de téléphone</strong>, puis le téléchargement de ce lien sera déclenché automatiquement pour lui.
+                        Les visiteurs choisissent toujours entre les deux formats <strong>1. PDF</strong> et <strong>2. EPUB</strong> après avoir saisi leur nom et leur adresse e-mail. Renseignez vos liens directs (LWS CDN, Google Drive...) ci-dessous ; si un lien est laissé vide, le site génère automatiquement le fichier officiel correspondant.
                       </span>
                     </div>
                   </div>
 
-                  {/* Main Link Input */}
+                  {/* Main PDF Link Input */}
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="text-xs font-bold text-white flex items-center gap-1.5">
                         <LinkIcon className="w-3.5 h-3.5 text-purple-400" />
-                        <span>Lien de l'Artbook (URL de téléchargement direct) :</span>
+                        <span>1. Lien direct PDF (optionnel) :</span>
                       </label>
                       {artbookForm.downloadUrl && (
                         <a
@@ -2432,7 +2438,7 @@ export const AdminArtistsManager: React.FC = () => {
                         type="url"
                         value={artbookForm.downloadUrl}
                         onChange={e => setArtbookForm({ ...artbookForm, downloadUrl: e.target.value })}
-                        placeholder="https://... (ex: https://monsite.com/mon-artbook.pdf ou lien Google Drive)"
+                        placeholder="https://... (ex: https://ozibd.net/artbooks/mon-artbook.pdf)"
                         className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-purple-500 text-sm text-white focus:outline-none font-mono"
                       />
                       {artbookForm.downloadUrl && (
@@ -2440,7 +2446,48 @@ export const AdminArtistsManager: React.FC = () => {
                           type="button"
                           onClick={() => setArtbookForm({ ...artbookForm, downloadUrl: '' })}
                           className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white"
-                          title="Effacer le lien"
+                          title="Effacer le lien PDF"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Optional EPUB Link Input */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <BookOpen className="w-3.5 h-3.5 text-sky-400" />
+                        <span>2. Lien direct EPUB (optionnel) :</span>
+                      </label>
+                      {artbookForm.epubDownloadUrl && (
+                        <a
+                          href={artbookForm.epubDownloadUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] font-bold text-sky-400 hover:text-sky-300 flex items-center gap-1 underline"
+                        >
+                          <span>Tester le lien EPUB</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="url"
+                        value={artbookForm.epubDownloadUrl}
+                        onChange={e => setArtbookForm({ ...artbookForm, epubDownloadUrl: e.target.value })}
+                        placeholder="https://... (laisser vide pour générer automatiquement le fichier EPUB)"
+                        className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-sky-500 text-sm text-white focus:outline-none font-mono"
+                      />
+                      {artbookForm.epubDownloadUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setArtbookForm({ ...artbookForm, epubDownloadUrl: '' })}
+                          className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white"
+                          title="Effacer le lien EPUB"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -2479,18 +2526,18 @@ export const AdminArtistsManager: React.FC = () => {
                   </div>
 
                   {/* Status Box */}
-                  {artbookForm.downloadUrl ? (
+                  {(artbookForm.downloadUrl || artbookForm.epubDownloadUrl) ? (
                     <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-emerald-300 text-xs flex items-center gap-2.5">
                       <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
                       <div>
-                        <span className="font-bold">Lien configuré avec succès !</span> Les utilisateurs recevront ce fichier immédiatement après saisie de leur e-mail et numéro de téléphone.
+                        <span className="font-bold">Lien(s) configuré(s) !</span> Après avoir renseigné son nom et son e-mail, l'internaute pourra choisir entre <strong>1. PDF</strong> et <strong>2. EPUB</strong> pour lancer immédiatement le téléchargement.
                       </div>
                     </div>
                   ) : (
                     <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-800/60 text-amber-300 text-xs flex items-center gap-2.5">
                       <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
                       <div>
-                        <span className="font-bold">Aucun lien direct externe n'est renseigné.</span> Le site générera automatiquement un PDF interactif officiel par défaut.
+                        <span className="font-bold">Aucun lien externe renseigné.</span> Le site proposera tout de même <strong>1. PDF</strong> et <strong>2. EPUB</strong> et générera automatiquement les deux formats officiels.
                       </div>
                     </div>
                   )}

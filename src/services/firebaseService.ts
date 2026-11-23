@@ -1372,6 +1372,7 @@ export async function syncArtbookToFirestoreDetailed(databaseInstance: Firestore
       tags: Array.isArray(artbook.tags) ? artbook.tags : [],
       downloadUrl: artbook.downloadUrl ?? '',
       pdfDownloadUrl: artbook.pdfDownloadUrl ?? '',
+      epubDownloadUrl: artbook.epubDownloadUrl ?? '',
       updatedAt: new Date().toISOString()
     });
     await setDoc(ref, cleaned, { merge: true });
@@ -1576,6 +1577,7 @@ export async function syncAllArtbooksToFirestore(
           tags: Array.isArray(artbook.tags) ? artbook.tags : [],
           downloadUrl: artbook.downloadUrl ?? '',
           pdfDownloadUrl: artbook.pdfDownloadUrl ?? '',
+          epubDownloadUrl: artbook.epubDownloadUrl ?? '',
           updatedAt: new Date().toISOString()
         });
         await setDoc(doc(databaseInstance, 'artbooks', artbook.id), cleaned, { merge: true });

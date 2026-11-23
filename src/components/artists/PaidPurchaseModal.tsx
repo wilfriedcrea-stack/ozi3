@@ -7,7 +7,6 @@ import {
   AlertCircle, 
   Download, 
   Lock, 
-  Loader2, 
   Smartphone, 
   RefreshCw,
   Sparkles,
@@ -17,13 +16,13 @@ import {
 import confetti from 'canvas-confetti';
 import { Artbook } from '../../types';
 import { useData } from '../../context/DataContext';
-import { generateAndDownloadArtbookPdf } from '../../utils/pdfGenerator';
-import { initiateArtbookPurchase, checkArtbookAccess } from '../../services/paystackClientService';
+import { initiateArtbookPurchase } from '../../services/paystackClientService';
 
 interface PaidPurchaseModalProps {
   artbook: Artbook;
   isOpen: boolean;
   onClose: () => void;
+  onOpenFormatChoice?: (info: { userName: string; userEmail: string; transactionRef: string }) => void;
 }
 
 type CheckoutStep = 'details' | 'processing' | 'confirmed' | 'failed';
@@ -47,9 +46,10 @@ const PAYMENT_PROVIDERS: PaymentProviderOption[] = [
 export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
   artbook,
   isOpen,
-  onClose
+  onClose,
+  onOpenFormatChoice
 }) => {
-  const { currentUser, readerProfile, recordArtbookPurchase, verifyArtbookPurchase } = useData();
+  const { currentUser, readerProfile, recordArtbookPurchase } = useData();
 
   const [step, setStep] = useState<CheckoutStep>('details');
   const [selectedProvider, setSelectedProvider] = useState<string>('wave');
@@ -58,7 +58,6 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
   const [phone, setPhone] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [transactionRef, setTransactionRef] = useState('');
-  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [downloadAuthorized, setDownloadAuthorized] = useState(false);
 
   // Pre-fill user details if logged in
@@ -170,28 +169,12 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
               origin: { y: 0.6 }
             });
 
-            // Déclenchement automatique du téléchargement
-            const directUrl = (artbook.downloadUrl || artbook.pdfDownloadUrl || '').trim();
-            if (directUrl) {
-              try {
-                const dlAnchor = document.createElement('a');
-                dlAnchor.href = directUrl;
-                dlAnchor.target = '_blank';
-                dlAnchor.rel = 'noopener noreferrer';
-                dlAnchor.download = `${artbook.title.replace(/[^a-zA-Z0-9_-]/g, '_')}_Artbook.pdf`;
-                document.body.appendChild(dlAnchor);
-                dlAnchor.click();
-                document.body.removeChild(dlAnchor);
-              } catch {
-                window.open(directUrl, '_blank');
-              }
-            } else {
-              generateAndDownloadArtbookPdf({
-                artbook,
+            if (onOpenFormatChoice) {
+              onClose();
+              onOpenFormatChoice({
                 userName: name.trim(),
                 userEmail: email.trim().toLowerCase(),
-                isPaid: true,
-                transactionRef: initResult.reference
+                transactionRef: initResult.reference || ''
               });
             }
           }
@@ -211,35 +194,15 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
     }
   };
 
-  const handleDownloadPurchasedPdf = async () => {
+  const handleOpenFormatPicker = () => {
     if (!downloadAuthorized) return;
-    const directUrl = (artbook.downloadUrl || artbook.pdfDownloadUrl || '').trim();
-    if (directUrl) {
-      try {
-        const dlAnchor = document.createElement('a');
-        dlAnchor.href = directUrl;
-        dlAnchor.target = '_blank';
-        dlAnchor.rel = 'noopener noreferrer';
-        dlAnchor.download = `${artbook.title.replace(/[^a-zA-Z0-9_-]/g, '_')}_Artbook.pdf`;
-        document.body.appendChild(dlAnchor);
-        dlAnchor.click();
-        document.body.removeChild(dlAnchor);
-      } catch (e) {
-        window.open(directUrl, '_blank');
-      }
-      return;
-    }
-    setIsDownloadingPdf(true);
-    try {
-      await generateAndDownloadArtbookPdf({
-        artbook,
+    onClose();
+    if (onOpenFormatChoice) {
+      onOpenFormatChoice({
         userName: name.trim(),
         userEmail: email.trim().toLowerCase(),
-        isPaid: true,
         transactionRef
       });
-    } finally {
-      setIsDownloadingPdf(false);
     }
   };
 
@@ -293,7 +256,7 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
                 <div className="min-w-0">
                   <div className="text-sm font-bold text-white truncate">{artbook.title}</div>
                   <div className="text-xs text-zinc-400 truncate">Par {artbook.artistName}</div>
-                  <div className="text-[11px] text-zinc-400 mt-0.5">Format PDF Haute Définition ({artbook.pageCount} p.)</div>
+                  <div className="text-[11px] text-zinc-400 mt-0.5">Édition Haute Définition ({artbook.pageCount} p.)</div>
                 </div>
               </div>
 
@@ -345,7 +308,7 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
 
               <div>
                 <label className="block text-xs font-bold text-zinc-300 mb-1">
-                  Adresse e-mail (pour réception de facture & PDF) <span className="text-[#ff8679]">*</span>
+                  Adresse e-mail (pour réception de facture & accès) <span className="text-[#ff8679]">*</span>
                 </label>
                 <input
                   type="email"
@@ -498,12 +461,11 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
             <div className="flex flex-col sm:flex-row gap-3 w-full">
               <button
                 type="button"
-                onClick={handleDownloadPurchasedPdf}
-                disabled={isDownloadingPdf}
+                onClick={handleOpenFormatPicker}
                 className="flex-1 py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
               >
-                {isDownloadingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                <span>{isDownloadingPdf ? 'Téléchargement en cours...' : 'Télécharger mon Artbook (PDF)'}</span>
+                <Download className="w-4 h-4" />
+                <span>Télécharger mon Artbook</span>
               </button>
 
               <button
