@@ -898,7 +898,7 @@ export const INITIAL_ANALYTICS: AnalyticsOverview = {
   totalReads: 1082500,
   totalUsers: 54320,
   apkDownloads: 52400,
-  creatorEarningsCfa: 38450000,
+  creatorEarningsCfa: 0,
   seriesCount: 18,
   chaptersPublished: 246,
   activeReadersToday: 4890,
@@ -921,15 +921,7 @@ export const INITIAL_ANALYTICS: AnalyticsOverview = {
     { date: '27 Août', newUsers: 1240, apkDownloads: 1450 },
     { date: '28 Août', newUsers: 1680, apkDownloads: 1920 }
   ],
-  revenueHistory: [
-    { date: '22 Août', revenueXof: 850000, coinsBought: 170000 },
-    { date: '23 Août', revenueXof: 1120000, coinsBought: 224000 },
-    { date: '24 Août', revenueXof: 1450000, coinsBought: 290000 },
-    { date: '25 Août', revenueXof: 1890000, coinsBought: 378000 },
-    { date: '26 Août', revenueXof: 2340000, coinsBought: 468000 },
-    { date: '27 Août', revenueXof: 2980000, coinsBought: 596000 },
-    { date: '28 Août', revenueXof: 3620000, coinsBought: 724000 }
-  ]
+  revenueHistory: []
 };
 
 export const DEFAULT_ADMIN_USER: AdminUser = {
@@ -976,57 +968,7 @@ export const INITIAL_USERS: import('../types').UserAccount[] = [
   }
 ];
 
-export const INITIAL_COIN_TRANSACTIONS: import('../types').CoinTransaction[] = [
-  {
-    id: 'tx-001',
-    userId: 'usr-005',
-    userName: 'Ibrahim Diop',
-    userEmail: 'ibrahim.reader@gmail.com',
-    type: 'pack_purchase',
-    coins: 330,
-    amountXof: 1500,
-    description: 'Achat Pack Aventure (300 + 30 Coins bonus) via Wave',
-    timestamp: '2026-08-28T10:45:00Z',
-    status: 'completed'
-  },
-  {
-    id: 'tx-002',
-    userId: 'usr-005',
-    userName: 'Ibrahim Diop',
-    userEmail: 'ibrahim.reader@gmail.com',
-    type: 'chapter_unlock',
-    coins: -15,
-    seriesTitle: 'La Légende de Kemet',
-    chapterNumber: 4,
-    description: 'Déblocage du Chapitre 4 : Le Temple des Sables',
-    timestamp: '2026-08-28T10:48:00Z',
-    status: 'completed'
-  },
-  {
-    id: 'tx-003',
-    userId: 'usr-002',
-    userName: 'Kofi Mensah',
-    userEmail: 'kofi.mensah@studio-kemet.com',
-    type: 'creator_payout',
-    coins: -245000,
-    amountXof: 857500,
-    seriesTitle: 'La Légende de Kemet',
-    description: 'Versement des revenus créateurs Août 2026 (Part 70%)',
-    timestamp: '2026-08-28T09:30:00Z',
-    status: 'pending'
-  },
-  {
-    id: 'tx-004',
-    userId: 'usr-004',
-    userName: 'Fatima Touré',
-    userEmail: 'fatima.mod@ozi.africa',
-    type: 'admin_credit',
-    coins: 500,
-    description: 'Attribution bonus de modération par Super Admin',
-    timestamp: '2026-08-27T16:00:00Z',
-    status: 'completed'
-  }
-];
+export const INITIAL_COIN_TRANSACTIONS: import('../types').CoinTransaction[] = [];
 
 export const INITIAL_ADS: import('../types').AdBanner[] = [
   {
@@ -1123,8 +1065,8 @@ export const INITIAL_MONETIZATION: MonetizationSettings = {
   vipMonthlyPriceXof: 2900,
   freeChaptersThreshold: 3,
   defaultPaidChapterCoins: 15,
-  totalPlatformRevenueXof: 54900000,
-  totalPaidToCreatorsXof: 38450000,
+  totalPlatformRevenueXof: 0,
+  totalPaidToCreatorsXof: 0,
   supportedPaymentGateways: [
     {
       id: 'gateway-wave',
@@ -1209,70 +1151,7 @@ export const INITIAL_MONETIZATION: MonetizationSettings = {
   ]
 };
 
-export const INITIAL_CREATOR_PAYOUTS: CreatorPayout[] = [
-  {
-    id: 'payout-101',
-    creatorId: 'kofi-mensah',
-    creatorName: 'Kofi Mensah',
-    creatorEmail: 'kofi.mensah@studio-kemet.com',
-    seriesTitle: 'La Légende de Kemet',
-    period: 'Août 2026',
-    totalReads: 84200,
-    coinsEarned: 245000,
-    amountXof: 857500,
-    status: 'pending',
-    paymentMethod: 'Wave Mobile Money (+225 07 48 99 12 00)',
-    paymentAccount: '+2250748991200',
-    requestedAt: '2026-08-25T10:30:00Z'
-  },
-  {
-    id: 'payout-102',
-    creatorId: 'yannick-bamba',
-    creatorName: 'Yannick Bamba',
-    creatorEmail: 'yannick.bamba@neo-abj.ci',
-    seriesTitle: 'Neo-Abidjan 2088',
-    period: 'Août 2026',
-    totalReads: 61000,
-    coinsEarned: 182000,
-    amountXof: 637000,
-    status: 'processing',
-    paymentMethod: 'Orange Money CI (+225 07 08 45 11 22)',
-    paymentAccount: '+2250708451122',
-    requestedAt: '2026-08-24T14:15:00Z'
-  },
-  {
-    id: 'payout-103',
-    creatorId: 'esther-makosso',
-    creatorName: 'Esther Makosso',
-    creatorEmail: 'esther.makosso@mamiwata.cg',
-    seriesTitle: 'Reine Mami Wata',
-    period: 'Juillet 2026',
-    totalReads: 49800,
-    coinsEarned: 142000,
-    amountXof: 497000,
-    status: 'paid',
-    paymentMethod: 'MTN Mobile Money (+242 06 512 88 90)',
-    paymentAccount: '+242065128890',
-    requestedAt: '2026-08-01T09:00:00Z',
-    processedAt: '2026-08-03T16:20:00Z'
-  },
-  {
-    id: 'payout-104',
-    creatorId: 'mamadou-sy',
-    creatorName: 'Mamadou Sy',
-    creatorEmail: 'mamadou.sy@baobab-art.sn',
-    seriesTitle: 'Chroniques du Baobab',
-    period: 'Juillet 2026',
-    totalReads: 32000,
-    coinsEarned: 95000,
-    amountXof: 332500,
-    status: 'paid',
-    paymentMethod: 'Wave Sénégal (+221 77 645 32 10)',
-    paymentAccount: '+221776453210',
-    requestedAt: '2026-08-02T11:45:00Z',
-    processedAt: '2026-08-03T17:00:00Z'
-  }
-];
+export const INITIAL_CREATOR_PAYOUTS: CreatorPayout[] = [];
 
 export const INITIAL_REPORTED_COMMENTS: ReportedComment[] = [
   {

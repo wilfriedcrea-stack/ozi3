@@ -1629,7 +1629,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [analytics, setAnalytics] = useState<AnalyticsOverview>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.ANALYTICS);
-      return saved ? JSON.parse(saved) : INITIAL_ANALYTICS;
+      if (saved) {
+        const parsed: AnalyticsOverview = JSON.parse(saved);
+        if (parsed.creatorEarningsCfa === 38450000) {
+          return { ...parsed, creatorEarningsCfa: 0, revenueHistory: [] };
+        }
+        return parsed;
+      }
+      return INITIAL_ANALYTICS;
     } catch {
       return INITIAL_ANALYTICS;
     }
@@ -1804,7 +1811,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [monetization, setMonetization] = useState<MonetizationSettings>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.MONETIZATION);
-      return saved ? JSON.parse(saved) : INITIAL_MONETIZATION;
+      if (saved) {
+        const parsed: MonetizationSettings = JSON.parse(saved);
+        return {
+          ...parsed,
+          totalPlatformRevenueXof: parsed.totalPlatformRevenueXof === 54900000 ? 0 : (parsed.totalPlatformRevenueXof || 0),
+          totalPaidToCreatorsXof: parsed.totalPaidToCreatorsXof === 38450000 ? 0 : (parsed.totalPaidToCreatorsXof || 0),
+        };
+      }
+      return INITIAL_MONETIZATION;
     } catch {
       return INITIAL_MONETIZATION;
     }
@@ -1815,7 +1830,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [creatorPayouts, setCreatorPayouts] = useState<CreatorPayout[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.PAYOUTS);
-      return saved ? JSON.parse(saved) : INITIAL_CREATOR_PAYOUTS;
+      if (saved) {
+        const parsed: CreatorPayout[] = JSON.parse(saved);
+        const mockIds = new Set(['payout-101', 'payout-102', 'payout-103', 'payout-104']);
+        return parsed.filter(p => !mockIds.has(p.id));
+      }
+      return INITIAL_CREATOR_PAYOUTS;
     } catch {
       return INITIAL_CREATOR_PAYOUTS;
     }
@@ -1858,7 +1878,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [coinTransactions, setCoinTransactions] = useState<CoinTransaction[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
-      return saved ? JSON.parse(saved) : INITIAL_COIN_TRANSACTIONS;
+      if (saved) {
+        const parsed: CoinTransaction[] = JSON.parse(saved);
+        const mockTxIds = new Set(['tx-001', 'tx-002', 'tx-003', 'tx-004']);
+        return parsed.filter(t => !mockTxIds.has(t.id));
+      }
+      return INITIAL_COIN_TRANSACTIONS;
     } catch {
       return INITIAL_COIN_TRANSACTIONS;
     }

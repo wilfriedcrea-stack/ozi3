@@ -17,7 +17,8 @@ import {
   Eye,
   KeyRound,
   Sparkles,
-  Palette
+  Palette,
+  CreditCard
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { OziLogo } from '../common/OziLogo';
@@ -55,6 +56,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ activeTab, setActive
     { id: 'series', label: 'Séries & Chapitres', icon: BookOpen, badge: `${series.length}` },
     { id: 'artists', label: 'Artistes & Artbooks', icon: Palette, badge: `${artists?.length || 0}`, badgeColor: 'bg-purple-500/20 text-purple-300 border border-purple-500/30' },
     { id: 'articles', label: 'Articles & Magazine', icon: FileText, badge: `${articles.length}` },
+    { id: 'paystack', label: 'Pass Paystack', icon: CreditCard, badge: 'Clés API', badgeColor: 'bg-amber-500/20 text-amber-300 border border-amber-500/30' },
     { id: 'monetization', label: 'Monétisation & Payouts', icon: Coins, badge: pendingPayoutsCount > 0 ? `${pendingPayoutsCount} virement` : null, badgeColor: 'bg-amber-500/20 text-amber-300 border border-amber-500/30' },
     { id: 'users', label: 'Utilisateurs & VIP', icon: UserCheck, badge: `${users.length}` },
     { id: 'moderation', label: 'Modération & Charte', icon: ShieldAlert, badge: pendingReportsCount > 0 ? `${pendingReportsCount} report` : null, badgeColor: 'bg-rose-500/20 text-rose-300 border border-rose-500/30' },
@@ -68,14 +70,15 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ activeTab, setActive
   ];
 
   return (
-    <aside className="w-64 bg-[#07080c] border-r border-slate-800 flex flex-col justify-between shrink-0 h-full">
+    <aside className="w-64 bg-[#07080c] border-r border-slate-800 flex flex-col shrink-0 h-full overflow-hidden">
       
       {/* Top Brand Header */}
-      <div>
-        <div className="p-6 border-b border-slate-800 flex items-center justify-between">
-          <OziLogo size="sm" showBadge={false} />
-        </div>
+      <div className="p-6 border-b border-slate-800 flex items-center justify-between shrink-0">
+        <OziLogo size="sm" showBadge={false} />
+      </div>
 
+      {/* Scrollable Navigation + Bottom Controls */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain scrollbar-thin flex flex-col justify-between">
         {/* Navigation List */}
         <nav className="p-4 space-y-1.5">
           {NAV_ITEMS.map((item) => {
@@ -86,19 +89,19 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ activeTab, setActive
                 key={item.id}
                 id={`admin-tab-btn-${item.id}`}
                 onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-xs font-bold transition-all duration-200 font-almodobar tap-active ${
+                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-xs font-bold transition-all duration-200 font-almodobar tap-active cursor-pointer ${
                   isActive
                     ? 'bg-ozi-primary text-white shadow-lg glow-ozi font-black'
                     : 'text-slate-400 hover:text-slate-100 hover:bg-[#0d0e15]'
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                  <span>{item.label}</span>
+                <div className="flex items-center gap-3 min-w-0">
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                  <span className="truncate">{item.label}</span>
                 </div>
 
                 {item.badge && (
-                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${item.badgeColor || (isActive ? 'bg-black/20 text-white' : 'bg-[#161724] text-slate-300')}`}>
+                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0 ${item.badgeColor || (isActive ? 'bg-black/20 text-white' : 'bg-[#161724] text-slate-300')}`}>
                     {item.badge}
                   </span>
                 )}
@@ -106,10 +109,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ activeTab, setActive
             );
           })}
         </nav>
-      </div>
 
-      {/* Bottom Info & Quick Exit */}
-      <div className="p-4 border-t border-slate-800 flex flex-col gap-3">
+        {/* Bottom Info & Quick Exit */}
+        <div className="p-4 border-t border-slate-800 flex flex-col gap-3 shrink-0">
         {/* Firestore live indicator */}
         <div className="p-3 rounded-xl bg-[#0d0e15] border border-slate-800 flex items-center justify-between text-[11px]">
           <div className="flex items-center gap-2">
@@ -149,6 +151,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ activeTab, setActive
             <LogOut className="w-3.5 h-3.5" />
             <span>Déconnexion</span>
           </button>
+        </div>
         </div>
       </div>
 

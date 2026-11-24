@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Coins, 
   Wallet, 
@@ -25,6 +25,7 @@ import {
 import { useData } from '../../context/DataContext';
 import { CoinPack, CreatorPayout, PaymentGateway } from '../../types';
 import { AdminPaystackManager } from './AdminPaystackManager';
+import { fetchAdminSubscriptionStats, AdminStatsData } from '../../services/paystackClientService';
 
 export const AdminMonetizationManager: React.FC = () => {
   const { 
@@ -43,6 +44,13 @@ export const AdminMonetizationManager: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'paystack' | 'payouts' | 'coinPacks' | 'vipRules' | 'gateways' | 'simulator'>('paystack');
   const [payoutFilter, setPayoutFilter] = useState<'all' | 'pending' | 'processing' | 'paid'>('all');
+  const [paystackStats, setPaystackStats] = useState<AdminStatsData | null>(null);
+
+  useEffect(() => {
+    fetchAdminSubscriptionStats().then(data => {
+      if (data) setPaystackStats(data);
+    });
+  }, []);
 
   // New Pack Modal
   const [isAddingPack, setIsAddingPack] = useState(false);
@@ -63,6 +71,10 @@ export const AdminMonetizationManager: React.FC = () => {
 
   const filteredPayouts = creatorPayouts.filter(p => payoutFilter === 'all' || p.status === payoutFilter);
   const pendingPayoutsCount = creatorPayouts.filter(p => p.status === 'pending').length;
+  const realTotalRevenueXof = paystackStats?.totalRevenueXof ?? 0;
+  const realPaidToCreatorsXof = creatorPayouts
+    .filter(p => p.status === 'paid')
+    .reduce((sum, p) => sum + (p.amountXof || 0), 0);
 
   const handleCreatePackSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,18 +117,18 @@ export const AdminMonetizationManager: React.FC = () => {
           </p>
         </div>
 
-        {/* Global Stats */}
+        {/* Global Real Stats */}
         <div className="flex flex-wrap items-center gap-3 relative z-10">
           <div className="px-4 py-2.5 rounded-2xl bg-zinc-900/90 border border-zinc-800">
-            <div className="text-[10px] text-zinc-400 uppercase font-bold">Chiffre d'Affaires Global</div>
+            <div className="text-[10px] text-zinc-400 uppercase font-bold">Chiffre d'Affaires Réel</div>
             <div className="text-lg font-black text-amber-400">
-              {(monetization.totalPlatformRevenueXof || 54900000).toLocaleString('fr-FR')} FCFA
+              {realTotalRevenueXof.toLocaleString('fr-FR')} FCFA
             </div>
           </div>
           <div className="px-4 py-2.5 rounded-2xl bg-zinc-900/90 border border-zinc-800">
             <div className="text-[10px] text-zinc-400 uppercase font-bold">Reversé aux Créateurs</div>
             <div className="text-lg font-black text-emerald-400">
-              {(monetization.totalPaidToCreatorsXof || 38450000).toLocaleString('fr-FR')} FCFA
+              {realPaidToCreatorsXof.toLocaleString('fr-FR')} FCFA
             </div>
           </div>
         </div>
@@ -184,11 +196,6 @@ export const AdminMonetizationManager: React.FC = () => {
         >
           <CreditCard className="w-4 h-4" />
           <span>Pass 30j Paystack</span>
-          <span className={`px-1.5 py-0.5 text-[10px] rounded-md font-bold ${
-            activeTab === 'paystack' ? 'bg-zinc-950/20 text-zinc-950' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-          }`}>
-            Live
-          </span>
         </button>
 
         <button
@@ -290,68 +297,78 @@ export const AdminMonetizationManager: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 gap-4">
-            {filteredPayouts.map((payout) => (
-              <div
-                key={payout.id}
-                className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg"
-              >
-                <div className="space-y-1.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                      payout.status === 'pending'
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                        : payout.status === 'paid'
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-zinc-800 text-zinc-300'
-                    }`}>
-                      {payout.status === 'pending' ? 'En attente' : payout.status === 'paid' ? 'Versé avec succès' : payout.status === 'processing' ? 'En traitement' : 'Rejeté'}
-                    </span>
-                    <strong className="text-white text-base">{payout.creatorName}</strong>
-                    <span className="text-xs text-amber-400">({payout.seriesTitle})</span>
-                    <span className="text-zinc-500 text-xs">• Période : {payout.period}</span>
-                  </div>
-
-                  <div className="text-xs text-zinc-400 flex flex-wrap items-center gap-4">
-                    <span>Lectures totales : <strong className="text-zinc-200">{payout.totalReads.toLocaleString('fr-FR')}</strong></span>
-                    <span>Coins générés : <strong className="text-amber-400">{payout.coinsEarned.toLocaleString('fr-FR')}</strong></span>
-                    <span>Compte de réception : <strong className="text-zinc-200">{payout.paymentMethod}</strong></span>
-                  </div>
-
-                  <div className="text-[11px] text-zinc-500">
-                    Demande soumise le {new Date(payout.requestedAt).toLocaleString('fr-FR')}
-                    {payout.processedAt && ` • Traitée le ${new Date(payout.processedAt).toLocaleString('fr-FR')}`}
-                  </div>
-                </div>
-
-                {/* Amount & CTA */}
-                <div className="flex items-center gap-4 self-end md:self-center shrink-0">
-                  <div className="text-right">
-                    <div className="text-xl font-black text-emerald-400">
-                      {payout.amountXof.toLocaleString('fr-FR')} FCFA
-                    </div>
-                    <div className="text-[10px] text-zinc-400">Net créateur (70%)</div>
-                  </div>
-
-                  {payout.status === 'pending' && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => approvePayout(payout.id)}
-                        className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black text-xs shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition-all"
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>Valider Virement</span>
-                      </button>
-                      <button
-                        onClick={() => rejectPayout(payout.id, 'Informations bancaires à corriger')}
-                        className="px-3 py-2.5 rounded-xl bg-zinc-800 hover:bg-rose-950 hover:text-rose-400 text-zinc-400 text-xs font-bold transition-all"
-                      >
-                        Rejeter
-                      </button>
-                    </div>
-                  )}
-                </div>
+            {filteredPayouts.length === 0 ? (
+              <div className="p-12 rounded-2xl bg-zinc-900/70 border border-zinc-800 text-center flex flex-col items-center justify-center gap-2">
+                <Wallet className="w-8 h-8 text-zinc-600 stroke-1" />
+                <div className="text-sm font-bold text-zinc-300">Aucun versement créateur pour le moment</div>
+                <p className="text-xs text-zinc-500 max-w-md">
+                  Les paiements réels et demandes de versement Mobile Money apparaîtront ici dès les premières ventes.
+                </p>
               </div>
-            ))}
+            ) : (
+              filteredPayouts.map((payout) => (
+                <div
+                  key={payout.id}
+                  className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg"
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                        payout.status === 'pending'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          : payout.status === 'paid'
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : 'bg-zinc-800 text-zinc-300'
+                      }`}>
+                        {payout.status === 'pending' ? 'En attente' : payout.status === 'paid' ? 'Versé avec succès' : payout.status === 'processing' ? 'En traitement' : 'Rejeté'}
+                      </span>
+                      <strong className="text-white text-base">{payout.creatorName}</strong>
+                      <span className="text-xs text-amber-400">({payout.seriesTitle})</span>
+                      <span className="text-zinc-500 text-xs">• Période : {payout.period}</span>
+                    </div>
+
+                    <div className="text-xs text-zinc-400 flex flex-wrap items-center gap-4">
+                      <span>Lectures totales : <strong className="text-zinc-200">{payout.totalReads.toLocaleString('fr-FR')}</strong></span>
+                      <span>Coins générés : <strong className="text-amber-400">{payout.coinsEarned.toLocaleString('fr-FR')}</strong></span>
+                      <span>Compte de réception : <strong className="text-zinc-200">{payout.paymentMethod}</strong></span>
+                    </div>
+
+                    <div className="text-[11px] text-zinc-500">
+                      Demande soumise le {new Date(payout.requestedAt).toLocaleString('fr-FR')}
+                      {payout.processedAt && ` • Traitée le ${new Date(payout.processedAt).toLocaleString('fr-FR')}`}
+                    </div>
+                  </div>
+
+                  {/* Amount & CTA */}
+                  <div className="flex items-center gap-4 self-end md:self-center shrink-0">
+                    <div className="text-right">
+                      <div className="text-xl font-black text-emerald-400">
+                        {payout.amountXof.toLocaleString('fr-FR')} FCFA
+                      </div>
+                      <div className="text-[10px] text-zinc-400">Net créateur (70%)</div>
+                    </div>
+
+                    {payout.status === 'pending' && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => approvePayout(payout.id)}
+                          className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black text-xs shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition-all"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Valider Virement</span>
+                        </button>
+                        <button
+                          onClick={() => rejectPayout(payout.id, 'Informations bancaires à corriger')}
+                          className="px-3 py-2.5 rounded-xl bg-zinc-800 hover:bg-rose-950 hover:text-rose-400 text-zinc-400 text-xs font-bold transition-all"
+                        >
+                          Rejeter
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}

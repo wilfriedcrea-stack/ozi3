@@ -180,9 +180,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
 
           <button
             type="button"
-            onClick={() => onNavigate('monetization')}
+            onClick={() => onNavigate('paystack')}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-950/80 via-amber-900/60 to-amber-950/80 hover:from-amber-500 hover:to-orange-500 text-amber-200 hover:text-zinc-950 border border-amber-600/50 hover:border-amber-400 text-xs font-bold transition-all shadow-lg shadow-amber-950/40 cursor-pointer group"
-            title="Consulter les revenus Paystack et abonnements"
+            title="Configurer vos clés Paystack et consulter vos paiements"
           >
             <CreditCard className="w-4 h-4 text-amber-400 group-hover:text-zinc-950 transition-colors" />
             <span>Pass Paystack ({(paystackStats?.totalRevenueXof || 0).toLocaleString('fr-FR')} FCFA)</span>
@@ -258,7 +258,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
           </div>
           <div>
             <div className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight">
-              {(analytics.creatorEarningsCfa).toLocaleString()} FCFA
+              {(paystackStats?.totalRevenueXof
+                ? Math.round((paystackStats.totalRevenueXof * 70) / 100)
+                : (analytics.creatorEarningsCfa || 0)
+              ).toLocaleString('fr-FR')} FCFA
             </div>
             <div className="text-[11px] text-zinc-400 font-medium mt-1">
               70% reversés directement aux auteurs
@@ -288,7 +291,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
         <div 
           role="button"
           tabIndex={0}
-          onClick={() => onNavigate('monetization')}
+          onClick={() => onNavigate('paystack')}
           className="p-5 rounded-2xl bg-gradient-to-br from-[#1a1409] via-zinc-900 to-zinc-900 border-2 border-amber-500/40 hover:border-amber-400 transition-all flex flex-col justify-between shadow-lg shadow-amber-500/5 hover:shadow-amber-500/15 cursor-pointer group relative overflow-hidden"
           title="Cliquez pour accéder directement à l'espace financier et gérer les abonnements Paystack"
         >

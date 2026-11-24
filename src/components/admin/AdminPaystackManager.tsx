@@ -13,7 +13,6 @@ import {
   AlertCircle, 
   Copy, 
   Check, 
-  Sparkles, 
   ExternalLink,
   BookOpen,
   Calendar,
@@ -36,8 +35,7 @@ import {
   fetchAdminPaystackConfig,
   saveAdminPaystackConfig,
   AdminStatsData,
-  PaystackAdminConfig,
-  simulateWorkSubscription 
+  PaystackAdminConfig
 } from '../../services/paystackClientService';
 
 export const AdminPaystackManager: React.FC = () => {
@@ -57,8 +55,6 @@ export const AdminPaystackManager: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'expired' | 'pending'>('all');
   const [workFilter, setWorkFilter] = useState<string>('all');
   const [copiedRef, setCopiedRef] = useState<string | null>(null);
-  const [isSimulating, setIsSimulating] = useState<boolean>(false);
-  const [actionNotice, setActionNotice] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -144,30 +140,6 @@ export const AdminPaystackManager: React.FC = () => {
     navigator.clipboard.writeText(ref);
     setCopiedRef(ref);
     setTimeout(() => setCopiedRef(null), 2000);
-  };
-
-  const handleSimulateQuick = async () => {
-    if (series.length === 0) return;
-    setIsSimulating(true);
-    setActionNotice(null);
-
-    const randomSeries = series[0];
-    const uid = currentUser?.uid || `sim_user_${Date.now().toString().slice(-4)}`;
-
-    try {
-      const res = await simulateWorkSubscription(uid, randomSeries.id, randomSeries.title);
-      if (res.success) {
-        setActionNotice({
-          type: 'success',
-          message: `Simulation réussie : 1 Pass 30 Jours activé pour « ${randomSeries.title} » !`
-        });
-        await loadData();
-      }
-    } catch (err: any) {
-      console.error('[AdminPaystackManager] Simulation error:', err);
-    } finally {
-      setIsSimulating(false);
-    }
   };
 
   const handleExportCsv = () => {
@@ -262,17 +234,6 @@ export const AdminPaystackManager: React.FC = () => {
           >
             <Download className="w-3.5 h-3.5 text-emerald-400" />
             <span>Export CSV</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleSimulateQuick}
-            disabled={isSimulating}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 font-black text-xs shadow-lg shadow-amber-500/20 transition-all cursor-pointer disabled:opacity-50 font-heading"
-            title="Simuler un paiement Paystack réussi (Bac à sable)"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>{isSimulating ? 'Activation...' : 'Tester Vente (Simu)'}</span>
           </button>
         </div>
 
@@ -451,23 +412,6 @@ export const AdminPaystackManager: React.FC = () => {
           </div>
         </form>
       </div>
-
-      {/* Action Notice */}
-      {actionNotice && (
-        <div className="p-4 rounded-2xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs sm:text-sm font-bold flex items-center justify-between gap-3 shadow-xl">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-            <span>{actionNotice.message}</span>
-          </div>
-          <button 
-            type="button" 
-            onClick={() => setActionNotice(null)}
-            className="text-emerald-400 hover:text-white"
-          >
-            Fermer
-          </button>
-        </div>
-      )}
 
       {/* 4 Financial KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

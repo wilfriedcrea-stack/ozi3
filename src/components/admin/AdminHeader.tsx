@@ -80,6 +80,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ activeTab, onNewSeries
       case 'series': return 'Gestion des Séries & Éditeur de Chapitres Webtoon';
       case 'artists': return 'Gestion des Artistes, Illustrateurs & Artbooks';
       case 'articles': return 'Articles & Carnets de Création';
+      case 'paystack': return 'Paystack • Clés API, Pass & Paiements';
       case 'monetization': return 'Monétisation, Tarifs Coins & Payouts Mobile Money';
       case 'moderation': return 'Modération des Commentaires & Salubrité';
       case 'teasers': return 'Gestion des Teasers & Vidéos';
