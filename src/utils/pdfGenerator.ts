@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { Artbook } from '../types';
+import { formatPriceXofWithEur } from './currency';
 
 interface GeneratePdfOptions {
   artbook: Artbook;
@@ -118,7 +119,7 @@ export async function generateAndDownloadArtbookPdf({
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
     doc.text(
-      isPaid ? `ÉDITION CERTIFIÉE — ${artbook.price.toLocaleString()} FCFA` : 'ÉDITION DIGITALE LIBRE & GRATUITE',
+      isPaid ? `ÉDITION CERTIFIÉE — ${formatPriceXofWithEur(artbook.price)}` : 'ÉDITION DIGITALE LIBRE & GRATUITE',
       pageWidth / 2,
       218,
       { align: 'center' }

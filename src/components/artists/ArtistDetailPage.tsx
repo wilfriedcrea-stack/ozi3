@@ -4,6 +4,7 @@ import { Artist, Artbook } from '../../types';
 import { useData } from '../../context/DataContext';
 
 import { normalizeImageUrl } from '../../utils/imageUtils';
+import { formatPriceXofWithEur } from '../../utils/currency';
 
 export interface ArtistShopProduct {
   id: string;
@@ -53,10 +54,8 @@ export const ArtistDetailPage: React.FC = () => {
     relatedArtbooks.forEach((ab, idx) => {
       const altUrl = ab.alternateCoverUrl || (idx % 2 === 0 ? defaultAlternate1 : defaultAlternate3);
       const isFree = Boolean(ab.isFree || !ab.price || ab.price === 0);
-      const priceStr = isFree 
-        ? 'Gratuit' 
-        : (ab.price >= 500 ? `${ab.price.toLocaleString('fr-FR')} FCFA` : `€${(ab.price ? (ab.price / 100).toFixed(2) : '29,99')}`.replace('.', ','));
-      const priceNum = isFree ? 0 : (ab.price || 29.99);
+      const priceStr = isFree ? 'Gratuit' : formatPriceXofWithEur(ab.price);
+      const priceNum = isFree ? 0 : ab.price;
 
       items.push({
         id: ab.id,

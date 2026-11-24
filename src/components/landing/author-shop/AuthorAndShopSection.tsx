@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ShoppingBag, Check, X, MessageCircle, CreditCard, ExternalLink } from 'lucide-react';
 import { Series } from '../../../types';
+import { formatPriceXofWithEur } from '../../../utils/currency';
 
 interface ProductItem {
   id: string;
@@ -200,7 +201,7 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
                       {product.title}
                     </h3>
                     <span className="text-xs font-bold text-orange-400 font-mono whitespace-nowrap">
-                      {product.priceCfa.toLocaleString('fr-FR')} F
+                      {formatPriceXofWithEur(product.priceCfa, product.priceEur)}
                     </span>
                   </div>
 
@@ -260,8 +261,7 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
                       {selectedProduct.title}
                     </h3>
                     <p className="text-sm font-bold text-emerald-400 font-mono mt-1">
-                      {selectedProduct.priceCfa.toLocaleString('fr-FR')} FCFA{' '}
-                      <span className="text-zinc-500 text-xs">({selectedProduct.priceEur} €)</span>
+                      {formatPriceXofWithEur(selectedProduct.priceCfa, selectedProduct.priceEur)}
                     </p>
                     <p className="text-[11px] text-zinc-400 line-clamp-2 mt-1">
                       {selectedProduct.description}
@@ -315,7 +315,10 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
                 <div className="flex items-center justify-between py-2 border-t border-zinc-800 text-sm mb-6">
                   <span className="text-zinc-400">Total à régler :</span>
                   <span className="text-base font-black text-white font-mono">
-                    {(selectedProduct.priceCfa * quantity).toLocaleString('fr-FR')} FCFA
+                    {formatPriceXofWithEur(
+                      selectedProduct.priceCfa * quantity,
+                      selectedProduct.priceEur > 0 ? selectedProduct.priceEur * quantity : undefined
+                    )}
                   </span>
                 </div>
 
@@ -335,7 +338,7 @@ export const AuthorAndShopSection: React.FC<AuthorAndShopSectionProps> = ({ seri
 
                   <a
                     href={`https://wa.me/2250700000000?text=${encodeURIComponent(
-                      `Bonjour l'équipe OZI Store ! Je souhaite commander :\n- Produit : ${selectedProduct.title} (Série : ${series.title})${selectedProduct.sizes ? ` - Taille : ${selectedSize}` : ''}\n- Quantité : ${quantity}\n- Montant : ${(selectedProduct.priceCfa * quantity).toLocaleString('fr-FR')} FCFA (${(selectedProduct.priceEur * quantity)} €)\nMerci de m'indiquer les modalités de livraison !`
+                      `Bonjour l'équipe OZI Store ! Je souhaite commander :\n- Produit : ${selectedProduct.title} (Série : ${series.title})${selectedProduct.sizes ? ` - Taille : ${selectedSize}` : ''}\n- Quantité : ${quantity}\n- Montant : ${formatPriceXofWithEur(selectedProduct.priceCfa * quantity, selectedProduct.priceEur > 0 ? selectedProduct.priceEur * quantity : undefined)}\nMerci de m'indiquer les modalités de livraison !`
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"

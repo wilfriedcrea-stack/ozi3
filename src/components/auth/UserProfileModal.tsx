@@ -24,6 +24,7 @@ import {
   verifyPaystackPayment 
 } from '../../services/paystackClientService';
 import { SubscriptionRecord, ArtbookPurchaseRecord, CoinPack } from '../../types';
+import { formatPriceXofWithEur } from '../../utils/currency';
 
 export const UserProfileModal: React.FC = () => {
   const { 
@@ -416,7 +417,7 @@ export const UserProfileModal: React.FC = () => {
 
                       <div className="text-right shrink-0">
                         <span className="text-xs font-mono font-bold text-zinc-200">
-                          {sub.amount?.toLocaleString('fr-FR')} {sub.currency || 'FCFA'}
+                          {formatPriceXofWithEur(sub.amount || 2000)}
                         </span>
                       </div>
                     </div>
@@ -431,7 +432,7 @@ export const UserProfileModal: React.FC = () => {
                 <div>
                   <h4 className="text-sm font-bold text-white">Pass Premium par Œuvre</h4>
                   <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                    Débloquez l'accès illimité pendant 30 jours à n'importe quelle œuvre du catalogue via Paystack (2 000 FCFA).
+                    Débloquez l'accès illimité pendant 30 jours à n'importe quelle œuvre du catalogue via Paystack ({formatPriceXofWithEur(2000)}).
                   </p>
                 </div>
                 <div className="text-[11px] text-zinc-500 bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-800/60">
@@ -566,7 +567,7 @@ export const UserProfileModal: React.FC = () => {
                       ) : (
                         <>
                           <CreditCard className="w-3.5 h-3.5" />
-                          <span>{pack.priceXof.toLocaleString('fr-FR')} FCFA</span>
+                          <span>{formatPriceXofWithEur(pack.priceXof, pack.priceEur)}</span>
                         </>
                       )}
                     </button>

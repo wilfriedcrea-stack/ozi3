@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import { Artbook } from '../types';
 import { normalizeImageUrl } from './imageUtils';
+import { formatPriceXofWithEur } from './currency';
 
 interface GenerateEpubOptions {
   artbook: Artbook;
@@ -181,7 +182,7 @@ h2 {
 
     // 5. Cover XHTML
     const editionLabel = isPaid
-      ? `Édition Certifiée (${artbook.price.toLocaleString()} FCFA)`
+      ? `Édition Certifiée (${formatPriceXofWithEur(artbook.price)})`
       : 'Édition Digitale Officielle OZI';
     const coverXhtml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>

@@ -24,6 +24,7 @@ import {
 import { Series, SeriesGenre, SeriesStatus, SeriesShopItem } from '../../types';
 import { useData } from '../../context/DataContext';
 import { compressImageToWebP, uploadToLWS } from '../../services/lwsUploadService';
+import { formatPriceXofWithEur } from '../../utils/currency';
 
 interface AdminSeriesModalProps {
   series: Series | null;
@@ -1035,8 +1036,7 @@ export const AdminSeriesModal: React.FC<AdminSeriesModalProps> = ({ series, onCl
                           </span>
                           <h4 className="text-xs font-bold text-white truncate">{art.title}</h4>
                           <p className="text-xs font-bold text-emerald-400 font-mono mt-0.5">
-                            {art.priceCfa?.toLocaleString('fr-FR')} FCFA{' '}
-                            <span className="text-zinc-500 text-[10px]">({art.priceEur} €)</span>
+                            {formatPriceXofWithEur(art.priceCfa || 0, art.priceEur)}
                           </p>
                         </div>
                       </div>

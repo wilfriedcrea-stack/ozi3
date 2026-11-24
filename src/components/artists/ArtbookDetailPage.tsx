@@ -24,6 +24,7 @@ import { DownloadFormatModal } from './DownloadFormatModal';
 import { ArtbookReviewsSection } from './ArtbookReviewsSection';
 import { checkArtbookAccess } from '../../services/paystackClientService';
 import { normalizeImageUrl } from '../../utils/imageUtils';
+import { formatPriceXofWithEur } from '../../utils/currency';
 
 export const ArtbookDetailPage: React.FC = () => {
   const { 
@@ -249,7 +250,7 @@ export const ArtbookDetailPage: React.FC = () => {
                   </span>
                 ) : (
                   <span className="px-3 py-1.5 rounded-full bg-black text-white font-black text-xs uppercase tracking-wider shadow-md">
-                    {currentArtbook.price.toLocaleString()} FCFA
+                    {formatPriceXofWithEur(currentArtbook.price)}
                   </span>
                 )}
               </div>
@@ -382,7 +383,7 @@ export const ArtbookDetailPage: React.FC = () => {
                     className="px-6 py-3 rounded-xl bg-black hover:bg-zinc-800 text-white font-bold text-sm shadow-sm inline-flex items-center gap-2 transition-all cursor-pointer"
                   >
                     <Lock className="w-4 h-4" />
-                    <span>Acheter — {currentArtbook.price.toLocaleString()} FCFA</span>
+                    <span>Acheter — {formatPriceXofWithEur(currentArtbook.price)}</span>
                   </button>
                 )}
 
@@ -534,7 +535,7 @@ export const ArtbookDetailPage: React.FC = () => {
                   className="w-full py-4 px-6 rounded-2xl bg-black hover:bg-zinc-800 text-white font-extrabold text-base sm:text-lg shadow-sm flex items-center justify-center gap-3 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer font-almodobar"
                 >
                   <Lock className="w-5 h-5" />
-                  <span>Acheter — {currentArtbook.price.toLocaleString()} FCFA</span>
+                  <span>Acheter — {formatPriceXofWithEur(currentArtbook.price)}</span>
                 </button>
               )}
 
@@ -582,7 +583,7 @@ export const ArtbookDetailPage: React.FC = () => {
                       <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
                         a.isFree ? 'bg-emerald-600 text-white' : 'bg-black text-white'
                       }`}>
-                        {a.isFree ? 'Gratuit' : `${a.price.toLocaleString()} FCFA`}
+                        {a.isFree ? 'Gratuit' : formatPriceXofWithEur(a.price)}
                       </span>
                     </div>
                   </div>

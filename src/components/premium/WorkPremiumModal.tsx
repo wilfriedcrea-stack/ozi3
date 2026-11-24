@@ -14,6 +14,7 @@ import {
 import { Series } from '../../types';
 import { useData } from '../../context/DataContext';
 import { initiateWorkSubscription } from '../../services/paystackClientService';
+import { formatPriceXofWithEur } from '../../utils/currency';
 
 interface WorkPremiumModalProps {
   series: Series;
@@ -121,8 +122,8 @@ export const WorkPremiumModal: React.FC<WorkPremiumModalProps> = ({
           />
           <div className="min-w-0 flex-1">
             <p className="text-xs text-zinc-400 font-medium">Par {series.author || 'Artiste OZI'}</p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-xl font-black text-white">{PRICE_XOF.toLocaleString('fr-FR')} FCFA</span>
+            <div className="flex flex-wrap items-baseline gap-2 mt-1">
+              <span className="text-lg sm:text-xl font-black text-white">{formatPriceXofWithEur(PRICE_XOF)}</span>
               <span className="text-xs text-zinc-400">/ 30 jours</span>
             </div>
             <p className="text-[11px] text-emerald-400 flex items-center gap-1 mt-1 font-semibold">
@@ -177,7 +178,7 @@ export const WorkPremiumModal: React.FC<WorkPremiumModalProps> = ({
           ) : (
             <>
               <CreditCard className="w-4 h-4" />
-              <span>{currentUser ? `Payer ${PRICE_XOF.toLocaleString('fr-FR')} FCFA via Paystack` : 'Se connecter pour s\'abonner'}</span>
+              <span>{currentUser ? `Payer ${formatPriceXofWithEur(PRICE_XOF)} via Paystack` : 'Se connecter pour s\'abonner'}</span>
             </>
           )}
         </button>

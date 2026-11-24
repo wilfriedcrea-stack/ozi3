@@ -25,6 +25,7 @@ import { ambientAudio } from '../../lib/ambientAudioEngine';
 import { WorkPremiumModal } from '../premium/WorkPremiumModal';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { WorkReviewsSection } from '../comments/WorkReviewsSection';
+import { formatPriceXofWithEur } from '../../utils/currency';
 
 export const WebtoonReaderModal: React.FC = () => {
   const { 
@@ -352,7 +353,7 @@ export const WebtoonReaderModal: React.FC = () => {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-500 text-zinc-950 font-black text-xs shadow-md shadow-amber-500/20 transition-all cursor-pointer font-heading"
             >
               <Lock className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Pass 30j (2 000 FCFA)</span>
+              <span className="hidden sm:inline">Pass 30j ({formatPriceXofWithEur(2000)})</span>
               <span className="sm:hidden">Pass 30j</span>
             </button>
           )}
@@ -565,8 +566,8 @@ export const WebtoonReaderModal: React.FC = () => {
                 <div className="w-full bg-[#1e1e30]/80 border border-amber-500/30 rounded-2xl p-4 sm:p-5 mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="text-left">
                     <span className="text-xs text-zinc-400 font-bold block uppercase tracking-wider font-heading">Pass Oeuvre 30 Jours</span>
-                    <div className="flex items-baseline gap-2 mt-0.5">
-                      <span className="text-3xl font-black text-white font-heading">2 000 FCFA</span>
+                    <div className="flex flex-wrap items-baseline gap-2 mt-0.5">
+                      <span className="text-xl sm:text-2xl font-black text-white font-heading">{formatPriceXofWithEur(2000)}</span>
                       <span className="text-sm text-zinc-400 font-medium">/ 30 jours</span>
                     </div>
                   </div>
@@ -599,7 +600,7 @@ export const WebtoonReaderModal: React.FC = () => {
                       className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-500 text-zinc-950 font-black text-base shadow-xl shadow-amber-500/25 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer font-heading"
                     >
                       <Lock className="w-4 h-4" />
-                      <span>Se connecter pour débloquer (2 000 FCFA)</span>
+                      <span>Se connecter pour débloquer ({formatPriceXofWithEur(2000)})</span>
                     </button>
                   )}
                 </div>

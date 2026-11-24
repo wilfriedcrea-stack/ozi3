@@ -43,6 +43,7 @@ import { useData } from '../../context/DataContext';
 import { Artist, Artbook } from '../../types';
 import { compressImageToWebP, uploadToLWS } from '../../services/lwsUploadService';
 import { normalizeImageUrl } from '../../utils/imageUtils';
+import { formatPriceXofWithEur } from '../../utils/currency';
 
 export const AdminArtistsManager: React.FC = () => {
   const { 
@@ -1154,7 +1155,7 @@ export const AdminArtistsManager: React.FC = () => {
                             ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
                             : 'bg-[#ff8679]/20 text-[#ff8679] border border-[#ff8679]/30'
                         }`}>
-                          {artbook.isFree ? 'Gratuit' : `${artbook.price.toLocaleString()} FCFA`}
+                          {artbook.isFree ? 'Gratuit' : formatPriceXofWithEur(artbook.price)}
                         </span>
                         <span className="text-[10px] text-slate-500">{artbook.releaseYear}</span>
                       </div>
@@ -1346,7 +1347,7 @@ export const AdminArtistsManager: React.FC = () => {
                         <td className="p-3">{p.userName}</td>
                         <td className="p-3 text-[11px] text-slate-400">{p.userEmail} • {p.userPhone}</td>
                         <td className="p-3 uppercase font-bold text-slate-400">{p.paymentGateway}</td>
-                        <td className="p-3 font-bold text-amber-400">{p.priceXof?.toLocaleString()} FCFA</td>
+                        <td className="p-3 font-bold text-amber-400">{formatPriceXofWithEur(p.priceXof || 0)}</td>
                         <td className="p-3">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                             p.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'

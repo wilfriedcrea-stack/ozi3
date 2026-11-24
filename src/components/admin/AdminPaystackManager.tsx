@@ -208,7 +208,7 @@ export const AdminPaystackManager: React.FC = () => {
             Tableau de Bord Financier Paystack
           </h2>
           <p className="text-xs sm:text-sm text-zinc-300 mt-1 max-w-2xl font-body">
-            Suivi temps réel des abonnements lecteurs de 30 jours (2 000 FCFA), chiffre d'affaires Mobile Money & Carte, ventilation par œuvre et état des expirations.
+            Suivi temps réel des abonnements lecteurs de 30 jours (2 000 FCFA (3,05 EUR)), chiffre d'affaires Mobile Money & Carte, ventilation par œuvre et état des expirations.
           </p>
         </div>
 

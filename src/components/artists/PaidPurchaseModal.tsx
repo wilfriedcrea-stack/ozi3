@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
-  CreditCard, 
   ShieldCheck, 
   CheckCircle2, 
   AlertCircle, 
   Download, 
   Lock, 
-  Smartphone, 
   RefreshCw,
   Sparkles,
   ArrowRight,
@@ -18,6 +16,7 @@ import confetti from 'canvas-confetti';
 import { Artbook } from '../../types';
 import { useData } from '../../context/DataContext';
 import { initiateArtbookPurchase, verifyPaystackPayment } from '../../services/paystackClientService';
+import { formatPriceXofWithEur } from '../../utils/currency';
 
 interface PaidPurchaseModalProps {
   artbook: Artbook;
@@ -28,22 +27,6 @@ interface PaidPurchaseModalProps {
 
 type CheckoutStep = 'details' | 'processing' | 'confirmed' | 'failed';
 
-interface PaymentProviderOption {
-  id: string;
-  name: string;
-  type: 'mobile_money' | 'card';
-  badge: string;
-  iconColor: string;
-}
-
-const PAYMENT_PROVIDERS: PaymentProviderOption[] = [
-  { id: 'wave', name: 'Wave Mobile Money', type: 'mobile_money', badge: '1% frais', iconColor: 'text-sky-400' },
-  { id: 'orange', name: 'Orange Money Afrique', type: 'mobile_money', badge: 'Instantané', iconColor: 'text-orange-400' },
-  { id: 'mtn', name: 'MTN Mobile Money (MoMo)', type: 'mobile_money', badge: 'Instantané', iconColor: 'text-yellow-400' },
-  { id: 'moov', name: 'Moov Africa Flooz', type: 'mobile_money', badge: 'Instantané', iconColor: 'text-blue-400' },
-  { id: 'paystack_card', name: 'Carte Bancaire / Paystack (Visa, Mastercard)', type: 'card', badge: 'Sécurisé 3D Secure', iconColor: 'text-emerald-400' }
-];
-
 export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
   artbook,
   isOpen,
@@ -53,10 +36,8 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
   const { currentUser, readerProfile, recordArtbookPurchase } = useData();
 
   const [step, setStep] = useState<CheckoutStep>('details');
-  const [selectedProvider, setSelectedProvider] = useState<string>('wave');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [transactionRef, setTransactionRef] = useState('');
   const [paymentAuthUrl, setPaymentAuthUrl] = useState('');
@@ -109,8 +90,6 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
       setErrorMsg('Veuillez renseigner une adresse e-mail valide.');
       return;
     }
-    const cleanPhone = phone.trim().replace(/[\s-]/g, '');
-
     setStep('processing');
 
     try {
@@ -125,7 +104,7 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
         artistName: artbook.artistName,
         email: email.trim().toLowerCase(),
         name: name.trim(),
-        phone: cleanPhone,
+        phone: '',
         amount: artbook.price || 3500,
       });
 
@@ -148,8 +127,8 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
         priceXof: artbook.price,
         userName: name.trim(),
         userEmail: email.trim().toLowerCase(),
-        userPhone: cleanPhone,
-        paymentGateway: selectedProvider,
+        userPhone: '',
+        paymentGateway: 'paystack',
         paymentReference: initResult.reference,
         status: 'pending',
         purchasedAt: new Date().toISOString(),
@@ -279,7 +258,7 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
 
               <div className="text-right shrink-0">
                 <div className="text-base sm:text-lg font-black text-[#ff8679] font-almodobar">
-                  {artbook.price.toLocaleString()} FCFA
+                  {formatPriceXofWithEur(artbook.price)}
                 </div>
                 <div className="text-[10px] text-zinc-500">TTC • Accès à vie</div>
               </div>
@@ -292,39 +271,24 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
               </div>
             )}
 
-            <form onSubmit={handleStartPayment} className="space-y-3.5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-zinc-300 mb-1">
-                    Nom & Prénom <span className="text-[#ff8679]">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    placeholder="Ex : Moussa Koné"
-                    className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 focus:border-[#ff8679] text-white text-xs sm:text-sm focus:outline-none transition-colors"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-zinc-300 mb-1">
-                    Téléphone Mobile (optionnel)
-                  </label>
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={e => setPhone(e.target.value)}
-                    placeholder="Ex : +225 05 00 00 00 00"
-                    className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 focus:border-[#ff8679] text-white text-xs sm:text-sm focus:outline-none transition-colors"
-                  />
-                </div>
+            <form onSubmit={handleStartPayment} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-zinc-300 mb-1.5">
+                  Nom et prénom <span className="text-[#ff8679]">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Ex : Moussa Koné"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 focus:border-[#ff8679] text-white text-xs sm:text-sm focus:outline-none transition-colors"
+                />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-zinc-300 mb-1">
-                  Adresse e-mail (pour réception de facture & accès) <span className="text-[#ff8679]">*</span>
+                <label className="block text-xs font-bold text-zinc-300 mb-1.5">
+                  Adresse e-mail <span className="text-[#ff8679]">*</span>
                 </label>
                 <input
                   type="email"
@@ -332,43 +296,8 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="Ex : moussa@exemple.com"
-                  className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 focus:border-[#ff8679] text-white text-xs sm:text-sm focus:outline-none transition-colors"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 focus:border-[#ff8679] text-white text-xs sm:text-sm focus:outline-none transition-colors"
                 />
-              </div>
-
-              {/* Payment Gateway Picker */}
-              <div>
-                <label className="block text-xs font-bold text-zinc-300 mb-2">
-                  Sélectionnez votre moyen de paiement :
-                </label>
-                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                  {PAYMENT_PROVIDERS.map(p => {
-                    const isSelected = selectedProvider === p.id;
-                    return (
-                      <div
-                        key={p.id}
-                        onClick={() => setSelectedProvider(p.id)}
-                        className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                          isSelected
-                            ? 'bg-[#ff8679]/10 border-[#ff8679] text-white shadow-sm shadow-[#ff8679]/10'
-                            : 'bg-zinc-900/70 border-zinc-800/80 hover:border-zinc-700 text-zinc-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5">
-                          {p.type === 'mobile_money' ? (
-                            <Smartphone className={`w-4 h-4 ${p.iconColor}`} />
-                          ) : (
-                            <CreditCard className={`w-4 h-4 ${p.iconColor}`} />
-                          )}
-                          <span className="text-xs font-bold">{p.name}</span>
-                        </div>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 font-semibold">
-                          {p.badge}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
               </div>
 
               <div className="pt-2">
@@ -377,14 +306,14 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
                   className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-[#ff8679] to-[#fb923c] hover:from-[#eb6e60] hover:to-[#ea580c] text-white font-bold text-sm shadow-lg shadow-[#ff8679]/20 flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer"
                 >
                   <Lock className="w-4 h-4" />
-                  <span>Confirmer & Payer {artbook.price.toLocaleString()} FCFA</span>
+                  <span>Confirmer — {formatPriceXofWithEur(artbook.price)}</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
 
               <div className="flex items-center justify-center gap-2 text-[11px] text-zinc-500 text-center">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Paiement chiffré 256 bits • Téléchargement certifié après vérification</span>
+                <span>Paiement sécurisé Paystack (Mobile Money & Carte) • Téléchargement après vérification</span>
               </div>
             </form>
           </div>
@@ -480,7 +409,7 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-zinc-400">Montant réglé :</span>
-                <span className="font-bold text-emerald-400">{artbook.price.toLocaleString()} FCFA</span>
+                <span className="font-bold text-emerald-400">{formatPriceXofWithEur(artbook.price)}</span>
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-zinc-400">Titulaire :</span>
