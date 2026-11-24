@@ -368,6 +368,7 @@ export async function initiateArtbookPurchase(params: {
         artbookTitle: params.artbookTitle,
         artistName: params.artistName,
         email: params.email,
+        customerName: params.name,
         amount: params.amount,
         currency: 'XOF',
         callbackUrl: params.callbackUrl,
@@ -426,6 +427,37 @@ export async function fetchUserArtbookPurchases(uid: string): Promise<any[]> {
     return res.json.purchases;
   }
   return [];
+}
+
+/**
+ * Recovers all confirmed artbook purchases made with a given email address (any device)
+ */
+export async function fetchArtbookPurchasesByEmail(email: string): Promise<{
+  success: boolean;
+  purchases: any[];
+  message?: string;
+}> {
+  const cleanEmail = email.trim().toLowerCase();
+  const res = await fetchPaystackWithFallback(
+    {
+      node: `/api/artbooks/purchases-by-email?email=${encodeURIComponent(cleanEmail)}`,
+      php: `/api/paystack.php?action=purchases-by-email&email=${encodeURIComponent(cleanEmail)}`,
+    },
+    { method: 'GET' }
+  );
+
+  if (res.ok && res.json?.success) {
+    return {
+      success: true,
+      purchases: Array.isArray(res.json.purchases) ? res.json.purchases : [],
+    };
+  }
+
+  return {
+    success: false,
+    purchases: [],
+    message: res.json?.message || res.json?.error || 'Impossible de rechercher vos achats pour le moment.',
+  };
 }
 
 /**

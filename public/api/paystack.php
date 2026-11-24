@@ -371,7 +371,8 @@ function upsertArtbookPurchase(array &$ledger, array $params): array {
         'status' => 'active',
         'paystackReference' => $ref,
         'purchasedAt' => $nowIso,
-        'customerEmail' => (string)($params['customerEmail'] ?? ''),
+        'customerEmail' => strtolower(trim((string)($params['customerEmail'] ?? ''))),
+        'userName' => (string)($params['userName'] ?? ''),
         'createdAt' => $nowIso,
         'updatedAt' => $nowIso,
     ];
@@ -736,6 +737,7 @@ if ($action === 'initialize') {
             'packId' => $packId !== '' ? $packId : ($paymentType === 'coin_pack' ? $targetId : ''),
             'coinsAmount' => (int)($body['coinsAmount'] ?? 0),
             'email' => $cleanEmail,
+            'customerName' => trim((string)($body['customerName'] ?? ($body['name'] ?? ''))),
         ],
     ]);
 
@@ -819,6 +821,7 @@ if ($action === 'webhook') {
                             'amount' => $amount,
                             'currency' => $currency,
                             'customerEmail' => $email,
+                            'userName' => (string)($meta['customerName'] ?? ''),
                         ]);
                     }
                 } elseif ($paymentType === 'coin_pack') {
@@ -936,6 +939,7 @@ if ($action === 'verify') {
                     'amount' => $paidAmount,
                     'currency' => $currency,
                     'customerEmail' => $customerEmail,
+                    'userName' => (string)($meta['customerName'] ?? ''),
                 ]),
                 'message' => 'Artbook débloqué avec succès !',
             ];
@@ -1062,6 +1066,48 @@ if ($action === 'user-purchases') {
     echo json_encode([
         'success' => true,
         'purchases' => $purchases,
+    ]);
+    exit();
+}
+
+if ($action === 'purchases-by-email') {
+    $rawEmail = (string)($_GET['email'] ?? '');
+    if ($rawEmail === '' && $method === 'POST') {
+        $body = json_decode((string)file_get_contents('php://input'), true);
+        if (is_array($body)) {
+            $rawEmail = (string)($body['email'] ?? '');
+        }
+    }
+    $cleanEmail = strtolower(trim($rawEmail));
+    if ($cleanEmail === '' || !filter_var($cleanEmail, FILTER_VALIDATE_EMAIL)) {
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Veuillez saisir une adresse e-mail valide.',
+            'purchases' => [],
+        ]);
+        exit();
+    }
+
+    $ledger = readLedger($ledgerFile);
+    $matched = [];
+    $seenRefs = [];
+    foreach ($ledger['artbook_purchases'] as $p) {
+        if (!is_array($p)) continue;
+        $pEmail = strtolower(trim((string)($p['customerEmail'] ?? $p['userEmail'] ?? '')));
+        $pStatus = strtolower(trim((string)($p['status'] ?? '')));
+        if ($pEmail === $cleanEmail && in_array($pStatus, ['active', 'completed'], true)) {
+            $dedupKey = (string)($p['paystackReference'] ?? $p['purchaseId'] ?? uniqid('', true));
+            if (isset($seenRefs[$dedupKey])) continue;
+            $seenRefs[$dedupKey] = true;
+            $matched[] = $p;
+        }
+    }
+
+    echo json_encode([
+        'success' => true,
+        'purchases' => $matched,
+        'count' => count($matched),
     ]);
     exit();
 }

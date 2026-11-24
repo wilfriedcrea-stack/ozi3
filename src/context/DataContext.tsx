@@ -146,6 +146,7 @@ import {
 import {
   fetchUserSubscriptions,
   fetchUserArtbookPurchases,
+  fetchArtbookPurchasesByEmail,
   verifyPaystackPayment
 } from '../services/paystackClientService';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
@@ -227,6 +228,18 @@ interface DataContextType {
   openArtbookPage: (artbookIdOrSlug: string) => void;
   recordArtbookDownload: (record: ArtbookDownloadRecord) => Promise<boolean>;
   recordArtbookPurchase: (record: ArtbookPurchaseRecord) => Promise<boolean>;
+  confirmArtbookPurchaseLocal: (rawPurchase: Partial<ArtbookPurchaseRecord> & { artbookId: string; paymentReference: string }) => void;
+  recoverArtbookPurchasesByEmail: (email: string) => Promise<{ success: boolean; count: number; message: string }>;
+  validatedArtbookNotification: {
+    artbookId: string;
+    artbookTitle: string;
+    artistName: string;
+    priceXof: number;
+    userName: string;
+    userEmail: string;
+    transactionRef: string;
+  } | null;
+  clearValidatedArtbookNotification: () => void;
   verifyArtbookPurchase: (purchaseId: string, reference: string) => Promise<{ verified: boolean; downloadAuthorized: boolean }>;
 
   // Artist & Artbook admin management
@@ -803,6 +816,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [currentUser]);
 
+  const [validatedArtbookNotification, setValidatedArtbookNotification] = useState<{
+    artbookId: string;
+    artbookTitle: string;
+    artistName: string;
+    priceXof: number;
+    userName: string;
+    userEmail: string;
+    transactionRef: string;
+  } | null>(null);
+
+  const clearValidatedArtbookNotification = useCallback(() => {
+    setValidatedArtbookNotification(null);
+  }, []);
+
   // Helper to mark a verified artbook purchase as completed & unlocked in state/localStorage
   const upsertVerifiedArtbookPurchaseLocal = useCallback((rawPurchase: Partial<ArtbookPurchaseRecord> & {
     artbookId: string;
@@ -872,6 +899,61 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } else {
       setUserSubscriptions([]);
     }
+  }, [currentUser, upsertVerifiedArtbookPurchaseLocal]);
+
+  const recoverArtbookPurchasesByEmail = useCallback(async (email: string): Promise<{ success: boolean; count: number; message: string }> => {
+    const cleanEmail = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+      return {
+        success: false,
+        count: 0,
+        message: 'Veuillez saisir une adresse e-mail valide.',
+      };
+    }
+
+    const res = await fetchArtbookPurchasesByEmail(cleanEmail);
+    if (!res.success) {
+      return {
+        success: false,
+        count: 0,
+        message: res.message || 'Impossible de rechercher vos achats pour le moment.',
+      };
+    }
+
+    const found = res.purchases || [];
+    if (found.length === 0) {
+      return {
+        success: true,
+        count: 0,
+        message: `Aucun achat Paystack confirmé trouvé pour ${cleanEmail}.`,
+      };
+    }
+
+    found.forEach((raw: any) => {
+      const resolvedArtbookId = raw.artbookId || '';
+      if (!resolvedArtbookId) return;
+      upsertVerifiedArtbookPurchaseLocal({
+        id: raw.id || raw.purchaseId,
+        artbookId: resolvedArtbookId,
+        artbookTitle: raw.artbookTitle,
+        artistName: raw.artistName,
+        priceXof: Number(raw.priceXof ?? raw.amount ?? 0),
+        userName: raw.userName || currentUser?.displayName || 'Lecteur OZI',
+        userEmail: raw.userEmail || raw.customerEmail || cleanEmail,
+        paymentReference: raw.paymentReference || raw.paystackReference || '',
+        purchasedAt: raw.purchasedAt || raw.createdAt,
+        userId: raw.userId || raw.uid,
+      });
+    });
+
+    return {
+      success: true,
+      count: found.length,
+      message: found.length === 1
+        ? '1 artbook payé retrouvé et ajouté à votre panier !'
+        : `${found.length} artbooks payés retrouvés et ajoutés à votre panier !`,
+    };
   }, [currentUser, upsertVerifiedArtbookPurchaseLocal]);
 
   // Automatic detection of Paystack redirect callback parameters (?reference=... or ?trxref=...)
@@ -958,17 +1040,33 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const title = p.artbookTitle || pendingArtbook?.artbookTitle || matchedAb?.title || 'Artbook OZI';
 
             if (resolvedArtbookId) {
+              const verifiedUserName = p.userName || pendingArtbook?.userName || currentUser?.displayName || 'Lecteur OZI';
+              const verifiedUserEmail = p.userEmail || p.customerEmail || pendingArtbook?.userEmail || currentUser?.email || '';
+              const verifiedPriceXof = Number(p.priceXof ?? p.amount ?? pendingArtbook?.priceXof ?? matchedAb?.price ?? 0);
+              const verifiedRef = p.paymentReference || p.paystackReference || reference;
+              const verifiedArtistName = p.artistName || pendingArtbook?.artistName || matchedAb?.artistName || 'Artiste OZI';
+
               upsertVerifiedArtbookPurchaseLocal({
                 id: p.id || p.purchaseId || pendingArtbook?.purchaseId,
                 artbookId: resolvedArtbookId,
                 artbookTitle: title,
-                artistName: p.artistName || pendingArtbook?.artistName || matchedAb?.artistName || 'Artiste OZI',
-                priceXof: Number(p.priceXof ?? p.amount ?? pendingArtbook?.priceXof ?? matchedAb?.price ?? 0),
-                userName: p.userName || pendingArtbook?.userName || currentUser?.displayName || 'Lecteur OZI',
-                userEmail: p.userEmail || p.customerEmail || pendingArtbook?.userEmail || currentUser?.email || '',
-                paymentReference: p.paymentReference || p.paystackReference || reference,
+                artistName: verifiedArtistName,
+                priceXof: verifiedPriceXof,
+                userName: verifiedUserName,
+                userEmail: verifiedUserEmail,
+                paymentReference: verifiedRef,
                 purchasedAt: p.purchasedAt || new Date().toISOString(),
                 userId: p.userId || p.uid || currentUser?.uid,
+              });
+
+              setValidatedArtbookNotification({
+                artbookId: resolvedArtbookId,
+                artbookTitle: title,
+                artistName: verifiedArtistName,
+                priceXof: verifiedPriceXof,
+                userName: verifiedUserName,
+                userEmail: verifiedUserEmail,
+                transactionRef: verifiedRef,
               });
             }
 
@@ -982,7 +1080,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               paymentType: 'artbook_purchase',
               artbookId: resolvedArtbookId,
               workTitle: title,
-              message: '🎉 Paiement confirmé ! Votre artbook est débloqué et ajouté à votre panier.',
+              message: '🎉 Paiement validé ! Téléchargement PDF & EPUB lancé et artbook ajouté à votre panier.',
             });
 
             if (resolvedArtbookId) {
@@ -4114,6 +4212,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       openArtbookPage,
       recordArtbookDownload,
       recordArtbookPurchase,
+      confirmArtbookPurchaseLocal: upsertVerifiedArtbookPurchaseLocal,
+      recoverArtbookPurchasesByEmail,
+      validatedArtbookNotification,
+      clearValidatedArtbookNotification,
       verifyArtbookPurchase: verifyArtbookPurchaseAction,
       addArtist,
       updateArtist,

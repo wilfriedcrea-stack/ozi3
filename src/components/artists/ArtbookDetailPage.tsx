@@ -35,7 +35,10 @@ export const ArtbookDetailPage: React.FC = () => {
     openArtbookPage,
     setViewMode,
     currentUser,
-    artbookPurchases
+    artbookPurchases,
+    validatedArtbookNotification,
+    clearValidatedArtbookNotification,
+    openCartModal
   } = useData();
 
   // Find target artbook
@@ -57,10 +60,12 @@ export const ArtbookDetailPage: React.FC = () => {
   const [isFreeModalOpen, setIsFreeModalOpen] = useState<boolean>(false);
   const [isPaidModalOpen, setIsPaidModalOpen] = useState<boolean>(false);
   const [isFormatModalOpen, setIsFormatModalOpen] = useState<boolean>(false);
+  const [isPaymentJustValidated, setIsPaymentJustValidated] = useState<boolean>(false);
   const [downloadLead, setDownloadLead] = useState<{
     userName?: string;
     userEmail?: string;
     isPaid?: boolean;
+    priceXof?: number;
     transactionRef?: string;
   }>({});
   const [copiedLink, setCopiedLink] = useState(false);
@@ -121,6 +126,24 @@ export const ArtbookDetailPage: React.FC = () => {
     });
   }, [currentArtbook?.id, currentUser?.uid, localCompletedPurchase]);
 
+  // Ouverture automatique de l'onglet « Paiement validé » + téléchargement PDF & EPUB au retour de Paystack
+  useEffect(() => {
+    if (!currentArtbook || !validatedArtbookNotification) return;
+    const targetId = validatedArtbookNotification.artbookId;
+    if (targetId === currentArtbook.id || targetId === currentArtbook.slug) {
+      setDownloadLead({
+        userName: validatedArtbookNotification.userName,
+        userEmail: validatedArtbookNotification.userEmail,
+        isPaid: true,
+        priceXof: validatedArtbookNotification.priceXof || currentArtbook.price,
+        transactionRef: validatedArtbookNotification.transactionRef,
+      });
+      setIsPaymentJustValidated(true);
+      setIsFormatModalOpen(true);
+      clearValidatedArtbookNotification();
+    }
+  }, [currentArtbook, validatedArtbookNotification, clearValidatedArtbookNotification]);
+
   if (!currentArtbook) {
     return (
       <div className="min-h-[70vh] bg-white text-zinc-950 flex flex-col items-center justify-center p-6 text-center">
@@ -152,10 +175,12 @@ export const ArtbookDetailPage: React.FC = () => {
       : null;
 
   const handleDirectUnlockedDownload = () => {
+    setIsPaymentJustValidated(false);
     setDownloadLead({
       userName: localCompletedPurchase?.userName || currentUser?.displayName || 'Lecteur OZI',
       userEmail: localCompletedPurchase?.userEmail || currentUser?.email || '',
       isPaid: true,
+      priceXof: localCompletedPurchase?.priceXof || currentArtbook.price,
       transactionRef: localCompletedPurchase?.paymentReference,
     });
     setIsFormatModalOpen(true);
@@ -681,6 +706,7 @@ export const ArtbookDetailPage: React.FC = () => {
         isOpen={isFreeModalOpen}
         onClose={() => setIsFreeModalOpen(false)}
         onFormCompleted={({ userName, userEmail }) => {
+          setIsPaymentJustValidated(false);
           setDownloadLead({ userName, userEmail, isPaid: false });
           setIsFormatModalOpen(true);
         }}
@@ -692,20 +718,31 @@ export const ArtbookDetailPage: React.FC = () => {
         isOpen={isPaidModalOpen}
         onClose={() => setIsPaidModalOpen(false)}
         onOpenFormatChoice={({ userName, userEmail, transactionRef }) => {
-          setDownloadLead({ userName, userEmail, isPaid: true, transactionRef });
+          setIsPaymentJustValidated(true);
+          setDownloadLead({ userName, userEmail, isPaid: true, priceXof: currentArtbook.price, transactionRef });
           setIsFormatModalOpen(true);
         }}
       />
 
-      {/* FORMAT SELECTION MODAL (1. PDF / 2. EPUB) */}
+      {/* AUTOMATIC DUAL DOWNLOAD MODAL (PDF + EPUB / PAIEMENT VALIDÉ) */}
       <DownloadFormatModal
         artbook={currentArtbook}
         isOpen={isFormatModalOpen}
-        onClose={() => setIsFormatModalOpen(false)}
+        onClose={() => {
+          setIsFormatModalOpen(false);
+          setIsPaymentJustValidated(false);
+        }}
         userName={downloadLead.userName}
         userEmail={downloadLead.userEmail}
         isPaid={downloadLead.isPaid}
+        paymentJustValidated={isPaymentJustValidated}
+        priceXof={downloadLead.priceXof}
         transactionRef={downloadLead.transactionRef}
+        onOpenCart={() => {
+          setIsFormatModalOpen(false);
+          setIsPaymentJustValidated(false);
+          openCartModal();
+        }}
       />
     </div>
   );

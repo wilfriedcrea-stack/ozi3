@@ -16,6 +16,7 @@ import {
   activateArtbookPurchase,
   hasArtbookAccess,
   getUserArtbookPurchases,
+  getArtbookPurchasesByEmail,
   activateCoinPackPurchase,
 } from '../services/subscriptionService';
 import { isAdminAuthorized, readStudioDataFile } from './studioDataRoutes';
@@ -99,6 +100,8 @@ paystackRouter.post('/initialize', async (req: Request, res: Response) => {
       packId,
       coinsAmount,
       email,
+      name,
+      customerName,
       amount,
       currency,
       callbackUrl,
@@ -133,6 +136,7 @@ paystackRouter.post('/initialize', async (req: Request, res: Response) => {
       artistName,
       packId,
       coinsAmount: Number(coinsAmount) || 0,
+      customerName: typeof customerName === 'string' ? customerName : (typeof name === 'string' ? name : ''),
       callbackUrl,
       originUrl: getRequestOrigin(req),
     });
@@ -214,6 +218,7 @@ paystackRouter.post('/webhook', async (req: Request, res: Response) => {
             amount,
             currency,
             customerEmail,
+            userName: metadata.customerName || '',
           });
         }
       } else if (paymentType === 'coin_pack') {
@@ -312,6 +317,7 @@ paystackRouter.get('/verify/:reference', async (req: Request, res: Response) => 
         amount: verifyResult.amount || expectedPrice,
         currency: verifyResult.currency || 'XOF',
         customerEmail: verifyResult.customerEmail || '',
+        userName: verifyResult.customerName || '',
       });
       return res.status(200).json({
         success: true,
@@ -404,6 +410,32 @@ paystackRouter.get(['/artbooks/user-purchases/:uid', '/user-purchases/:uid'], as
     return res.status(200).json({ success: true, purchases });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/artbooks/purchases-by-email & /api/paystack/artbooks/purchases-by-email & /api/paystack/purchases-by-email
+ */
+paystackRouter.get(['/artbooks/purchases-by-email', '/purchases-by-email'], async (req: Request, res: Response) => {
+  try {
+    const rawEmail = String(req.query.email || '').trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!rawEmail || !emailRegex.test(rawEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Veuillez saisir une adresse e-mail valide.',
+        purchases: [],
+      });
+    }
+
+    const purchases = await getArtbookPurchasesByEmail(rawEmail);
+    return res.status(200).json({
+      success: true,
+      purchases,
+      count: purchases.length,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message, purchases: [] });
   }
 });
 

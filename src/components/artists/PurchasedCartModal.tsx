@@ -8,6 +8,10 @@ import {
   Palette,
   Receipt,
   Sparkles,
+  Mail,
+  Search,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Artbook, ArtbookPurchaseRecord } from '../../types';
@@ -23,12 +27,30 @@ export const PurchasedCartModal: React.FC = () => {
     artbooks,
     openArtbookPage,
     setViewMode,
+    currentUser,
+    recoverArtbookPurchasesByEmail,
   } = useData();
 
   const [selectedDownloadTarget, setSelectedDownloadTarget] = useState<{
     artbook: Artbook;
     purchase: ArtbookPurchaseRecord;
   } | null>(null);
+
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [isRecovering, setIsRecovering] = useState(false);
+  const [recoveryStatus, setRecoveryStatus] = useState<{
+    type: 'success' | 'info' | 'error';
+    text: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (isCartModalOpen) {
+      setRecoveryStatus(null);
+      if (!recoveryEmail && currentUser?.email) {
+        setRecoveryEmail(currentUser.email);
+      }
+    }
+  }, [isCartModalOpen, currentUser?.email]);
 
   useEffect(() => {
     if (!isCartModalOpen) return;
@@ -55,6 +77,29 @@ export const PurchasedCartModal: React.FC = () => {
   }, [artbookPurchases]);
 
   if (!isCartModalOpen) return null;
+
+  const handleRecoverByEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecoveryStatus(null);
+    setIsRecovering(true);
+    try {
+      const result = await recoverArtbookPurchasesByEmail(recoveryEmail);
+      if (!result.success) {
+        setRecoveryStatus({ type: 'error', text: result.message });
+      } else if (result.count === 0) {
+        setRecoveryStatus({ type: 'info', text: result.message });
+      } else {
+        setRecoveryStatus({ type: 'success', text: result.message });
+      }
+    } catch {
+      setRecoveryStatus({
+        type: 'error',
+        text: 'Erreur réseau lors de la récupération de vos achats.',
+      });
+    } finally {
+      setIsRecovering(false);
+    }
+  };
 
   const findArtbookForPurchase = (purchase: ArtbookPurchaseRecord): Artbook => {
     const found = (artbooks || []).find(
@@ -92,7 +137,7 @@ export const PurchasedCartModal: React.FC = () => {
         aria-label="Mes Artbooks payés"
       >
         <div
-          className="relative w-full max-w-xl rounded-3xl bg-[#14151e] border border-zinc-800 shadow-2xl p-6 sm:p-7 text-zinc-100 max-h-[85vh] flex flex-col"
+          className="relative w-full max-w-xl rounded-3xl bg-[#14151e] border border-zinc-800 shadow-2xl p-6 sm:p-7 text-zinc-100 max-h-[88vh] flex flex-col"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Close Button */}
@@ -106,7 +151,7 @@ export const PurchasedCartModal: React.FC = () => {
           </button>
 
           {/* Header */}
-          <div className="flex items-center gap-3 mb-5 pr-10">
+          <div className="flex items-center gap-3 mb-4 pr-10">
             <div className="w-11 h-11 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
               <ShoppingCart className="w-5 h-5" />
             </div>
@@ -121,17 +166,74 @@ export const PurchasedCartModal: React.FC = () => {
             </div>
           </div>
 
+          {/* Retrouver mes achats avec mon e-mail */}
+          <div className="mb-4 p-3.5 rounded-2xl bg-zinc-950/80 border border-zinc-800/90">
+            <div className="flex items-center gap-2 text-xs font-bold text-zinc-200 mb-2">
+              <Mail className="w-4 h-4 text-[#ff8679] shrink-0" />
+              <span>Retrouver mes achats avec mon e-mail</span>
+            </div>
+            <form onSubmit={handleRecoverByEmail} className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="email"
+                required
+                value={recoveryEmail}
+                onChange={(e) => setRecoveryEmail(e.target.value)}
+                placeholder="Votre e-mail utilisé lors du paiement"
+                className="flex-1 px-3.5 py-2 rounded-xl bg-zinc-900 border border-zinc-800 focus:border-[#ff8679] text-white text-xs sm:text-sm focus:outline-none transition-colors"
+              />
+              <button
+                type="submit"
+                disabled={isRecovering}
+                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                {isRecovering ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Recherche...</span>
+                  </>
+                ) : (
+                  <>
+                    <Search className="w-3.5 h-3.5" />
+                    <span>Retrouver</span>
+                  </>
+                )}
+              </button>
+            </form>
+            <p className="text-[11px] text-zinc-500 mt-1.5">
+              Récupérez tous vos artbooks payés depuis n’importe quel téléphone ou ordinateur.
+            </p>
+
+            {recoveryStatus && (
+              <div
+                className={`mt-2.5 p-2.5 rounded-xl text-xs flex items-center gap-2 border ${
+                  recoveryStatus.type === 'success'
+                    ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-300'
+                    : recoveryStatus.type === 'error'
+                    ? 'bg-rose-950/50 border-rose-500/40 text-rose-200'
+                    : 'bg-zinc-900 border-zinc-700 text-zinc-300'
+                }`}
+              >
+                {recoveryStatus.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                )}
+                <span>{recoveryStatus.text}</span>
+              </div>
+            )}
+          </div>
+
           {/* Content List */}
           <div className="flex-1 overflow-y-auto pr-1 space-y-3">
             {paidPurchases.length === 0 ? (
-              <div className="py-10 px-4 text-center rounded-2xl bg-zinc-950/70 border border-zinc-800/80 space-y-4">
-                <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 mx-auto">
-                  <ShoppingCart className="w-7 h-7" />
+              <div className="py-8 px-4 text-center rounded-2xl bg-zinc-950/70 border border-zinc-800/80 space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 mx-auto">
+                  <ShoppingCart className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">Aucun artbook payé pour le moment</h3>
+                  <h3 className="text-base font-bold text-white">Aucun artbook payé sur cet appareil</h3>
                   <p className="text-xs text-zinc-400 mt-1 max-w-sm mx-auto leading-relaxed">
-                    Dès que vous achetez un artbook via Paystack, il apparaît ici pour vous permettre de le télécharger à tout moment en PDF ou EPUB.
+                    Dès que vous achetez un artbook via Paystack, il apparaît ici pour télécharger ses fichiers PDF et EPUB à tout moment.
                   </p>
                 </div>
                 <button
@@ -210,7 +312,7 @@ export const PurchasedCartModal: React.FC = () => {
                         className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-sm"
                       >
                         <Download className="w-3.5 h-3.5" />
-                        <span>Télécharger</span>
+                        <span>Télécharger (PDF + EPUB)</span>
                       </button>
 
                       <button
@@ -233,7 +335,7 @@ export const PurchasedCartModal: React.FC = () => {
         </div>
       </div>
 
-      {/* Format Picker Modal (1. PDF / 2. EPUB) directly from Cart */}
+      {/* Automatic Dual Downloader (PDF + EPUB) directly from Cart */}
       {selectedDownloadTarget && (
         <DownloadFormatModal
           artbook={selectedDownloadTarget.artbook}
@@ -242,6 +344,7 @@ export const PurchasedCartModal: React.FC = () => {
           userName={selectedDownloadTarget.purchase.userName}
           userEmail={selectedDownloadTarget.purchase.userEmail}
           isPaid={true}
+          priceXof={selectedDownloadTarget.purchase.priceXof}
           transactionRef={selectedDownloadTarget.purchase.paymentReference}
         />
       )}

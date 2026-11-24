@@ -365,6 +365,51 @@ export async function getUserArtbookPurchases(uid: string): Promise<ArtbookPurch
 }
 
 /**
+ * Returns all confirmed artbook purchases associated with a buyer email (cross-device recovery)
+ */
+export async function getArtbookPurchasesByEmail(email: string): Promise<ArtbookPurchaseRecord[]> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail) return [];
+
+  const list: ArtbookPurchaseRecord[] = [];
+  const seenKeys = new Set<string>();
+
+  const pushUnique = (pur: ArtbookPurchaseRecord) => {
+    const status = String(pur.status || '').toLowerCase();
+    const isConfirmed = pur.downloadAuthorized || status === 'completed' || status === 'active';
+    if (!isConfirmed) return;
+    const key = pur.paymentReference || pur.id;
+    if (key && seenKeys.has(key)) return;
+    if (key) seenKeys.add(key);
+    list.push(pur);
+  };
+
+  for (const pur of memoryArtbookPurchases.values()) {
+    const purEmail = String(pur.userEmail || '').trim().toLowerCase();
+    if (purEmail === cleanEmail) {
+      pushUnique(pur);
+    }
+  }
+
+  if (serverDb) {
+    try {
+      const colRef = collection(serverDb, 'artbook_purchases');
+      const [snapUserEmail, snapCustomerEmail] = await Promise.all([
+        getDocs(query(colRef, where('userEmail', '==', cleanEmail))),
+        getDocs(query(colRef, where('customerEmail', '==', cleanEmail))),
+      ]);
+      snapUserEmail.forEach(d => pushUnique(d.data() as ArtbookPurchaseRecord));
+      snapCustomerEmail.forEach(d => pushUnique(d.data() as ArtbookPurchaseRecord));
+    } catch (err) {
+      console.warn('[SubscriptionService] Notice fetching artbook purchases by email:', err);
+    }
+  }
+
+  list.sort((a, b) => new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime());
+  return list;
+}
+
+/**
  * Returns all artbook purchases across all readers for reporting
  */
 export async function getAllArtbookPurchases(): Promise<ArtbookPurchaseRecord[]> {

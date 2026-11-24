@@ -33,7 +33,7 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
   onClose,
   onOpenFormatChoice
 }) => {
-  const { currentUser, readerProfile, recordArtbookPurchase } = useData();
+  const { currentUser, readerProfile, recordArtbookPurchase, confirmArtbookPurchaseLocal } = useData();
 
   const [step, setStep] = useState<CheckoutStep>('details');
   const [name, setName] = useState('');
@@ -176,6 +176,16 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
 
           if (verifyData.success && (verifyData.verified || verifyData.status === 'success')) {
             stopPolling();
+            confirmArtbookPurchaseLocal({
+              artbookId: artbook.id,
+              artbookTitle: artbook.title,
+              artistName: artbook.artistName,
+              priceXof: artbook.price,
+              userName: name.trim(),
+              userEmail: email.trim().toLowerCase(),
+              paymentReference: activeRef,
+              userId: currentUser?.uid,
+            });
             setDownloadAuthorized(true);
             setStep('confirmed');
 
@@ -384,9 +394,28 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
                     const data = await verifyPaystackPayment(transactionRef, uid, artbook.id, 'artbook_purchase');
                     if (data.success && (data.verified || data.status === 'success')) {
                       stopPolling();
+                      confirmArtbookPurchaseLocal({
+                        artbookId: artbook.id,
+                        artbookTitle: artbook.title,
+                        artistName: artbook.artistName,
+                        priceXof: artbook.price,
+                        userName: name.trim(),
+                        userEmail: email.trim().toLowerCase(),
+                        paymentReference: transactionRef,
+                        userId: currentUser?.uid,
+                      });
                       setDownloadAuthorized(true);
-                      setStep('confirmed');
                       confetti({ particleCount: 100, spread: 80 });
+                      if (onOpenFormatChoice) {
+                        onClose();
+                        onOpenFormatChoice({
+                          userName: name.trim(),
+                          userEmail: email.trim().toLowerCase(),
+                          transactionRef,
+                        });
+                      } else {
+                        setStep('confirmed');
+                      }
                     }
                   } catch (e) {
                     console.warn(e);

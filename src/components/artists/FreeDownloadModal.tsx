@@ -208,7 +208,7 @@ export const FreeDownloadModal: React.FC<FreeDownloadModalProps> = ({
                   </>
                 ) : (
                   <>
-                    <span>Valider et choisir le format</span>
+                    <span>Valider et télécharger (PDF + EPUB)</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}

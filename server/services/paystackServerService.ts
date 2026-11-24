@@ -22,6 +22,7 @@ export interface PaystackInitializeOptions {
   artistName?: string;
   packId?: string;
   coinsAmount?: number;
+  customerName?: string;
   callbackUrl?: string;
   originUrl?: string;
 }
@@ -244,6 +245,7 @@ export async function initializePaystackTransaction(
           packId: options.packId || (paymentType === 'coin_pack' ? targetId : ''),
           coinsAmount: options.coinsAmount || 0,
           email: options.email,
+          customerName: options.customerName || '',
           custom_fields: [
             {
               display_name: 'Type de Paiement',
@@ -343,6 +345,7 @@ export async function verifyPaystackTransaction(reference: string): Promise<{
   packId?: string;
   coinsAmount?: number;
   customerEmail?: string;
+  customerName?: string;
   raw?: any;
 }> {
   const { secretKey } = resolvePaystackCredentials();
@@ -389,6 +392,7 @@ export async function verifyPaystackTransaction(reference: string): Promise<{
         packId: metadata.packId || (paymentType === 'coin_pack' ? targetId : ''),
         coinsAmount: metadata.coinsAmount || 0,
         customerEmail: (d.customer && d.customer.email) || metadata.email || '',
+        customerName: metadata.customerName || '',
         raw: d,
       };
     }
