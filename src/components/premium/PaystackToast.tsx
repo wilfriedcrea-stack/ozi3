@@ -1,15 +1,21 @@
 import React, { useEffect } from 'react';
-import { CheckCircle2, AlertCircle, X, Sparkles, BookOpen } from 'lucide-react';
+import { CheckCircle2, AlertCircle, X, Sparkles, BookOpen, ShoppingCart, Coins } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
 export const PaystackToast: React.FC = () => {
-  const { paystackToast, setPaystackToast, openProfileModal } = useData();
+  const {
+    paystackToast,
+    setPaystackToast,
+    openProfileModal,
+    openCartModal,
+    openArtbookPage,
+  } = useData();
 
   useEffect(() => {
     if (paystackToast?.visible) {
       const timer = setTimeout(() => {
         setPaystackToast(null);
-      }, 7000);
+      }, 9000);
       return () => clearTimeout(timer);
     }
   }, [paystackToast, setPaystackToast]);
@@ -19,26 +25,27 @@ export const PaystackToast: React.FC = () => {
   }
 
   const isSuccess = paystackToast.type === 'success';
+  const paymentType = paystackToast.paymentType || 'work_pass';
 
   return (
-    <aside 
+    <aside
       aria-label="Notification de paiement"
       className="fixed top-5 right-4 sm:right-6 z-[9999] max-w-md w-[calc(100vw-2rem)] animate-in fade-in slide-in-from-top-4 duration-300 pointer-events-auto"
     >
-      <div 
+      <div
         className={`relative overflow-hidden rounded-2xl border p-4 shadow-2xl backdrop-blur-xl ${
-          isSuccess 
-            ? 'bg-zinc-900/95 border-emerald-500/50 shadow-emerald-500/20 text-white' 
+          isSuccess
+            ? 'bg-zinc-900/95 border-emerald-500/50 shadow-emerald-500/20 text-white'
             : 'bg-zinc-900/95 border-amber-500/50 shadow-amber-500/20 text-white'
         }`}
       >
         {/* Top glow accent */}
-        <div 
+        <div
           className={`absolute top-0 left-0 right-0 h-1 ${
-            isSuccess 
-              ? 'bg-gradient-to-r from-emerald-500 via-teal-400 to-amber-400 animate-pulse' 
+            isSuccess
+              ? 'bg-gradient-to-r from-emerald-500 via-teal-400 to-amber-400 animate-pulse'
               : 'bg-gradient-to-r from-amber-500 to-rose-500'
-          }`} 
+          }`}
         />
 
         <div className="flex items-start gap-3">
@@ -68,29 +75,76 @@ export const PaystackToast: React.FC = () => {
 
             {paystackToast.workTitle && (
               <p className="text-xs text-amber-300 font-medium mt-1 truncate">
-                Œuvre : <span className="font-bold underline">{paystackToast.workTitle}</span>
+                {paymentType === 'artbook_purchase'
+                  ? 'Artbook : '
+                  : paymentType === 'coin_pack'
+                  ? 'Pack : '
+                  : 'Œuvre : '}
+                <span className="font-bold underline">{paystackToast.workTitle}</span>
               </p>
             )}
 
-            <div className="mt-3 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setPaystackToast(null);
-                  openProfileModal();
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold text-xs transition-colors shadow-sm"
-              >
-                <BookOpen className="w-3.5 h-3.5" />
-                Voir mes abonnements
-              </button>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {paymentType === 'artbook_purchase' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaystackToast(null);
+                      openCartModal();
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold text-xs transition-colors shadow-sm cursor-pointer"
+                  >
+                    <ShoppingCart className="w-3.5 h-3.5" />
+                    Voir mon panier
+                  </button>
+                  {paystackToast.artbookId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetId = paystackToast.artbookId!;
+                        setPaystackToast(null);
+                        openArtbookPage(targetId);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs transition-colors cursor-pointer"
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      Télécharger l'artbook
+                    </button>
+                  )}
+                </>
+              ) : paymentType === 'coin_pack' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaystackToast(null);
+                    openProfileModal();
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold text-xs transition-colors shadow-sm cursor-pointer"
+                >
+                  <Coins className="w-3.5 h-3.5" />
+                  Voir mes Coins
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaystackToast(null);
+                    openProfileModal();
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold text-xs transition-colors shadow-sm cursor-pointer"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  Voir mes abonnements
+                </button>
+              )}
             </div>
           </div>
 
           <button
             type="button"
             onClick={() => setPaystackToast(null)}
-            className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition-colors shrink-0"
+            className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition-colors shrink-0 cursor-pointer"
             aria-label="Fermer la notification"
           >
             <X className="w-4 h-4" />

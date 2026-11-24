@@ -22,6 +22,7 @@ import { AuthModal } from './components/auth/AuthModal';
 import { UserProfileModal } from './components/auth/UserProfileModal';
 import { PaystackToast } from './components/premium/PaystackToast';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
+import { PurchasedCartModal } from './components/artists/PurchasedCartModal';
 
 const MainLayout: React.FC = () => {
   const { viewMode, adminAuth } = useData();
@@ -71,6 +72,7 @@ const MainLayout: React.FC = () => {
         <TeaserVideoModal />
         <AuthModal />
         <UserProfileModal />
+        <PurchasedCartModal />
       </div>
     </PullToRefresh>
   );

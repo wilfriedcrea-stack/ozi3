@@ -8,6 +8,7 @@ export interface InitiateSubscriptionParams {
   email?: string;
   amount?: number; // 2 000 FCFA
   currency?: string; // 'XOF'
+  callbackUrl?: string;
 }
 
 export interface PaystackAdminConfig {
@@ -200,6 +201,7 @@ export async function initiateWorkSubscription(
         email: params.email,
         amount: params.amount || 2000,
         currency: params.currency || 'XOF',
+        callbackUrl: params.callbackUrl,
       }),
     }
   );
@@ -349,6 +351,7 @@ export async function initiateArtbookPurchase(params: {
   name?: string;
   phone?: string;
   amount: number;
+  callbackUrl?: string;
 }): Promise<PaystackInitResponse> {
   const res = await fetchPaystackWithFallback(
     {
@@ -367,6 +370,7 @@ export async function initiateArtbookPurchase(params: {
         email: params.email,
         amount: params.amount,
         currency: 'XOF',
+        callbackUrl: params.callbackUrl,
       }),
     }
   );

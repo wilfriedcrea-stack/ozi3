@@ -96,6 +96,11 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
       const uid = currentUser?.uid || `guest_${Date.now()}`;
       setCheckoutUid(uid);
 
+      const callbackUrl =
+        typeof window !== 'undefined'
+          ? `${window.location.origin}${window.location.pathname}#/paystack/callback?type=artbook_purchase&target=${encodeURIComponent(artbook.id)}`
+          : undefined;
+
       // 1. Initialisation réelle de la transaction Paystack (Mobile Money / Carte)
       const initResult = await initiateArtbookPurchase({
         uid,
@@ -106,6 +111,7 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
         name: name.trim(),
         phone: '',
         amount: artbook.price || 3500,
+        callbackUrl,
       });
 
       if (!initResult.success || !initResult.reference) {
@@ -117,6 +123,24 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
       setTransactionRef(initResult.reference);
       setPaymentAuthUrl(initResult.authorizationUrl || '');
       const purchaseId = `purchase-${Date.now()}`;
+
+      // Sauvegarder le contexte d'achat pour le retour de Paystack
+      try {
+        localStorage.setItem(
+          'ozi_pending_paystack_artbook',
+          JSON.stringify({
+            purchaseId,
+            uid,
+            artbookId: artbook.id,
+            artbookTitle: artbook.title,
+            artistName: artbook.artistName,
+            priceXof: artbook.price,
+            userName: name.trim(),
+            userEmail: email.trim().toLowerCase(),
+            reference: initResult.reference,
+          })
+        );
+      } catch {}
 
       // 2. Enregistrer l'initiation en attente localement
       await recordArtbookPurchase({
@@ -136,13 +160,10 @@ export const PaidPurchaseModal: React.FC<PaidPurchaseModalProps> = ({
         userId: currentUser?.uid
       });
 
-      // 3. Ouvrir le guichet sécurisé Paystack si URL fournie
+      // 3. Redirection directe dans la même fenêtre vers Paystack
       if (initResult.authorizationUrl) {
-        try {
-          window.open(initResult.authorizationUrl, '_blank', 'noopener,noreferrer,width=540,height=720');
-        } catch {
-          // Si le navigateur bloque la fenêtre, l'utilisateur clique sur le bouton manuel dans l'étape processing
-        }
+        window.location.href = initResult.authorizationUrl;
+        return;
       }
 
       // 4. Polling actif de vérification auprès du serveur (Node ou PHP LWS)

@@ -51,6 +51,11 @@ export const WorkPremiumModal: React.FC<WorkPremiumModalProps> = ({
 
     setIsLoading(true);
     try {
+      const callbackUrl =
+        typeof window !== 'undefined'
+          ? `${window.location.origin}${window.location.pathname}#/paystack/callback?type=work_pass&target=${encodeURIComponent(series.id)}`
+          : undefined;
+
       const res = await initiateWorkSubscription({
         uid: currentUser.uid,
         workId: series.id,
@@ -58,6 +63,7 @@ export const WorkPremiumModal: React.FC<WorkPremiumModalProps> = ({
         email: currentUser.email || readerProfile?.email || '',
         amount: PRICE_XOF,
         currency: 'XOF',
+        callbackUrl,
       });
 
       if (res.success && res.authorizationUrl) {

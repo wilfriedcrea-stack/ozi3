@@ -34,7 +34,8 @@ export const ArtbookDetailPage: React.FC = () => {
     openArtistPage, 
     openArtbookPage,
     setViewMode,
-    currentUser 
+    currentUser,
+    artbookPurchases
   } = useData();
 
   // Find target artbook
@@ -87,9 +88,29 @@ export const ArtbookDetailPage: React.FC = () => {
     setActiveImageIndex(0);
   }, [currentArtbook?.id]);
 
-  // Vérifier si le lecteur connecté a déjà acheté cet Artbook via Paystack
+  const localCompletedPurchase = useMemo(() => {
+    if (!currentArtbook) return null;
+    return (
+      (artbookPurchases || []).find(
+        (p) =>
+          (p.artbookId === currentArtbook.id || p.artbookId === currentArtbook.slug) &&
+          p.status === 'completed' &&
+          p.downloadAuthorized
+      ) || null
+    );
+  }, [artbookPurchases, currentArtbook?.id, currentArtbook?.slug]);
+
+  // Vérifier si le lecteur (connecté ou invité) a déjà acheté cet Artbook via Paystack
   useEffect(() => {
-    if (!currentArtbook || currentArtbook.isFree || !currentUser?.uid) {
+    if (!currentArtbook || currentArtbook.isFree) {
+      setHasPurchasedAccess(false);
+      return;
+    }
+    if (localCompletedPurchase) {
+      setHasPurchasedAccess(true);
+      return;
+    }
+    if (!currentUser?.uid) {
       setHasPurchasedAccess(false);
       return;
     }
@@ -98,7 +119,7 @@ export const ArtbookDetailPage: React.FC = () => {
         setHasPurchasedAccess(true);
       }
     });
-  }, [currentArtbook?.id, currentUser?.uid]);
+  }, [currentArtbook?.id, currentUser?.uid, localCompletedPurchase]);
 
   if (!currentArtbook) {
     return (
@@ -132,9 +153,10 @@ export const ArtbookDetailPage: React.FC = () => {
 
   const handleDirectUnlockedDownload = () => {
     setDownloadLead({
-      userName: currentUser?.displayName || 'Lecteur OZI',
-      userEmail: currentUser?.email || '',
+      userName: localCompletedPurchase?.userName || currentUser?.displayName || 'Lecteur OZI',
+      userEmail: localCompletedPurchase?.userEmail || currentUser?.email || '',
       isPaid: true,
+      transactionRef: localCompletedPurchase?.paymentReference,
     });
     setIsFormatModalOpen(true);
   };

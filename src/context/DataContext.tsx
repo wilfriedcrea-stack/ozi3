@@ -143,7 +143,11 @@ import {
   updateReaderProfileInDb, 
   fetchOrCreateReaderProfile 
 } from '../services/authService';
-import { fetchUserSubscriptions, verifyPaystackPayment } from '../services/paystackClientService';
+import {
+  fetchUserSubscriptions,
+  fetchUserArtbookPurchases,
+  verifyPaystackPayment
+} from '../services/paystackClientService';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
 interface DataContextType {
@@ -200,6 +204,9 @@ interface DataContextType {
   setIsProfileModalOpen: (open: boolean) => void;
   openProfileModal: () => void;
   closeProfileModal: () => void;
+  isCartModalOpen: boolean;
+  openCartModal: () => void;
+  closeCartModal: () => void;
   signInReaderWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   signInReaderWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   signUpReaderWithEmail: (name: string, email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
@@ -343,8 +350,22 @@ interface DataContextType {
   userSubscriptions: SubscriptionRecord[];
   hasWorkAccess: (workId: string) => boolean;
   refreshUserSubscriptions: () => Promise<void>;
-  paystackToast: { visible: boolean; message: string; type: 'success' | 'error' | 'info'; workTitle?: string } | null;
-  setPaystackToast: (toast: { visible: boolean; message: string; type: 'success' | 'error' | 'info'; workTitle?: string } | null) => void;
+  paystackToast: {
+    visible: boolean;
+    message: string;
+    type: 'success' | 'error' | 'info';
+    workTitle?: string;
+    paymentType?: 'work_pass' | 'artbook_purchase' | 'coin_pack';
+    artbookId?: string;
+  } | null;
+  setPaystackToast: (toast: {
+    visible: boolean;
+    message: string;
+    type: 'success' | 'error' | 'info';
+    workTitle?: string;
+    paymentType?: 'work_pass' | 'artbook_purchase' | 'coin_pack';
+    artbookId?: string;
+  } | null) => void;
 }
 
 
@@ -404,6 +425,22 @@ const parseCurrentRoute = (): ParsedRoute => {
   const path = window.location.pathname.toLowerCase().replace(/\/+$/, '');
   const hash = window.location.hash.toLowerCase();
   const searchParams = new URLSearchParams(window.location.search);
+
+  // 0. Retour Paystack callback : rediriger directement vers l'artbook ou l'oeuvre ciblé
+  if (hash.includes('/paystack/callback')) {
+    const rawHashQuery = window.location.hash.includes('?')
+      ? window.location.hash.split('?').slice(1).join('?')
+      : '';
+    const cbHashParams = new URLSearchParams(rawHashQuery);
+    const cbType = (cbHashParams.get('type') || searchParams.get('type') || '').toLowerCase();
+    const cbTarget = cbHashParams.get('target') || searchParams.get('target') || '';
+    if (cbTarget && cbType === 'artbook_purchase') {
+      return { mode: 'artbook-detail', id: cbTarget };
+    }
+    if (cbTarget && cbType === 'work_pass') {
+      return { mode: 'oeuvre-detail', id: cbTarget };
+    }
+  }
 
   // 1. Artbook standalone page check (#/artbook/slug or /artbook/slug or ?artbook=slug)
   const artbookHashMatch = window.location.hash.match(/#\/?artbook\/([a-zA-Z0-9_-]+)/i);
@@ -623,6 +660,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [authModalInitialTab, setAuthModalInitialTab] = useState<'login' | 'register' | 'forgot'>('login');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+  const [isCartModalOpen, setIsCartModalOpen] = useState<boolean>(false);
 
   const openAuthModal = useCallback((tab: 'login' | 'register' | 'forgot' = 'login') => {
     setAuthModalInitialTab(tab);
@@ -639,6 +677,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const closeProfileModal = useCallback(() => {
     setIsProfileModalOpen(false);
+  }, []);
+
+  const openCartModal = useCallback(() => {
+    setIsCartModalOpen(true);
+  }, []);
+
+  const closeCartModal = useCallback(() => {
+    setIsCartModalOpen(false);
   }, []);
 
   // Listen to Firebase Auth state for Readers
@@ -745,7 +791,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     message: string;
     type: 'success' | 'error' | 'info';
     workTitle?: string;
+    paymentType?: 'work_pass' | 'artbook_purchase' | 'coin_pack';
+    artbookId?: string;
   } | null>(null);
+  const processedPaystackRefsRef = useRef<Set<string>>(new Set());
 
   const refreshUserSubscriptions = useCallback(async () => {
     if (currentUser?.uid) {
@@ -754,59 +803,261 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [currentUser]);
 
-  // Load subscriptions on user change
+  // Helper to mark a verified artbook purchase as completed & unlocked in state/localStorage
+  const upsertVerifiedArtbookPurchaseLocal = useCallback((rawPurchase: Partial<ArtbookPurchaseRecord> & {
+    artbookId: string;
+    paymentReference: string;
+  }) => {
+    if (!rawPurchase.artbookId) return;
+    setArtbookPurchases((prev) => {
+      const ref = rawPurchase.paymentReference;
+      const existingIdx = prev.findIndex(
+        (p) =>
+          (ref && p.paymentReference === ref) ||
+          (rawPurchase.id && p.id === rawPurchase.id)
+      );
+      const matchedAb = (artbooksRef.current || []).find(
+        (a) => a.id === rawPurchase.artbookId || a.slug === rawPurchase.artbookId
+      );
+      const nextRecord: ArtbookPurchaseRecord = {
+        id: rawPurchase.id || (existingIdx >= 0 ? prev[existingIdx].id : `pur_${ref || Date.now()}`),
+        artbookId: rawPurchase.artbookId,
+        artbookTitle: rawPurchase.artbookTitle || matchedAb?.title || (existingIdx >= 0 ? prev[existingIdx].artbookTitle : 'Artbook OZI'),
+        artistName: rawPurchase.artistName || matchedAb?.artistName || (existingIdx >= 0 ? prev[existingIdx].artistName : 'Artiste OZI'),
+        priceXof: Number(rawPurchase.priceXof ?? matchedAb?.price ?? (existingIdx >= 0 ? prev[existingIdx].priceXof : 0)),
+        userName: rawPurchase.userName || (existingIdx >= 0 ? prev[existingIdx].userName : 'Lecteur OZI'),
+        userEmail: rawPurchase.userEmail || (existingIdx >= 0 ? prev[existingIdx].userEmail : ''),
+        userPhone: rawPurchase.userPhone || '',
+        paymentGateway: 'paystack',
+        paymentReference: ref,
+        status: 'completed',
+        purchasedAt: rawPurchase.purchasedAt || (existingIdx >= 0 ? prev[existingIdx].purchasedAt : new Date().toISOString()),
+        downloadAuthorized: true,
+        userId: rawPurchase.userId || (existingIdx >= 0 ? prev[existingIdx].userId : undefined),
+      };
+
+      if (existingIdx >= 0) {
+        const clone = [...prev];
+        clone[existingIdx] = nextRecord;
+        return clone;
+      }
+      return [nextRecord, ...prev];
+    });
+  }, []);
+
+  // Load subscriptions & server artbook purchases on user change
   useEffect(() => {
     if (currentUser?.uid) {
       fetchUserSubscriptions(currentUser.uid).then(setUserSubscriptions);
+      fetchUserArtbookPurchases(currentUser.uid).then((serverPurchases) => {
+        if (!Array.isArray(serverPurchases) || serverPurchases.length === 0) return;
+        serverPurchases.forEach((raw: any) => {
+          const st = String(raw.status || '').toLowerCase();
+          if (st === 'active' || st === 'completed' || raw.downloadAuthorized) {
+            upsertVerifiedArtbookPurchaseLocal({
+              id: raw.id || raw.purchaseId,
+              artbookId: raw.artbookId,
+              artbookTitle: raw.artbookTitle,
+              artistName: raw.artistName,
+              priceXof: Number(raw.priceXof ?? raw.amount ?? 0),
+              userName: raw.userName || currentUser.displayName || 'Lecteur OZI',
+              userEmail: raw.userEmail || raw.customerEmail || currentUser.email || '',
+              paymentReference: raw.paymentReference || raw.paystackReference || '',
+              purchasedAt: raw.purchasedAt || raw.createdAt,
+              userId: raw.userId || raw.uid || currentUser.uid,
+            });
+          }
+        });
+      });
     } else {
       setUserSubscriptions([]);
     }
-  }, [currentUser]);
+  }, [currentUser, upsertVerifiedArtbookPurchaseLocal]);
 
   // Automatic detection of Paystack redirect callback parameters (?reference=... or ?trxref=...)
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const searchParams = new URLSearchParams(window.location.search);
-    const hash = window.location.hash || '';
-    let reference = searchParams.get('reference') || searchParams.get('trxref') || searchParams.get('ref');
+    const rawHash = window.location.hash || '';
+    const hashQuery = rawHash.includes('?') ? rawHash.split('?').slice(1).join('?') : '';
+    const hashParams = new URLSearchParams(hashQuery);
 
-    if (!reference && hash.includes('ref=')) {
-      const match = hash.match(/ref=([a-zA-Z0-9_-]+)/);
-      if (match) reference = match[1];
+    const reference =
+      searchParams.get('reference') ||
+      searchParams.get('trxref') ||
+      searchParams.get('ref') ||
+      hashParams.get('reference') ||
+      hashParams.get('trxref') ||
+      hashParams.get('ref');
+
+    if (!reference) return;
+    if (processedPaystackRefsRef.current.has(reference)) return;
+    processedPaystackRefsRef.current.add(reference);
+
+    let pendingArtbook: any = null;
+    try {
+      const rawPending = localStorage.getItem('ozi_pending_paystack_artbook');
+      if (rawPending) pendingArtbook = JSON.parse(rawPending);
+    } catch {}
+
+    const urlType = (searchParams.get('type') || hashParams.get('type') || '').trim();
+    const urlTarget = (
+      searchParams.get('target') ||
+      hashParams.get('target') ||
+      searchParams.get('artbookId') ||
+      hashParams.get('artbookId') ||
+      searchParams.get('workId') ||
+      hashParams.get('workId') ||
+      ''
+    ).trim();
+
+    let inferredType: 'work_pass' | 'artbook_purchase' | 'coin_pack' | undefined;
+    if (urlType === 'artbook_purchase' || urlType === 'work_pass' || urlType === 'coin_pack') {
+      inferredType = urlType;
+    } else if (reference.startsWith('ozi_art_') || (pendingArtbook && pendingArtbook.reference === reference)) {
+      inferredType = 'artbook_purchase';
+    } else if (reference.startsWith('ozi_coin_')) {
+      inferredType = 'coin_pack';
+    } else if (reference.startsWith('ozi_sub_')) {
+      inferredType = 'work_pass';
     }
 
-    if (reference) {
-      (async () => {
-        try {
-          const res = await verifyPaystackPayment(
-            reference!,
-            currentUser?.uid,
-            selectedOeuvreId || undefined
-          );
+    const effectiveTarget =
+      urlTarget ||
+      (pendingArtbook && pendingArtbook.reference === reference ? pendingArtbook.artbookId : '') ||
+      selectedOeuvreId ||
+      '';
 
-          if (res.success && res.verified) {
+    const effectiveUid =
+      currentUser?.uid ||
+      (pendingArtbook && pendingArtbook.reference === reference ? pendingArtbook.uid : '') ||
+      undefined;
+
+    (async () => {
+      try {
+        const res = await verifyPaystackPayment(
+          reference,
+          effectiveUid,
+          effectiveTarget || undefined,
+          inferredType
+        );
+
+        const resolvedType =
+          (res.paymentType as 'work_pass' | 'artbook_purchase' | 'coin_pack' | undefined) ||
+          inferredType ||
+          (res.purchase ? 'artbook_purchase' : 'work_pass');
+
+        if (res.success && res.verified) {
+          if (resolvedType === 'artbook_purchase') {
+            const p = res.purchase || {};
+            const resolvedArtbookId = p.artbookId || effectiveTarget || pendingArtbook?.artbookId || '';
+            const matchedAb = (artbooksRef.current || []).find(
+              (a) => a.id === resolvedArtbookId || a.slug === resolvedArtbookId
+            );
+            const title = p.artbookTitle || pendingArtbook?.artbookTitle || matchedAb?.title || 'Artbook OZI';
+
+            if (resolvedArtbookId) {
+              upsertVerifiedArtbookPurchaseLocal({
+                id: p.id || p.purchaseId || pendingArtbook?.purchaseId,
+                artbookId: resolvedArtbookId,
+                artbookTitle: title,
+                artistName: p.artistName || pendingArtbook?.artistName || matchedAb?.artistName || 'Artiste OZI',
+                priceXof: Number(p.priceXof ?? p.amount ?? pendingArtbook?.priceXof ?? matchedAb?.price ?? 0),
+                userName: p.userName || pendingArtbook?.userName || currentUser?.displayName || 'Lecteur OZI',
+                userEmail: p.userEmail || p.customerEmail || pendingArtbook?.userEmail || currentUser?.email || '',
+                paymentReference: p.paymentReference || p.paystackReference || reference,
+                purchasedAt: p.purchasedAt || new Date().toISOString(),
+                userId: p.userId || p.uid || currentUser?.uid,
+              });
+            }
+
+            try {
+              localStorage.removeItem('ozi_pending_paystack_artbook');
+            } catch {}
+
             setPaystackToast({
               visible: true,
               type: 'success',
-              message: '🎉 Félicitations ! Votre Pass 30 Jours a été activé avec succès.',
+              paymentType: 'artbook_purchase',
+              artbookId: resolvedArtbookId,
+              workTitle: title,
+              message: '🎉 Paiement confirmé ! Votre artbook est débloqué et ajouté à votre panier.',
+            });
+
+            if (resolvedArtbookId) {
+              setSelectedArtbookId(resolvedArtbookId);
+              setViewModeState('artbook-detail');
+              window.history.replaceState(
+                {},
+                document.title,
+                `${window.location.pathname}#/artbook/${resolvedArtbookId}`
+              );
+              return;
+            }
+          } else if (resolvedType === 'coin_pack') {
+            setPaystackToast({
+              visible: true,
+              type: 'success',
+              paymentType: 'coin_pack',
+              message: '🎉 Votre pack de Coins a été crédité avec succès !',
+            });
+          } else {
+            setPaystackToast({
+              visible: true,
+              type: 'success',
+              paymentType: 'work_pass',
               workTitle: res.subscription?.workTitle,
+              message: '🎉 Félicitations ! Votre Pass 30 Jours a été activé avec succès.',
             });
             if (currentUser?.uid) {
               const updated = await fetchUserSubscriptions(currentUser.uid);
               setUserSubscriptions(updated);
             }
+            const resolvedWorkId = res.subscription?.workId || effectiveTarget;
+            if (resolvedWorkId) {
+              setSelectedOeuvreId(resolvedWorkId);
+              setViewModeState('oeuvre-detail');
+              window.history.replaceState(
+                {},
+                document.title,
+                `${window.location.pathname}#/oeuvre/${resolvedWorkId}`
+              );
+              return;
+            }
           }
-
-          // Clean URL params cleanly without reloading
-          const cleanPath = window.location.pathname + (hash ? hash.split('?')[0] : '');
-          window.history.replaceState({}, document.title, cleanPath);
-        } catch (err) {
-          console.error('[DataContext] Error processing Paystack callback:', err);
+        } else if (resolvedType === 'artbook_purchase' && effectiveTarget) {
+          // Retour vers l'artbook même si l'utilisateur a annulé sur Paystack
+          setPaystackToast({
+            visible: true,
+            type: 'info',
+            paymentType: 'artbook_purchase',
+            artbookId: effectiveTarget,
+            message: 'Paiement annulé ou en attente de validation.',
+          });
+          setSelectedArtbookId(effectiveTarget);
+          setViewModeState('artbook-detail');
+          window.history.replaceState(
+            {},
+            document.title,
+            `${window.location.pathname}#/artbook/${effectiveTarget}`
+          );
+          return;
         }
-      })();
-    }
-  }, [currentUser, selectedOeuvreId]);
+
+        // Nettoyage propre de l'URL de callback si aucune redirection spécifique n'a eu lieu
+        if (rawHash.includes('/paystack/callback')) {
+          window.history.replaceState({}, document.title, window.location.pathname);
+          setViewModeState('accueil');
+        } else {
+          const cleanPath = window.location.pathname + (rawHash ? rawHash.split('?')[0] : '');
+          window.history.replaceState({}, document.title, cleanPath);
+        }
+      } catch (err) {
+        console.error('[DataContext] Error processing Paystack callback:', err);
+      }
+    })();
+  }, [currentUser, selectedOeuvreId, upsertVerifiedArtbookPurchaseLocal]);
 
   const setViewMode = useCallback((mode: ViewModeType) => {
     setViewModeState(mode);
@@ -3940,6 +4191,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsProfileModalOpen,
       openProfileModal,
       closeProfileModal,
+      isCartModalOpen,
+      openCartModal,
+      closeCartModal,
       signInReaderWithGoogle: signInReaderWithGoogleAction,
       signInReaderWithEmail: signInReaderWithEmailAction,
       signUpReaderWithEmail: signUpReaderWithEmailAction,

@@ -36,7 +36,8 @@ export const UserProfileModal: React.FC = () => {
     logoutReader, 
     updateReaderProfileData,
     monetization,
-    adjustUserCoins
+    adjustUserCoins,
+    artbookPurchases: localArtbookPurchases
   } = useData();
 
   const userAccount = users?.find(u => u.id === currentUser?.uid || (currentUser?.email && u.email === currentUser.email));
@@ -63,12 +64,26 @@ export const UserProfileModal: React.FC = () => {
         .finally(() => setIsLoadingSubs(false));
     } else if (activeTab === 'artbooks' && currentUser?.uid) {
       setIsLoadingArtbooks(true);
+      const completedLocal = (localArtbookPurchases || []).filter(
+        (p) => p.status === 'completed' && p.downloadAuthorized
+      );
       fetchUserArtbookPurchases(currentUser.uid)
-        .then(res => setArtbooks(res))
-        .catch(() => {})
+        .then((res) => {
+          const merged = [...completedLocal, ...(Array.isArray(res) ? res : [])];
+          const seen = new Set<string>();
+          const unique = merged.filter((item: any) => {
+            const ref = item.paymentReference || item.paystackReference || item.id || item.purchaseId;
+            if (!ref) return true;
+            if (seen.has(ref)) return false;
+            seen.add(ref);
+            return true;
+          });
+          setArtbooks(unique);
+        })
+        .catch(() => setArtbooks(completedLocal))
         .finally(() => setIsLoadingArtbooks(false));
     }
-  }, [activeTab, currentUser?.uid]);
+  }, [activeTab, currentUser?.uid, localArtbookPurchases]);
 
   useEffect(() => {
     if (readerProfile?.displayName) {
@@ -466,7 +481,7 @@ export const UserProfileModal: React.FC = () => {
                         </span>
                       </div>
                       <div className="text-[10px] text-zinc-400 mt-0.5 truncate">
-                        {art.artistName} • Réf : {art.paymentReference.slice(0, 16)}...
+                        {art.artistName} • Réf : {(art.paymentReference || (art as any).paystackReference || '').slice(0, 16)}...
                       </div>
                     </div>
                     <div className="text-right shrink-0">

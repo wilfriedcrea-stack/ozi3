@@ -11,7 +11,8 @@ import {
   Palette,
   BookOpen,
   Home,
-  FileText
+  FileText,
+  ShoppingCart
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { OziLogo } from '../common/OziLogo';
@@ -25,8 +26,23 @@ export const Navbar: React.FC = () => {
     isReaderAuthLoading, 
     openAuthModal, 
     openProfileModal, 
+    openCartModal,
+    artbookPurchases,
     logoutReader 
   } = useData();
+
+  const paidArtbooksCount = React.useMemo(() => {
+    const completed = (artbookPurchases || []).filter(
+      (p) => p.status === 'completed' && p.downloadAuthorized
+    );
+    const seen = new Set<string>();
+    return completed.filter((p) => {
+      const k = p.paymentReference || `${p.artbookId}:${p.id}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    }).length;
+  }, [artbookPurchases]);
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -152,6 +168,22 @@ export const Navbar: React.FC = () => {
             <span className="font-semibold">Recherche</span>
           </button>
 
+          {/* Desktop Shopping Cart Button (Mes Artbooks Payés) */}
+          <button
+            id="nav-cart-btn"
+            onClick={() => openCartModal()}
+            className="hidden md:flex relative items-center justify-center p-2.5 rounded-xl bg-[#1a1b22] hover:bg-[#22232c] text-zinc-200 hover:text-white border border-zinc-800 hover:border-zinc-700 transition-all cursor-pointer"
+            title="Mon Panier (Artbooks payés)"
+            aria-label="Mon Panier (Artbooks payés)"
+          >
+            <ShoppingCart className="w-4 h-4 text-[#ff8679]" />
+            {paidArtbooksCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-zinc-950 text-[10px] font-black flex items-center justify-center shadow-sm">
+                {paidArtbooksCount}
+              </span>
+            )}
+          </button>
+
           {/* Desktop Reader Auth Area */}
           <div className="hidden md:block relative" ref={dropdownRef}>
             {isReaderAuthLoading ? (
@@ -250,6 +282,22 @@ export const Navbar: React.FC = () => {
             <Search className="w-5 h-5" />
           </button>
 
+          {/* Mobile Shopping Cart Button (Mes Artbooks Payés) */}
+          <button
+            id="nav-mobile-cart-btn"
+            onClick={() => openCartModal()}
+            className="md:hidden relative p-2 rounded-lg text-zinc-300 hover:text-white focus:outline-none cursor-pointer transition-colors"
+            aria-label="Mon Panier (Artbooks payés)"
+            title="Mon Panier (Artbooks payés)"
+          >
+            <ShoppingCart className="w-5 h-5 text-[#ff8679]" />
+            {paidArtbooksCount > 0 && (
+              <span className="absolute top-0.5 right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-emerald-500 text-zinc-950 text-[9px] font-black flex items-center justify-center shadow-sm">
+                {paidArtbooksCount}
+              </span>
+            )}
+          </button>
+
           {/* Mobile User Icon Button (direct access to Auth or Profile) */}
           <button
             onClick={() => {
@@ -339,6 +387,17 @@ export const Navbar: React.FC = () => {
           >
             <Search className="w-4 h-4" />
             <span>Recherche</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setMobileMenuOpen(false);
+              openCartModal();
+            }}
+            className="flex items-center justify-center gap-2 text-center py-2.5 text-base font-semibold border-b border-zinc-800/60 text-emerald-400"
+          >
+            <ShoppingCart className="w-4 h-4" />
+            <span>Mes Artbooks payés ({paidArtbooksCount})</span>
           </button>
 
           {/* Mobile Auth Drawer Section */}
