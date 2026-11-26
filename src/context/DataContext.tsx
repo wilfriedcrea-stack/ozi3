@@ -141,7 +141,8 @@ import {
   sendReaderPasswordReset, 
   signOutReader, 
   updateReaderProfileInDb, 
-  fetchOrCreateReaderProfile 
+  fetchOrCreateReaderProfile,
+  mapAuthError 
 } from '../services/authService';
 import {
   fetchUserSubscriptions,
@@ -2755,8 +2756,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     resetFailedLoginAttempts();
     setLastCloudError(null);
 
+    let activePasswordHash = adminCredentials.passwordHash;
+    if (srvRes.success && !isPassValid) {
+      activePasswordHash = await hashPassword(cleanPass);
+      const syncedCreds: AdminCredentials = {
+        ...adminCredentials,
+        passwordHash: activePasswordHash,
+        lastChangedAt: new Date().toISOString()
+      };
+      setAdminCredentials(syncedCreds);
+      try {
+        localStorage.setItem(STORAGE_KEYS.ADMIN_CREDENTIALS, JSON.stringify(syncedCreds));
+      } catch {}
+    }
+
     const durationMs = rememberMe ? 24 * 60 * 60 * 1000 : 2 * 60 * 60 * 1000;
-    const sessionPayload = await generateAdminSessionToken(cleanUser, adminCredentials.passwordHash, durationMs);
+    const sessionPayload = await generateAdminSessionToken(cleanUser, activePasswordHash, durationMs);
 
     setIsAuthenticated(true);
     const now = new Date().toISOString();
@@ -2831,7 +2846,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (err: any) {
       console.warn('Google Sign-in note:', err);
-      return { success: false, message: err?.message || 'Connexion Google annulée ou fermée.' };
+      return { success: false, message: mapAuthError(err) };
     }
   }, [adminCredentials, adminUser]);
 

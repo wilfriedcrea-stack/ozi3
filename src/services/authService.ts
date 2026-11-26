@@ -43,7 +43,11 @@ export function mapAuthError(err: unknown): string {
       return 'Aucun compte OZI ne correspond à cette adresse e-mail.';
     case 'auth/invalid-credential':
     case 'auth/invalid-login-credentials':
-      return 'Identifiants invalides. Veuillez vérifier votre e-mail et votre mot de passe.';
+      return 'Identifiants invalides ou compte non encore créé avec mot de passe sur ce projet Firebase. Utilisez « Continuer avec Google » ou créez votre compte via « Créer un compte ».';
+    case 'auth/unauthorized-domain': {
+      const host = typeof window !== 'undefined' ? window.location.hostname : '';
+      return `Ce domaine${host ? ` (${host})` : ''} n'est pas encore autorisé pour la connexion Google dans Firebase Console (Authentication > Settings > Authorized domains).`;
+    }
     case 'auth/popup-closed-by-user':
       return 'La fenêtre de connexion Google a été fermée avant la validation.';
     case 'auth/popup-blocked':
@@ -55,7 +59,7 @@ export function mapAuthError(err: unknown): string {
     case 'auth/user-disabled':
       return 'Ce compte a été suspendu par l\'équipe de modération.';
     case 'auth/operation-not-allowed':
-      return 'L\'authentification par e-mail et mot de passe doit être activée dans la console Firebase (Firebase Console > Authentication > Sign-in method > Adresse e-mail/Mot de passe > Activer).';
+      return 'La connexion par e-mail et mot de passe n\'est pas encore activée dans la console Firebase (Authentication > Sign-in method > Adresse e-mail/Mot de passe > Activer).';
     default: {
       const message = (err as { message?: string }).message;
       return message || 'Une erreur est survenue lors de l\'authentification.';
