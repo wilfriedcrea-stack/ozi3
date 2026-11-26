@@ -268,6 +268,54 @@
         "status": { "type": "string", "enum": ["approved", "pending", "hidden"] }
       },
       "required": ["id", "artbookId", "userId", "userName", "rating", "commentText", "likesCount", "likedBy", "createdAt", "status"]
+    },
+    "DiscussionMessage": {
+      "title": "DiscussionMessage",
+      "description": "Message en temps réel publié sur la page Discussion communautaire OZI",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "authorPhotoURL": { "type": "string", "maxLength": 120000 },
+        "userId": { "type": "string" },
+        "guestSessionId": { "type": "string", "maxLength": 64 },
+        "isGuest": { "type": "boolean" },
+        "authorIsAdmin": { "type": "boolean" },
+        "replyTo": { "type": "object" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "text", "authorName", "authorPhotoURL", "userId", "isGuest", "createdAt"]
+    },
+    "GalleryCreation": {
+      "title": "GalleryCreation",
+      "description": "Création visuelle (image uniquement) partagée par un membre dans #galerie",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 80 },
+        "imageUrl": { "type": "string", "minLength": 10, "maxLength": 900000 },
+        "storagePath": { "type": "string", "maxLength": 256 },
+        "authorId": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "authorPhotoURL": { "type": "string", "maxLength": 120000 },
+        "authorIsAdmin": { "type": "boolean" },
+        "likesCount": { "type": "number" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "title", "imageUrl", "authorId", "authorName", "authorPhotoURL", "likesCount", "createdAt"]
+    },
+    "GalleryLike": {
+      "title": "GalleryLike",
+      "description": "Mention J'aime sur une création de la galerie communautaire",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "creationId": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "creationId", "userId", "createdAt"]
     }
   },
   "firestore": {
@@ -335,6 +383,18 @@
     },
     "/reported_comments/{reportId}": {
       "description": "Signalements de commentaires par les lecteurs pour modération"
+    },
+    "/discussion_messages/{messageId}": {
+      "schema": "DiscussionMessage",
+      "description": "Messages en temps réel de la page Discussion ouverte à tous (membres et visiteurs)"
+    },
+    "/gallery_creations/{creationId}": {
+      "schema": "GalleryCreation",
+      "description": "Galerie d'images réservée aux créations des membres connectés"
+    },
+    "/gallery_creations/{creationId}/likes/{likerId}": {
+      "schema": "GalleryLike",
+      "description": "Likes sur les créations de la galerie"
     }
   }
 }

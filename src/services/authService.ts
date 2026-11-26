@@ -66,12 +66,16 @@ export function mapAuthError(err: unknown): string {
 /**
  * Fetches existing reader profile from Firestore /users/{uid} or creates it on first login
  */
-export async function fetchOrCreateReaderProfile(user: User, fallbackDisplayName?: string): Promise<ReaderProfile> {
+export async function fetchOrCreateReaderProfile(
+  user: User,
+  fallbackDisplayName?: string,
+  initialPhotoURL?: string
+): Promise<ReaderProfile> {
   const userRef = doc(db, 'users', user.uid);
   const now = new Date().toISOString();
   const cleanDisplayName = user.displayName || fallbackDisplayName || user.email?.split('@')[0] || 'Lecteur OZI';
   const cleanEmail = user.email || '';
-  const cleanPhotoURL = user.photoURL || '';
+  const cleanPhotoURL = initialPhotoURL || user.photoURL || '';
 
   try {
     const userSnap = await getDoc(userRef);
@@ -161,11 +165,17 @@ export async function signInReaderWithEmail(email: string, pass: string): Promis
 }
 
 /**
- * Registers a new reader with Email and Password + Pseudonym
+ * Registers a new reader with Email and Password + Pseudonym + Optional Profile Photo
  */
-export async function signUpReaderWithEmail(displayName: string, email: string, pass: string): Promise<{ success: boolean; profile?: ReaderProfile; error?: string }> {
+export async function signUpReaderWithEmail(
+  displayName: string,
+  email: string,
+  pass: string,
+  photoURL?: string
+): Promise<{ success: boolean; profile?: ReaderProfile; error?: string }> {
   const cleanName = displayName.trim();
   const cleanEmail = email.trim();
+  const cleanPhoto = photoURL ? photoURL.trim() : '';
 
   if (!cleanName) {
     return { success: false, error: 'Veuillez renseigner un pseudonyme de lecteur.' };
@@ -183,13 +193,17 @@ export async function signUpReaderWithEmail(displayName: string, email: string, 
   try {
     const result = await createUserWithEmailAndPassword(auth, cleanEmail, pass);
 
-    // Update Firebase Auth profile
+    // Update Firebase Auth profile (Auth photoURL only accepts short HTTPS URLs)
     try {
-      await updateProfile(result.user, { displayName: cleanName });
+      const authProfileUpdate: { displayName: string; photoURL?: string } = { displayName: cleanName };
+      if (cleanPhoto.startsWith('http') && cleanPhoto.length <= 1800) {
+        authProfileUpdate.photoURL = cleanPhoto;
+      }
+      await updateProfile(result.user, authProfileUpdate);
     } catch {}
 
-    // Create Firestore document under users/{uid}
-    const profile = await fetchOrCreateReaderProfile(result.user, cleanName);
+    // Create Firestore document under users/{uid} with full customized photoURL
+    const profile = await fetchOrCreateReaderProfile(result.user, cleanName, cleanPhoto);
     return { success: true, profile };
   } catch (err) {
     return { success: false, error: mapAuthError(err) };
@@ -218,7 +232,10 @@ export async function signOutReader(): Promise<void> {
 /**
  * Updates editable fields of reader profile in Firestore
  */
-export async function updateReaderProfileInDb(uid: string, updates: { displayName?: string; bio?: string }): Promise<{ success: boolean; error?: string }> {
+export async function updateReaderProfileInDb(
+  uid: string,
+  updates: { displayName?: string; bio?: string; photoURL?: string }
+): Promise<{ success: boolean; error?: string }> {
   try {
     const userRef = doc(db, 'users', uid);
     const now = new Date().toISOString();
@@ -227,7 +244,9 @@ export async function updateReaderProfileInDb(uid: string, updates: { displayNam
     if (updates.displayName !== undefined) {
       payload.displayName = updates.displayName.trim();
       if (auth.currentUser) {
-        await updateProfile(auth.currentUser, { displayName: updates.displayName.trim() });
+        try {
+          await updateProfile(auth.currentUser, { displayName: updates.displayName.trim() });
+        } catch {}
       }
     }
 
@@ -235,7 +254,21 @@ export async function updateReaderProfileInDb(uid: string, updates: { displayNam
       payload.bio = updates.bio.trim();
     }
 
-    await updateDoc(userRef, payload);
+    if (updates.photoURL !== undefined) {
+      const cleanPhoto = updates.photoURL.trim();
+      payload.photoURL = cleanPhoto;
+      if (auth.currentUser && cleanPhoto.startsWith('http') && cleanPhoto.length <= 1800) {
+        try {
+          await updateProfile(auth.currentUser, { photoURL: cleanPhoto });
+        } catch {}
+      }
+    }
+
+    try {
+      await updateDoc(userRef, payload);
+    } catch {
+      await setDoc(userRef, { uid, ...payload }, { merge: true });
+    }
     return { success: true };
   } catch (err) {
     return { success: false, error: 'Impossible de mettre à jour le profil.' };

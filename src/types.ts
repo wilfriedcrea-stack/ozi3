@@ -564,3 +564,35 @@ export interface ArtbookReview {
   updatedAt?: string;
   status: 'approved' | 'pending' | 'hidden';
 }
+
+export interface DiscussionReplyRef {
+  id: string;
+  authorName: string;
+  excerpt: string;
+}
+
+export interface DiscussionMessage {
+  id: string;
+  text: string;
+  authorName: string;
+  authorPhotoURL: string;
+  userId: string | null;
+  guestSessionId?: string;
+  isGuest: boolean;
+  authorIsAdmin?: boolean;
+  replyTo?: DiscussionReplyRef | null;
+  createdAt: string;
+}
+
+export interface GalleryCreation {
+  id: string;
+  title: string;
+  imageUrl: string;
+  storagePath?: string;
+  authorId: string;
+  authorName: string;
+  authorPhotoURL: string;
+  authorIsAdmin?: boolean;
+  likesCount: number;
+  createdAt: string;
+}

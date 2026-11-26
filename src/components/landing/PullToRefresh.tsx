@@ -7,7 +7,7 @@ interface PullToRefreshProps {
 }
 
 export const PullToRefresh: React.FC<PullToRefreshProps> = ({ children }) => {
-  const { refreshCatalogueFromFirestore, isRefreshingCatalogue } = useData();
+  const { refreshCatalogueFromFirestore, isRefreshingCatalogue, viewMode } = useData();
   const [pullDistance, setPullDistance] = useState(0);
   const [isPulling, setIsPulling] = useState(false);
   const [justRefreshed, setJustRefreshed] = useState(false);
@@ -15,6 +15,11 @@ export const PullToRefresh: React.FC<PullToRefreshProps> = ({ children }) => {
   const pullThreshold = 75;
 
   useEffect(() => {
+    if (viewMode === 'discussion') {
+      setIsPulling(false);
+      setPullDistance(0);
+      return;
+    }
     let startY = 0;
     let isTracking = false;
 
@@ -74,13 +79,13 @@ export const PullToRefresh: React.FC<PullToRefreshProps> = ({ children }) => {
       window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [pullDistance, isRefreshingCatalogue, refreshCatalogueFromFirestore]);
+  }, [pullDistance, isRefreshingCatalogue, refreshCatalogueFromFirestore, viewMode]);
 
   const rotation = Math.min((pullDistance / pullThreshold) * 360, 360);
   const opacity = Math.min(pullDistance / 40, 1);
 
   return (
-    <div className="relative w-full">
+    <div className={viewMode === 'discussion' ? 'relative w-full h-[100dvh] overflow-hidden' : 'relative w-full'}>
       {/* Pull Indicator */}
       <div 
         className="fixed top-2 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-200"

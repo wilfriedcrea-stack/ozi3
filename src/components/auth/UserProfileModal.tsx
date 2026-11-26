@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   User, 
-  Mail, 
   Calendar, 
   ShieldCheck, 
   LogOut, 
@@ -13,8 +12,9 @@ import {
   Loader2,
   BookOpen,
   Palette,
-  Download,
-  Coins
+  Coins,
+  Camera,
+  Images
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { 
@@ -23,12 +23,15 @@ import {
   initiateCoinPackPurchase, 
   verifyPaystackPayment 
 } from '../../services/paystackClientService';
+import { AVATAR_PRESETS, processAndUploadAvatar } from '../../services/avatarService';
+import { PersonalGalleryTab } from './PersonalGalleryTab';
 import { SubscriptionRecord, ArtbookPurchaseRecord, CoinPack } from '../../types';
 import { formatPriceXofWithEur } from '../../utils/currency';
 
 export const UserProfileModal: React.FC = () => {
   const { 
     isProfileModalOpen, 
+    profileModalInitialTab,
     closeProfileModal, 
     currentUser, 
     readerProfile, 
@@ -43,10 +46,14 @@ export const UserProfileModal: React.FC = () => {
   const userAccount = users?.find(u => u.id === currentUser?.uid || (currentUser?.email && u.email === currentUser.email));
   const userCoinsBalance = userAccount?.coinsBalance ?? readerProfile?.coinsBalance ?? 0;
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'subscriptions' | 'artbooks' | 'coins'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'gallery' | 'subscriptions' | 'artbooks' | 'coins'>('profile');
+  const [isGalleryLightboxOpen, setIsGalleryLightboxOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [showPresetPicker, setShowPresetPicker] = useState(false);
+  const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [subscriptions, setSubscriptions] = useState<SubscriptionRecord[]>([]);
   const [isLoadingSubs, setIsLoadingSubs] = useState(false);
@@ -93,9 +100,15 @@ export const UserProfileModal: React.FC = () => {
     }
   }, [readerProfile, currentUser]);
 
-  // Keyboard shortcut to close on Escape
   useEffect(() => {
-    if (!isProfileModalOpen) return;
+    if (isProfileModalOpen) {
+      setActiveTab(profileModalInitialTab || 'profile');
+    }
+  }, [isProfileModalOpen, profileModalInitialTab]);
+
+  // Keyboard shortcut to close on Escape (yields if gallery lightbox is open)
+  useEffect(() => {
+    if (!isProfileModalOpen || isGalleryLightboxOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         closeProfileModal();
@@ -103,13 +116,13 @@ export const UserProfileModal: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isProfileModalOpen, closeProfileModal]);
+  }, [isProfileModalOpen, isGalleryLightboxOpen, closeProfileModal]);
 
   if (!isProfileModalOpen || !currentUser) return null;
 
   const displayName = readerProfile?.displayName || currentUser.displayName || currentUser.email?.split('@')[0] || 'Lecteur OZI';
   const email = currentUser.email || readerProfile?.email || 'Non renseigné';
-  const photoURL = currentUser.photoURL || readerProfile?.photoURL;
+  const photoURL = readerProfile?.photoURL || currentUser.photoURL;
   const createdAt = readerProfile?.createdAt 
     ? new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(readerProfile.createdAt))
     : 'Récemment';
@@ -131,6 +144,46 @@ export const UserProfileModal: React.FC = () => {
       }
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUser) return;
+    setIsUploadingPhoto(true);
+    setFeedback(null);
+    try {
+      const { photoURL: nextPhotoUrl } = await processAndUploadAvatar(file, currentUser.uid);
+      const res = await updateReaderProfileData({ photoURL: nextPhotoUrl });
+      if (res.success) {
+        setFeedback('Photo de profil mise à jour !');
+        setShowPresetPicker(false);
+        setTimeout(() => setFeedback(null), 3500);
+      } else {
+        setFeedback(res.error || 'Erreur lors de la mise à jour de la photo.');
+      }
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Impossible de mettre à jour la photo.');
+    } finally {
+      setIsUploadingPhoto(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleSelectPresetAvatar = async (presetDataUrl: string) => {
+    setIsUploadingPhoto(true);
+    setFeedback(null);
+    try {
+      const res = await updateReaderProfileData({ photoURL: presetDataUrl });
+      if (res.success) {
+        setFeedback('Avatar mis à jour !');
+        setShowPresetPicker(false);
+        setTimeout(() => setFeedback(null), 3000);
+      } else {
+        setFeedback(res.error || 'Erreur lors de la mise à jour.');
+      }
+    } finally {
+      setIsUploadingPhoto(false);
     }
   };
 
@@ -208,7 +261,9 @@ export const UserProfileModal: React.FC = () => {
       aria-labelledby="profile-modal-title"
     >
       <div 
-        className="relative w-full max-w-md bg-[#141418] border border-[#242436] rounded-3xl p-6 sm:p-8 shadow-2xl text-white overflow-hidden"
+        className={`relative w-full max-h-[90vh] overflow-y-auto bg-[#141418] border border-[#242436] rounded-3xl p-5 sm:p-8 shadow-2xl text-white transition-[max-width] duration-200 ${
+          activeTab === 'gallery' ? 'max-w-3xl' : 'max-w-md'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Subtle decorative glow */}
@@ -225,20 +280,83 @@ export const UserProfileModal: React.FC = () => {
 
         {/* User Card Top */}
         <div className="flex flex-col items-center text-center mb-6">
-          <div className="relative w-20 h-20 rounded-full overflow-hidden bg-gradient-to-tr from-[#ff8679] to-[#fb923c] p-0.5 shadow-xl mb-3">
-            {photoURL ? (
-              <img 
-                src={photoURL} 
-                alt={displayName} 
-                className="w-full h-full object-cover rounded-full bg-zinc-900"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <div className="w-full h-full rounded-full bg-zinc-900 flex items-center justify-center text-2xl font-black text-[#ff8679]">
-                {displayName.charAt(0).toUpperCase()}
-              </div>
-            )}
+          <div className="relative mb-3">
+            <div className="relative w-20 h-20 rounded-full overflow-hidden bg-gradient-to-tr from-[#ff8679] to-[#fb923c] p-0.5 shadow-xl">
+              {photoURL ? (
+                <img 
+                  src={photoURL} 
+                  alt={displayName} 
+                  className="w-full h-full object-cover rounded-full bg-zinc-900"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-full h-full rounded-full bg-zinc-900 flex items-center justify-center text-2xl font-black text-[#ff8679]">
+                  {displayName.charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
+            <input
+              ref={avatarFileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              onChange={handleAvatarFileChange}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => avatarFileInputRef.current?.click()}
+              disabled={isUploadingPhoto}
+              title="Changer ma photo de profil"
+              aria-label="Changer ma photo de profil"
+              className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-[#ff8679] hover:bg-[#eb6e60] text-white border-2 border-[#141418] flex items-center justify-center shadow-lg transition-transform hover:scale-105 cursor-pointer disabled:opacity-60"
+            >
+              {isUploadingPhoto ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Camera className="w-3.5 h-3.5" />
+              )}
+            </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setShowPresetPicker((prev) => !prev)}
+            className="text-[11px] font-semibold text-zinc-400 hover:text-[#ff8679] transition-colors mb-2 cursor-pointer"
+          >
+            {showPresetPicker ? 'Fermer les avatars' : 'Choisir un avatar ou importer une photo'}
+          </button>
+
+          {showPresetPicker && (
+            <div className="w-full mb-3 p-3 rounded-2xl bg-zinc-950/90 border border-zinc-800 flex flex-col items-center gap-2.5 animate-in fade-in">
+              <div className="flex items-center justify-center gap-2">
+                {AVATAR_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => handleSelectPresetAvatar(preset.dataUrl)}
+                    disabled={isUploadingPhoto}
+                    className={`w-9 h-9 rounded-full overflow-hidden border-2 transition-transform cursor-pointer ${
+                      photoURL === preset.dataUrl
+                        ? 'border-[#ff8679] scale-110'
+                        : 'border-zinc-800 hover:border-zinc-500'
+                    }`}
+                    title={preset.label}
+                  >
+                    <img src={preset.dataUrl} alt={preset.label} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => avatarFileInputRef.current?.click()}
+                disabled={isUploadingPhoto}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[11px] font-bold text-white cursor-pointer"
+              >
+                <Camera className="w-3.5 h-3.5 text-[#ff8679]" />
+                <span>Importer depuis mon appareil</span>
+              </button>
+            </div>
+          )}
 
           {/* Name & Edit Form */}
           {isEditing ? (
@@ -283,11 +401,11 @@ export const UserProfileModal: React.FC = () => {
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex items-center p-1 rounded-2xl bg-zinc-950/80 border border-zinc-800/80 mb-5">
+        <div className="flex items-center p-1 rounded-2xl bg-zinc-950/80 border border-zinc-800/80 mb-5 overflow-x-auto scrollbar-none gap-1">
           <button
             type="button"
             onClick={() => setActiveTab('profile')}
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+            className={`flex-1 py-2 px-2 text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'profile' 
                 ? 'bg-zinc-800 text-white shadow-sm' 
                 : 'text-zinc-400 hover:text-zinc-200'
@@ -296,9 +414,22 @@ export const UserProfileModal: React.FC = () => {
             Infos
           </button>
           <button
+            id="profile-tab-gallery"
+            type="button"
+            onClick={() => setActiveTab('gallery')}
+            className={`flex-1 py-2 px-2 text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap inline-flex items-center justify-center gap-1.5 ${
+              activeTab === 'gallery' 
+                ? 'bg-[#ff8679] text-white shadow-sm font-black' 
+                : 'text-zinc-300 hover:text-white'
+            }`}
+          >
+            <Images className="w-3.5 h-3.5 shrink-0" />
+            <span>Ma Galerie</span>
+          </button>
+          <button
             type="button"
             onClick={() => setActiveTab('subscriptions')}
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+            className={`flex-1 py-2 px-2 text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'subscriptions' 
                 ? 'bg-zinc-800 text-white shadow-sm' 
                 : 'text-zinc-400 hover:text-zinc-200'
@@ -309,7 +440,7 @@ export const UserProfileModal: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('artbooks')}
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+            className={`flex-1 py-2 px-2 text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'artbooks' 
                 ? 'bg-zinc-800 text-white shadow-sm' 
                 : 'text-zinc-400 hover:text-zinc-200'
@@ -320,7 +451,7 @@ export const UserProfileModal: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('coins')}
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+            className={`flex-1 py-2 px-2 text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'coins' 
                 ? 'bg-amber-500 text-zinc-950 shadow-sm font-black' 
                 : 'text-amber-400 hover:text-amber-300'
@@ -385,6 +516,11 @@ export const UserProfileModal: React.FC = () => {
               </span>
             </div>
           </div>
+        )}
+
+        {/* TAB: Ma Galerie Personnelle */}
+        {activeTab === 'gallery' && (
+          <PersonalGalleryTab onLightboxChange={setIsGalleryLightboxOpen} />
         )}
 
         {/* TAB 2: Subscriptions (Paystack 30 jours par œuvre) */}

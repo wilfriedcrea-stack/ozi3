@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   Mail, 
@@ -6,15 +6,16 @@ import {
   User, 
   Eye, 
   EyeOff, 
-  Sparkles, 
   ArrowRight, 
   AlertCircle, 
   CheckCircle2, 
   Loader2,
-  KeyRound
+  Camera,
+  Trash2
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { isValidEmail } from '../../services/authService';
+import { AVATAR_PRESETS, processAndUploadAvatar } from '../../services/avatarService';
 import { OziLogo } from '../common/OziLogo';
 
 export const AuthModal: React.FC = () => {
@@ -36,6 +37,9 @@ export const AuthModal: React.FC = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [selectedPhotoURL, setSelectedPhotoURL] = useState('');
+  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Status
   const [isLoading, setIsLoading] = useState(false);
@@ -80,6 +84,22 @@ export const AuthModal: React.FC = () => {
       setErrorMessage('Une erreur est survenue lors de la connexion Google.');
     } finally {
       setIsGoogleLoading(false);
+    }
+  };
+
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setErrorMessage(null);
+    setIsProcessingPhoto(true);
+    try {
+      const { photoURL } = await processAndUploadAvatar(file);
+      setSelectedPhotoURL(photoURL);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Impossible de traiter cette photo.');
+    } finally {
+      setIsProcessingPhoto(false);
+      e.target.value = '';
     }
   };
 
@@ -137,7 +157,7 @@ export const AuthModal: React.FC = () => {
 
       setIsLoading(true);
       try {
-        const res = await signUpReaderWithEmail(cleanName, cleanEmail, password);
+        const res = await signUpReaderWithEmail(cleanName, cleanEmail, password, selectedPhotoURL || undefined);
         if (!res.success) {
           setErrorMessage(res.error || 'Échec de l\'inscription.');
         }
@@ -170,7 +190,7 @@ export const AuthModal: React.FC = () => {
       aria-labelledby="auth-modal-title"
     >
       <div 
-        className="relative w-full max-w-md bg-[#141418] border border-[#242436] rounded-3xl p-6 sm:p-8 shadow-2xl text-white overflow-hidden"
+        className="relative w-full max-w-md max-h-[90vh] overflow-y-auto bg-[#141418] border border-[#242436] rounded-3xl p-6 sm:p-8 shadow-2xl text-white"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Subtle decorative glow */}
@@ -276,22 +296,118 @@ export const AuthModal: React.FC = () => {
 
         {/* Email & Password Form */}
         <form onSubmit={handleSubmit} className="space-y-3.5">
-          {/* Pseudonym (Register only) */}
+          {/* Profile Photo Customizer + Pseudonym (Register only) */}
           {activeTab === 'register' && (
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
-                Pseudonyme *
-              </label>
-              <div className="relative">
-                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                <input
-                  type="text"
-                  required
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="ex: Kweku_Reader"
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#ff8679] text-white text-xs sm:text-sm focus:outline-none transition-colors"
-                />
+            <div className="space-y-3.5">
+              <div className="p-3.5 rounded-2xl bg-zinc-950/80 border border-zinc-800/80">
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                    Photo de profil
+                  </span>
+                  {selectedPhotoURL && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPhotoURL('')}
+                      className="inline-flex items-center gap-1 text-[11px] text-zinc-400 hover:text-rose-400 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Retirer</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3.5">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isProcessingPhoto}
+                    className="relative w-16 h-16 rounded-full overflow-hidden bg-zinc-900 border-2 border-dashed border-zinc-700 hover:border-[#ff8679] flex items-center justify-center shrink-0 transition-colors cursor-pointer group"
+                    title="Importer votre photo de profil"
+                  >
+                    {selectedPhotoURL ? (
+                      <img
+                        src={selectedPhotoURL}
+                        alt="Aperçu avatar"
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <User className="w-7 h-7 text-zinc-500 group-hover:text-[#ff8679] transition-colors" />
+                    )}
+                    <span className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                      {isProcessingPhoto ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-white" />
+                      ) : (
+                        <Camera className="w-5 h-5 text-white" />
+                      )}
+                    </span>
+                  </button>
+
+                  <div className="flex-1 min-w-0">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      onChange={handlePhotoSelect}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isProcessingPhoto}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-bold text-white transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {isProcessingPhoto ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Camera className="w-3.5 h-3.5 text-[#ff8679]" />
+                      )}
+                      <span>{selectedPhotoURL ? 'Changer ma photo' : 'Importer une photo'}</span>
+                    </button>
+                    <p className="text-[11px] text-zinc-500 mt-1.5">
+                      Visible dans vos discussions. Ou choisissez un avatar :
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-zinc-800/70">
+                  {AVATAR_PRESETS.map((preset) => {
+                    const isSelected = selectedPhotoURL === preset.dataUrl;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => setSelectedPhotoURL(preset.dataUrl)}
+                        className={`w-9 h-9 rounded-full overflow-hidden border-2 transition-transform cursor-pointer ${
+                          isSelected
+                            ? 'border-[#ff8679] scale-110 shadow-md shadow-[#ff8679]/30'
+                            : 'border-zinc-800 hover:border-zinc-500'
+                        }`}
+                        title={preset.label}
+                        aria-label={`Choisir l'avatar ${preset.label}`}
+                      >
+                        <img src={preset.dataUrl} alt={preset.label} className="w-full h-full object-cover" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                  Pseudonyme *
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                  <input
+                    type="text"
+                    required
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="ex: Kweku_Reader"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#ff8679] text-white text-xs sm:text-sm focus:outline-none transition-colors"
+                  />
+                </div>
               </div>
             </div>
           )}

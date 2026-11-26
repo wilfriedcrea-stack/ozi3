@@ -22,6 +22,15 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Vérifie si le compte authentifié est administrateur / modérateur en base ou wilfriedcrea@gmail.com
+    function isAdminOrStaffUser() {
+      return isAdmin() || (
+        isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'admin', 'moderator']
+      );
+    }
+
     // =========================================================================
     // 1. SÉRIES, ŒUVRES & CHAPITRES (CATALOGUE OFFICIEL)
     // Protection ÉTAPE 2 : Interdiction totale d'écriture aux lecteurs.
@@ -303,6 +312,194 @@ service cloud.firestore {
         && isValidReviewId(reviewId)
         && request.auth.uid == resource.data.userId
       );
+    }
+
+    // =========================================================================
+    // 12. SALON DE DISCUSSION PUBLIC TEMPS RÉEL (STYLE CHATANGO)
+    // - Lecture et écriture ouvertes à tous (membres connectés & visiteurs).
+    // - Anti-usurpation : les visiteurs ne peuvent ni usurper un userId ni définir
+    //   de photo personnalisée (icône par défaut uniquement).
+    // - Suppression réservée à l'auteur authentifié ou à l'administrateur.
+    // =========================================================================
+
+    function isValidMessageId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidReplyRef(reply) {
+      return reply is map
+        && reply.keys().hasAll(['id', 'authorName', 'excerpt'])
+        && reply.keys().hasOnly(['id', 'authorName', 'excerpt'])
+        && reply.id is string && reply.id.size() > 0 && reply.id.size() <= 128
+        && reply.authorName is string && reply.authorName.size() > 0 && reply.authorName.size() <= 40
+        && reply.excerpt is string && reply.excerpt.size() <= 160;
+    }
+
+    function isValidDiscussionMessage(data) {
+      return data.keys().hasAll([
+          'id', 'text', 'authorName', 'authorPhotoURL', 'userId', 'isGuest', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'text', 'authorName', 'authorPhotoURL', 'userId', 'guestSessionId', 'isGuest', 'authorIsAdmin', 'replyTo', 'createdAt'
+        ])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.text is string && data.text.size() >= 1 && data.text.size() <= 1000
+        && data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 40
+        && data.authorPhotoURL is string && data.authorPhotoURL.size() <= 120000
+        && data.isGuest is bool
+        && (!('authorIsAdmin' in data) || data.authorIsAdmin is bool)
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && (!('guestSessionId' in data) || (data.guestSessionId is string && data.guestSessionId.size() <= 64))
+        && (!('replyTo' in data) || data.replyTo == null || isValidReplyRef(data.replyTo))
+        && (
+          (data.isGuest == false && isAuthenticated() && data.userId is string && data.userId == request.auth.uid)
+          ||
+          (data.isGuest == true && data.userId == null && data.authorPhotoURL == '')
+        );
+    }
+
+    match /discussion_messages/{messageId} {
+      allow read: if true;
+
+      allow create: if isValidMessageId(messageId)
+        && isValidDiscussionMessage(request.resource.data)
+        && request.resource.data.id == messageId
+        && (
+          !('authorIsAdmin' in request.resource.data)
+          || request.resource.data.authorIsAdmin == false
+          || (request.resource.data.isGuest == false && isAdminOrStaffUser())
+        );
+
+      allow update: if isAdmin();
+
+      allow delete: if isAdmin() || (
+        isAuthenticated()
+        && isValidMessageId(messageId)
+        && resource.data.isGuest == false
+        && resource.data.userId == request.auth.uid
+      );
+    }
+
+    // =========================================================================
+    // 13. GALERIE DES CRÉATIONS COMMUNAUTAIRES (#galerie)
+    // - Lecture ouverte à tous.
+    // - Ajout d'images strictement réservé aux membres authentifiés (avec compte).
+    // - Seuls les fichiers/URLs image valides sont acceptés.
+    // - Tout visiteur ou membre peut liker/retirer son like (+1 / -1 atomique).
+    // - Suppression réservée à l'auteur ou à l'administrateur.
+    // =========================================================================
+
+    function isValidCreationId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidGalleryImageUrl(url) {
+      return url is string
+        && url.size() >= 10
+        && url.size() <= 900000
+        && url.matches('^(https://|data:image/(webp|png|jpeg|jpg|gif);base64,).*');
+    }
+
+    function isValidGalleryCreation(data) {
+      return data.keys().hasAll([
+          'id', 'title', 'imageUrl', 'authorId', 'authorName', 'authorPhotoURL', 'likesCount', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'title', 'imageUrl', 'storagePath', 'authorId', 'authorName', 'authorPhotoURL', 'authorIsAdmin', 'likesCount', 'createdAt'
+        ])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.title is string && data.title.size() <= 80
+        && isValidGalleryImageUrl(data.imageUrl)
+        && (!('storagePath' in data) || (data.storagePath is string && data.storagePath.size() <= 256))
+        && data.authorId is string && data.authorId.size() > 0 && data.authorId.size() <= 128
+        && data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 40
+        && data.authorPhotoURL is string && data.authorPhotoURL.size() <= 120000
+        && (!('authorIsAdmin' in data) || data.authorIsAdmin is bool)
+        && data.likesCount is int && data.likesCount >= 0
+        && data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 64;
+    }
+
+    function isValidGalleryLike(data) {
+      return data.keys().hasAll(['id', 'creationId', 'userId', 'createdAt'])
+        && data.keys().hasOnly(['id', 'creationId', 'userId', 'createdAt'])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.creationId is string && data.creationId.size() > 0 && data.creationId.size() <= 128
+        && (data.userId == null || (data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128))
+        && data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 64;
+    }
+
+    match /gallery_creations/{creationId} {
+      allow read: if true;
+
+      allow create: if isAuthenticated()
+        && isValidCreationId(creationId)
+        && isValidGalleryCreation(request.resource.data)
+        && request.resource.data.id == creationId
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.likesCount == 0
+        && (
+          !('authorIsAdmin' in request.resource.data)
+          || request.resource.data.authorIsAdmin == false
+          || isAdminOrStaffUser()
+        );
+
+      allow update: if isAdmin() || (
+        isValidCreationId(creationId)
+        && isValidGalleryCreation(request.resource.data)
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.imageUrl == resource.data.imageUrl
+        && request.resource.data.authorId == resource.data.authorId
+        && request.resource.data.authorName == resource.data.authorName
+        && request.resource.data.authorPhotoURL == resource.data.authorPhotoURL
+        && request.resource.data.createdAt == resource.data.createdAt
+        && (
+          (
+            request.resource.data.title == resource.data.title
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount'])
+            && (
+              request.resource.data.likesCount == resource.data.likesCount + 1
+              || (request.resource.data.likesCount >= 0 && request.resource.data.likesCount == resource.data.likesCount - 1)
+            )
+          )
+          ||
+          (
+            isAuthenticated()
+            && request.auth.uid == resource.data.authorId
+            && request.resource.data.likesCount == resource.data.likesCount
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title'])
+          )
+        )
+      );
+
+      allow delete: if isAdmin() || (
+        isAuthenticated()
+        && isValidCreationId(creationId)
+        && resource.data.authorId == request.auth.uid
+      );
+
+      match /likes/{likerId} {
+        allow get: if isValidCreationId(creationId) && isValidCreationId(likerId);
+
+        allow create: if isValidCreationId(creationId)
+          && isValidCreationId(likerId)
+          && isValidGalleryLike(request.resource.data)
+          && request.resource.data.id == likerId
+          && request.resource.data.creationId == creationId
+          && exists(/databases/$(database)/documents/gallery_creations/$(creationId))
+          && (
+            (isAuthenticated() && request.resource.data.userId == request.auth.uid)
+            || (!isAuthenticated() && request.resource.data.userId == null)
+          );
+
+        allow delete: if isAdmin() || (
+          isValidCreationId(creationId)
+          && isValidCreationId(likerId)
+          && (
+            (resource.data.userId != null && isAuthenticated() && resource.data.userId == request.auth.uid)
+            || resource.data.userId == null
+          )
+        );
+      }
     }
   }
 }

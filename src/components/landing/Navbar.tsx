@@ -12,7 +12,9 @@ import {
   BookOpen,
   Home,
   FileText,
-  ShoppingCart
+  ShoppingCart,
+  MessageCircle,
+  Images
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { OziLogo } from '../common/OziLogo';
@@ -48,7 +50,7 @@ export const Navbar: React.FC = () => {
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const navigateTo = (mode: 'accueil' | 'oeuvres' | 'artistes' | 'articles' | 'recherche' | 'admin') => {
+  const navigateTo = (mode: 'accueil' | 'oeuvres' | 'artistes' | 'articles' | 'discussion' | 'recherche' | 'admin') => {
     setMobileMenuOpen(false);
     setUserDropdownOpen(false);
     setViewMode(mode);
@@ -72,7 +74,7 @@ export const Navbar: React.FC = () => {
   }, []);
 
   const readerDisplayName = readerProfile?.displayName || currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Lecteur OZI';
-  const readerPhotoURL = currentUser?.photoURL || readerProfile?.photoURL;
+  const readerPhotoURL = readerProfile?.photoURL || currentUser?.photoURL;
 
   return (
     <header 
@@ -93,16 +95,16 @@ export const Navbar: React.FC = () => {
           </button>
         </div>
 
-        {/* Center: Centered Navigation (Accueil, Œuvres, Artistes, Articles) */}
+        {/* Center: Centered Navigation (Accueil, Œuvres, Artistes, Articles, Discussion) */}
         <nav 
           id="desktop-primary-nav"
-          className="hidden md:flex items-center justify-center gap-8 lg:gap-11"
+          className="hidden md:flex items-center justify-center gap-6 lg:gap-8"
         >
           {/* 1. Accueil */}
           <button 
             id="nav-link-accueil"
             onClick={() => navigateTo('accueil')}
-            className={`text-base font-semibold tracking-normal transition-colors py-2 focus:outline-none cursor-pointer ${
+            className={`text-base font-semibold tracking-normal transition-colors py-2 focus:outline-none cursor-pointer whitespace-nowrap shrink-0 ${
               viewMode === 'accueil'
                 ? 'text-[#ff8679]'
                 : 'text-[#d4d4d8] hover:text-white'
@@ -115,7 +117,7 @@ export const Navbar: React.FC = () => {
           <button 
             id="nav-link-oeuvres"
             onClick={() => navigateTo('oeuvres')}
-            className={`text-base font-semibold tracking-normal transition-colors py-2 focus:outline-none cursor-pointer ${
+            className={`text-base font-semibold tracking-normal transition-colors py-2 focus:outline-none cursor-pointer whitespace-nowrap shrink-0 ${
               viewMode === 'oeuvres'
                 ? 'text-[#ff8679]'
                 : 'text-[#d4d4d8] hover:text-white'
@@ -128,7 +130,7 @@ export const Navbar: React.FC = () => {
           <button 
             id="nav-link-artistes"
             onClick={() => navigateTo('artistes')}
-            className={`text-base font-semibold tracking-normal transition-colors py-2 focus:outline-none cursor-pointer ${
+            className={`text-base font-semibold tracking-normal transition-colors py-2 focus:outline-none cursor-pointer whitespace-nowrap shrink-0 ${
               ['artistes', 'artiste-detail', 'artbook-detail'].includes(viewMode)
                 ? 'text-[#ff8679]'
                 : 'text-[#d4d4d8] hover:text-white'
@@ -141,13 +143,26 @@ export const Navbar: React.FC = () => {
           <button 
             id="nav-link-articles"
             onClick={() => navigateTo('articles')}
-            className={`text-base font-semibold tracking-normal transition-colors py-2 focus:outline-none cursor-pointer ${
+            className={`text-base font-semibold tracking-normal transition-colors py-2 focus:outline-none cursor-pointer whitespace-nowrap shrink-0 ${
               viewMode === 'articles'
                 ? 'text-[#ff8679]'
                 : 'text-[#d4d4d8] hover:text-white'
             }`}
           >
             Articles
+          </button>
+
+          {/* 5. Discussion */}
+          <button 
+            id="nav-link-discussion"
+            onClick={() => navigateTo('discussion')}
+            className={`text-base font-semibold tracking-normal transition-colors py-2 focus:outline-none cursor-pointer whitespace-nowrap shrink-0 ${
+              viewMode === 'discussion'
+                ? 'text-[#ff8679]'
+                : 'text-[#d4d4d8] hover:text-white'
+            }`}
+          >
+            Discussion
           </button>
         </nav>
 
@@ -226,7 +241,7 @@ export const Navbar: React.FC = () => {
                     </div>
 
                     <button
-                      onClick={() => { setUserDropdownOpen(false); openProfileModal(); }}
+                      onClick={() => { setUserDropdownOpen(false); openProfileModal('profile'); }}
                       className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-zinc-300 hover:text-white hover:bg-zinc-800/80 flex items-center gap-2.5 transition-colors cursor-pointer"
                     >
                       <User className="w-3.5 h-3.5 text-[#ff8679]" />
@@ -234,7 +249,16 @@ export const Navbar: React.FC = () => {
                     </button>
 
                     <button
-                      onClick={() => { setUserDropdownOpen(false); openProfileModal(); }}
+                      id="nav-dropdown-personal-gallery-btn"
+                      onClick={() => { setUserDropdownOpen(false); openProfileModal('gallery'); }}
+                      className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-zinc-300 hover:text-white hover:bg-zinc-800/80 flex items-center gap-2.5 transition-colors cursor-pointer"
+                    >
+                      <Images className="w-3.5 h-3.5 text-[#ff8679]" />
+                      <span>Ma Galerie</span>
+                    </button>
+
+                    <button
+                      onClick={() => { setUserDropdownOpen(false); openProfileModal('subscriptions'); }}
                       className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-zinc-300 hover:text-white hover:bg-zinc-800/80 flex items-center gap-2.5 transition-colors cursor-pointer"
                     >
                       <Sparkles className="w-3.5 h-3.5 text-[#fb923c]" />
@@ -380,6 +404,16 @@ export const Navbar: React.FC = () => {
           </button>
 
           <button
+            onClick={() => navigateTo('discussion')}
+            className={`flex items-center justify-center gap-2 text-center py-2.5 text-base font-semibold border-b border-zinc-800/60 ${
+              viewMode === 'discussion' ? 'text-[#ff8679]' : 'text-zinc-200'
+            }`}
+          >
+            <MessageCircle className="w-4 h-4" />
+            <span>Discussion</span>
+          </button>
+
+          <button
             onClick={() => navigateTo('recherche')}
             className={`flex items-center justify-center gap-2 text-center py-2.5 text-base font-semibold border-b border-zinc-800/60 ${
               viewMode === 'recherche' ? 'text-[#ff8679]' : 'text-zinc-200'
@@ -420,19 +454,25 @@ export const Navbar: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="grid grid-cols-3 gap-2 pt-1">
                   <button
-                    onClick={() => { setMobileMenuOpen(false); openProfileModal(); }}
-                    className="py-2 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-white text-center cursor-pointer"
+                    onClick={() => { setMobileMenuOpen(false); openProfileModal('profile'); }}
+                    className="py-2 px-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-white text-center cursor-pointer"
                   >
                     Mon Profil
+                  </button>
+                  <button
+                    onClick={() => { setMobileMenuOpen(false); openProfileModal('gallery'); }}
+                    className="py-2 px-2 rounded-xl bg-[#ff8679]/15 border border-[#ff8679]/40 hover:bg-[#ff8679]/25 text-xs font-bold text-[#ff8679] text-center cursor-pointer"
+                  >
+                    Ma Galerie
                   </button>
                   <button
                     onClick={async () => {
                       setMobileMenuOpen(false);
                       await logoutReader();
                     }}
-                    className="py-2 px-3 rounded-xl bg-rose-950/40 text-rose-300 hover:bg-rose-950/60 text-xs font-bold text-center cursor-pointer"
+                    className="py-2 px-2 rounded-xl bg-rose-950/40 text-rose-300 hover:bg-rose-950/60 text-xs font-bold text-center cursor-pointer"
                   >
                     Déconnexion
                   </button>
@@ -493,6 +533,15 @@ export const Navbar: React.FC = () => {
           Articles
         </button>
         <button
+          onClick={() => navigateTo('discussion')}
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1 ${
+            viewMode === 'discussion' ? 'bg-[#ff8679] text-white font-bold' : 'text-zinc-300 hover:text-white'
+          }`}
+        >
+          <MessageCircle className="w-3 h-3" />
+          <span>Discussion</span>
+        </button>
+        <button
           onClick={() => navigateTo('recherche')}
           className={`p-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
             viewMode === 'recherche' ? 'bg-[#ff8679] text-white' : 'text-zinc-400 hover:text-white'
@@ -506,11 +555,11 @@ export const Navbar: React.FC = () => {
       {/* Mobile Fixed Bottom Navigation Dock (1-tap access on all phones) */}
       <nav 
         id="mobile-bottom-dock" 
-        className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#101118]/95 backdrop-blur-xl border-t border-zinc-800/90 px-3 py-2 flex items-center justify-around shadow-2xl safe-area-pb"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#101118]/95 backdrop-blur-xl border-t border-zinc-800/90 px-1.5 py-2 flex items-center justify-around shadow-2xl safe-area-pb"
       >
         <button
           onClick={() => navigateTo('accueil')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-colors cursor-pointer ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-1.5 rounded-lg transition-colors cursor-pointer ${
             viewMode === 'accueil' ? 'text-[#ff8679]' : 'text-zinc-400 hover:text-zinc-200'
           }`}
         >
@@ -520,7 +569,7 @@ export const Navbar: React.FC = () => {
 
         <button
           onClick={() => navigateTo('oeuvres')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-colors cursor-pointer ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-1.5 rounded-lg transition-colors cursor-pointer ${
             viewMode === 'oeuvres' ? 'text-[#ff8679]' : 'text-zinc-400 hover:text-zinc-200'
           }`}
         >
@@ -531,7 +580,7 @@ export const Navbar: React.FC = () => {
         <button
           id="mobile-dock-artistes"
           onClick={() => navigateTo('artistes')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-all cursor-pointer ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-all cursor-pointer ${
             ['artistes', 'artiste-detail', 'artbook-detail'].includes(viewMode)
               ? 'text-[#ff8679] bg-[#ff8679]/15 font-bold shadow-sm'
               : 'text-zinc-300 hover:text-white'
@@ -543,7 +592,7 @@ export const Navbar: React.FC = () => {
 
         <button
           onClick={() => navigateTo('articles')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-colors cursor-pointer ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-1.5 rounded-lg transition-colors cursor-pointer ${
             viewMode === 'articles' ? 'text-[#ff8679]' : 'text-zinc-400 hover:text-zinc-200'
           }`}
         >
@@ -552,8 +601,19 @@ export const Navbar: React.FC = () => {
         </button>
 
         <button
+          id="mobile-dock-discussion"
+          onClick={() => navigateTo('discussion')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-1.5 rounded-lg transition-colors cursor-pointer ${
+            viewMode === 'discussion' ? 'text-[#ff8679]' : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          <MessageCircle className="w-4 h-4" />
+          <span className="text-[10px] font-semibold">Discussion</span>
+        </button>
+
+        <button
           onClick={() => navigateTo('recherche')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-colors cursor-pointer ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-1.5 rounded-lg transition-colors cursor-pointer ${
             viewMode === 'recherche' ? 'text-[#ff8679]' : 'text-zinc-400 hover:text-zinc-200'
           }`}
         >

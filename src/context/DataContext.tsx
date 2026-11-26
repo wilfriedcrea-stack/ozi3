@@ -203,21 +203,24 @@ interface DataContextType {
   closeAuthModal: () => void;
   isProfileModalOpen: boolean;
   setIsProfileModalOpen: (open: boolean) => void;
-  openProfileModal: () => void;
+  profileModalInitialTab: 'profile' | 'gallery' | 'subscriptions' | 'artbooks' | 'coins';
+  openProfileModal: (tab?: 'profile' | 'gallery' | 'subscriptions' | 'artbooks' | 'coins') => void;
   closeProfileModal: () => void;
+  discussionChannel: 'discussion' | 'galerie';
+  setDiscussionChannel: (channel: 'discussion' | 'galerie') => void;
   isCartModalOpen: boolean;
   openCartModal: () => void;
   closeCartModal: () => void;
   signInReaderWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   signInReaderWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
-  signUpReaderWithEmail: (name: string, email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  signUpReaderWithEmail: (name: string, email: string, pass: string, photoURL?: string) => Promise<{ success: boolean; error?: string }>;
   sendReaderPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
   logoutReader: () => Promise<void>;
-  updateReaderProfileData: (updates: { displayName?: string; bio?: string }) => Promise<{ success: boolean; error?: string }>;
+  updateReaderProfileData: (updates: { displayName?: string; bio?: string; photoURL?: string }) => Promise<{ success: boolean; error?: string }>;
 
   // View state & standalone pages
-  viewMode: 'accueil' | 'oeuvres' | 'articles' | 'recherche' | 'admin' | 'article-detail' | 'oeuvre-detail' | 'artistes' | 'artiste-detail' | 'artbook-detail';
-  setViewMode: (mode: 'accueil' | 'oeuvres' | 'articles' | 'recherche' | 'admin' | 'article-detail' | 'oeuvre-detail' | 'artistes' | 'artiste-detail' | 'artbook-detail') => void;
+  viewMode: 'accueil' | 'oeuvres' | 'articles' | 'discussion' | 'recherche' | 'admin' | 'article-detail' | 'oeuvre-detail' | 'artistes' | 'artiste-detail' | 'artbook-detail';
+  setViewMode: (mode: 'accueil' | 'oeuvres' | 'articles' | 'discussion' | 'recherche' | 'admin' | 'article-detail' | 'oeuvre-detail' | 'artistes' | 'artiste-detail' | 'artbook-detail') => void;
   selectedArticleId: string | null;
   selectedOeuvreId: string | null;
   selectedArtistId: string | null;
@@ -426,7 +429,7 @@ export const isSeriesPermanentlyDeleted = (s: Series, deletedSet: Set<string>): 
   return false;
 };
 
-type ViewModeType = 'accueil' | 'oeuvres' | 'articles' | 'recherche' | 'admin' | 'article-detail' | 'oeuvre-detail' | 'artistes' | 'artiste-detail' | 'artbook-detail';
+type ViewModeType = 'accueil' | 'oeuvres' | 'articles' | 'discussion' | 'recherche' | 'admin' | 'article-detail' | 'oeuvre-detail' | 'artistes' | 'artiste-detail' | 'artbook-detail';
 
 interface ParsedRoute {
   mode: ViewModeType;
@@ -538,6 +541,11 @@ const parseCurrentRoute = (): ParsedRoute => {
   // 9. Articles list check
   if (path === '/articles' || path.startsWith('/articles/') || hash === '#articles' || hash === '#/articles' || searchParams.has('articles')) {
     return { mode: 'articles', id: null };
+  }
+
+  // 10. Discussion page check
+  if (path === '/discussion' || path.startsWith('/discussion/') || hash === '#discussion' || hash === '#/discussion' || searchParams.has('discussion')) {
+    return { mode: 'discussion', id: null };
   }
 
   return { mode: 'accueil', id: null };
@@ -673,6 +681,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [authModalInitialTab, setAuthModalInitialTab] = useState<'login' | 'register' | 'forgot'>('login');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+  const [profileModalInitialTab, setProfileModalInitialTab] = useState<'profile' | 'gallery' | 'subscriptions' | 'artbooks' | 'coins'>('profile');
+  const [discussionChannel, setDiscussionChannel] = useState<'discussion' | 'galerie'>('discussion');
   const [isCartModalOpen, setIsCartModalOpen] = useState<boolean>(false);
 
   const openAuthModal = useCallback((tab: 'login' | 'register' | 'forgot' = 'login') => {
@@ -684,7 +694,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsAuthModalOpen(false);
   }, []);
 
-  const openProfileModal = useCallback(() => {
+  const openProfileModal = useCallback((tab: 'profile' | 'gallery' | 'subscriptions' | 'artbooks' | 'coins' = 'profile') => {
+    setProfileModalInitialTab(tab);
     setIsProfileModalOpen(true);
   }, []);
 
@@ -768,8 +779,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return res;
   }, []);
 
-  const signUpReaderWithEmailAction = useCallback(async (name: string, email: string, pass: string) => {
-    const res = await signUpReaderWithEmail(name, email, pass);
+  const signUpReaderWithEmailAction = useCallback(async (name: string, email: string, pass: string, photoURL?: string) => {
+    const res = await signUpReaderWithEmail(name, email, pass, photoURL);
     if (res.success && res.profile) {
       setReaderProfile(res.profile);
       setIsAuthModalOpen(false);
@@ -788,11 +799,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsProfileModalOpen(false);
   }, []);
 
-  const updateReaderProfileDataAction = useCallback(async (updates: { displayName?: string; bio?: string }) => {
+  const updateReaderProfileDataAction = useCallback(async (updates: { displayName?: string; bio?: string; photoURL?: string }) => {
     if (!currentUser) return { success: false, error: 'Non authentifié' };
     const res = await updateReaderProfileInDb(currentUser.uid, updates);
     if (res.success) {
       setReaderProfile(prev => prev ? ({ ...prev, ...updates, updatedAt: new Date().toISOString() }) : null);
+      if (updates.photoURL !== undefined || updates.displayName !== undefined) {
+        setUsers(prev =>
+          prev.map(u =>
+            u.id === currentUser.uid
+              ? {
+                  ...u,
+                  name: updates.displayName !== undefined ? updates.displayName : u.name,
+                  avatarUrl: updates.photoURL !== undefined ? updates.photoURL : u.avatarUrl,
+                }
+              : u
+          )
+        );
+      }
     }
     return res;
   }, [currentUser]);
@@ -1164,6 +1188,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (mode === 'admin') targetHash = '#admin';
       else if (mode === 'oeuvres') targetHash = '#oeuvres';
       else if (mode === 'articles') targetHash = '#articles';
+      else if (mode === 'discussion') targetHash = '#discussion';
       else if (mode === 'artistes') targetHash = '#artistes';
       else if (mode === 'recherche') targetHash = '#recherche';
       else if (mode === 'accueil') targetHash = '';
@@ -4291,8 +4316,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       closeAuthModal,
       isProfileModalOpen,
       setIsProfileModalOpen,
+      profileModalInitialTab,
       openProfileModal,
       closeProfileModal,
+      discussionChannel,
+      setDiscussionChannel,
       isCartModalOpen,
       openCartModal,
       closeCartModal,

@@ -11,6 +11,7 @@ import { OeuvreDetailPage } from './components/landing/OeuvreDetailPage';
 import { ArtistsPage } from './components/artists/ArtistsPage';
 import { ArtistDetailPage } from './components/artists/ArtistDetailPage';
 import { ArtbookDetailPage } from './components/artists/ArtbookDetailPage';
+import { DiscussionPage } from './components/discussion/DiscussionPage';
 import { Footer } from './components/landing/Footer';
 import { WebtoonReaderModal } from './components/landing/WebtoonReaderModal';
 import { TeaserVideoModal } from './components/landing/TeaserVideoModal';
@@ -34,36 +35,45 @@ const MainLayout: React.FC = () => {
     return <AdminStudio />;
   }
 
+  const isDiscussionView = viewMode === 'discussion';
+
   return (
     <PullToRefresh>
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-amber-500 selection:text-zinc-950 font-sans flex flex-col justify-between">
-        <div>
-          {/* Top Image Banner before Header */}
-          <TopBanner />
+      <div
+        className={
+          isDiscussionView
+            ? 'h-[100dvh] overflow-hidden bg-[#0b0c12] text-zinc-100 selection:bg-amber-500 selection:text-zinc-950 font-sans flex flex-col'
+            : 'min-h-screen bg-zinc-950 text-zinc-100 selection:bg-amber-500 selection:text-zinc-950 font-sans flex flex-col justify-between'
+        }
+      >
+        <div className={isDiscussionView ? 'flex-1 min-h-0 flex flex-col' : undefined}>
+          {/* Top Image Banner before Header (hidden in full-page Discussion mode) */}
+          {!isDiscussionView && <TopBanner />}
 
           {/* Sticky Header Navbar */}
           <Navbar />
 
           {/* Dynamic Page Views */}
-          <main>
+          <main className={isDiscussionView ? 'flex-1 min-h-0 flex flex-col' : undefined}>
             {viewMode === 'accueil' && <AccueilPage />}
             {viewMode === 'oeuvres' && <OeuvresPage />}
             {viewMode === 'artistes' && <ArtistsPage />}
             {viewMode === 'articles' && <ArticlesPage />}
+            {viewMode === 'discussion' && <DiscussionPage />}
             {viewMode === 'recherche' && <SearchPage />}
             {viewMode === 'article-detail' && <ArticleDetailPage />}
             {viewMode === 'oeuvre-detail' && <OeuvreDetailPage />}
             {viewMode === 'artiste-detail' && <ArtistDetailPage />}
             {viewMode === 'artbook-detail' && <ArtbookDetailPage />}
             {/* Fallback to Accueil if viewMode is unrecognized */}
-            {!['accueil', 'oeuvres', 'artistes', 'articles', 'recherche', 'article-detail', 'oeuvre-detail', 'artiste-detail', 'artbook-detail'].includes(viewMode) && (
+            {!['accueil', 'oeuvres', 'artistes', 'articles', 'discussion', 'recherche', 'article-detail', 'oeuvre-detail', 'artiste-detail', 'artbook-detail'].includes(viewMode) && (
               <AccueilPage />
             )}
           </main>
         </div>
 
-        {/* Footer */}
-        <Footer />
+        {/* Footer (hidden in full-page Discussion mode) */}
+        {!isDiscussionView && <Footer />}
 
         {/* Global Modals & Notifications */}
         <OfflineIndicator />

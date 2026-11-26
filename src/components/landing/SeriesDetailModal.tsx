@@ -255,7 +255,7 @@ export const SeriesDetailModal: React.FC<SeriesDetailModalProps> = ({ series, on
             </button>
 
             <a
-              href="#section-download"
+              href="#section-accueil"
               onClick={onClose}
               className="w-full sm:w-auto flex items-center justify-center gap-2 py-3.5 px-5 rounded-2xl bg-[#1c1c2b] hover:bg-[#26263a] text-zinc-200 font-bold text-xs border border-[#2e2e46] transition-colors font-heading"
             >

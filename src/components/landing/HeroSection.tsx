@@ -1,70 +1,124 @@
-import React, { useState } from 'react';
-import { 
-  Download, 
-  Play, 
-  Star, 
-  ShieldCheck, 
-  ArrowRight, 
-  Eye, 
-  Flame, 
-  CheckCircle2, 
-  BookOpen,
-  Smartphone
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Download,
+  CheckCircle2,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useData } from '../../context/DataContext';
-import { ApkDownloadModal } from './ApkDownloadModal';
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
 
 export const HeroSection: React.FC = () => {
-  const { series, appVersion, recordApkDownload, openReader, openTeaserModal, teasers, setViewMode, openOeuvrePage } = useData();
+  const { appVersion, recordApkDownload } = useData();
   const [downloading, setDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
-  const [activeHeroIndex, setActiveHeroIndex] = useState(0);
-  const [apkModalOpen, setApkModalOpen] = useState(false);
 
-  const featuredSeries = series.filter(s => s && s.isFeatured).slice(0, 3);
-  const currentHero = featuredSeries[activeHeroIndex] || series[0] || {
-    id: 'ozi-featured',
-    title: 'OZI Webtoons & Mangas',
-    slug: 'ozi-featured',
-    author: 'Studio OZI',
-    artist: 'Collectif OZI',
-    country: 'Côte d\'Ivoire',
-    synopsis: 'Plongez dans le meilleur des bandes dessinées et webtoons africains et internationaux.',
-    genre: 'Action & Shonen',
-    secondaryGenres: [],
-    tags: [],
-    coverUrl: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80',
-    bannerUrl: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=1600&q=80',
-    status: 'ongoing',
-    rating: 4.9,
-    reviewsCount: 150,
-    totalReads: 500000,
-    totalLikes: 25000,
-    chaptersCount: 12,
-    isFeatured: true,
-    isExclusive: true,
-    isTrending: true,
-    releaseYear: 2026,
-    language: 'Français',
-    ageRating: 'Tous publics',
-    updatedAt: '2026-08-20',
-    chapters: []
-  };
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const [isInView, setIsInView] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const [reducedMotion, setReducedMotion] = useState(false);
 
-  const apkUrl = appVersion.downloadUrl || appVersion.apkDownloadUrl || 'https://ozibd.net/ozi-reader.apk';
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const syncMotionPref = () => {
+      const prefersReduced = mediaQuery.matches;
+      setReducedMotion(prefersReduced);
+      if (prefersReduced) {
+        setIsInView(true);
+        setScrollProgress(0);
+      }
+    };
+    syncMotionPref();
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', syncMotionPref);
+    }
+
+    const stageEl = stageRef.current;
+    if (!stageEl) {
+      return () => {
+        if (typeof mediaQuery.removeEventListener === 'function') {
+          mediaQuery.removeEventListener('change', syncMotionPref);
+        }
+      };
+    }
+
+    // Immediate viewport check so already-visible or scrolled-past elements stay visible
+    const checkInitialVisibility = () => {
+      const rect = stageEl.getBoundingClientRect();
+      const vh = window.innerHeight || document.documentElement.clientHeight || 800;
+      if (rect.top < vh * 0.96 && rect.bottom > 0) {
+        setIsInView(true);
+      }
+    };
+    checkInitialVisibility();
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting || entry.boundingClientRect.top < window.innerHeight * 0.92) {
+            setIsInView(true);
+          }
+        }
+      },
+      { threshold: [0.05, 0.2], rootMargin: '0px 0px -4% 0px' }
+    );
+    observer.observe(stageEl);
+
+    let rafId = 0;
+    const updateScroll3D = () => {
+      rafId = 0;
+      if (mediaQuery.matches || !stageRef.current) return;
+
+      const rect = stageRef.current.getBoundingClientRect();
+      const vh = window.innerHeight || document.documentElement.clientHeight || 800;
+      const center = rect.top + rect.height / 2;
+      const normalized = clamp((center - vh * 0.5) / (vh * 0.65), -1, 1);
+
+      setScrollProgress(normalized);
+
+      if (rect.top < vh * 0.96 && rect.bottom > 0) {
+        setIsInView(true);
+      }
+    };
+
+    const handleScroll = () => {
+      if (rafId) return;
+      rafId = window.requestAnimationFrame(updateScroll3D);
+    };
+
+    updateScroll3D();
+    // Capture scroll events from either window or any nested scroll container
+    window.addEventListener('scroll', handleScroll, { passive: true, capture: true });
+    window.addEventListener('resize', handleScroll, { passive: true });
+
+    return () => {
+      observer.disconnect();
+      if (rafId) window.cancelAnimationFrame(rafId);
+      window.removeEventListener('scroll', handleScroll, { capture: true });
+      window.removeEventListener('resize', handleScroll);
+      if (typeof mediaQuery.removeEventListener === 'function') {
+        mediaQuery.removeEventListener('change', syncMotionPref);
+      }
+    };
+  }, []);
+
+  const apkUrl =
+    appVersion.downloadUrl ||
+    appVersion.apkDownloadUrl ||
+    'https://ozibd.net/ozi-reader.apk';
 
   const handleDownloadApk = () => {
     setDownloading(true);
     recordApkDownload();
 
-    // Trigger celebratory confetti
     try {
       confetti({
         particleCount: 80,
         spread: 70,
         origin: { y: 0.6 },
-        colors: ['#ff8679', '#ffa296', '#F59E0B', '#ffffff']
+        colors: ['#ff8679', '#ffa296', '#F59E0B', '#ffffff'],
       });
     } catch {
       // safe fallback
@@ -73,8 +127,7 @@ export const HeroSection: React.FC = () => {
     setTimeout(() => {
       setDownloading(false);
       setDownloadSuccess(true);
-      
-      // Trigger real download
+
       const link = document.createElement('a');
       link.href = apkUrl;
       link.download = `OZI-Reader-${appVersion.version}.apk`;
@@ -90,264 +143,179 @@ export const HeroSection: React.FC = () => {
     }, 800);
   };
 
-  const handleWatchTrailer = () => {
-    if (teasers.length > 0) {
-      openTeaserModal(teasers[0]);
-    }
-  };
+  const p = reducedMotion ? 0 : scrollProgress;
+  const visible = reducedMotion || isInView;
+
+  const phoneEntranceStyle: React.CSSProperties = reducedMotion
+    ? {}
+    : {
+        opacity: visible ? 1 : 0,
+        transform: visible
+          ? 'perspective(1200px) translate3d(0px, 0px, 0px) rotateY(0deg) rotateX(0deg) scale(1)'
+          : 'perspective(1200px) translate3d(56px, 72px, -130px) rotateY(-36deg) rotateX(18deg) rotateZ(6deg) scale(0.8)',
+        transition:
+          'transform 950ms cubic-bezier(0.16, 1, 0.3, 1) 80ms, opacity 750ms ease-out 80ms',
+        willChange: 'transform, opacity',
+      };
+
+  const phoneScrollStyle: React.CSSProperties = reducedMotion
+    ? {}
+    : {
+        transform: `perspective(1100px) translate3d(${(p * 14).toFixed(1)}px, ${(p * -26).toFixed(1)}px, ${(-30 + (1 - Math.abs(p)) * 30).toFixed(1)}px) rotateY(${(-6 + p * 18).toFixed(2)}deg) rotateX(${(p * -10).toFixed(2)}deg) rotateZ(${(p * 3).toFixed(2)}deg) scale(${(1 - Math.abs(p) * 0.04).toFixed(3)})`,
+        willChange: 'transform',
+      };
+
+  const characterEntranceStyle: React.CSSProperties = reducedMotion
+    ? {}
+    : {
+        opacity: visible ? 1 : 0,
+        transform: visible
+          ? 'perspective(1200px) translate3d(0px, 0px, 0px) rotateY(0deg) rotateX(0deg) scale(1)'
+          : 'perspective(1200px) translate3d(-56px, 56px, 90px) rotateY(30deg) rotateX(-12deg) rotateZ(-5deg) scale(0.84)',
+        transition:
+          'transform 1050ms cubic-bezier(0.16, 1, 0.3, 1) 180ms, opacity 800ms ease-out 180ms',
+        willChange: 'transform, opacity',
+      };
+
+  const characterScrollStyle: React.CSSProperties = reducedMotion
+    ? {}
+    : {
+        transform: `perspective(1100px) translate3d(${(p * -18).toFixed(1)}px, ${(p * 20).toFixed(1)}px, ${(70 - Math.abs(p) * 20).toFixed(1)}px) rotateY(${(6 - p * 20).toFixed(2)}deg) rotateX(${(p * 8).toFixed(2)}deg) rotateZ(${(p * -3.5).toFixed(2)}deg) scale(${(1.03 - Math.abs(p) * 0.04).toFixed(3)})`,
+        willChange: 'transform',
+      };
+
+  const stage3DStyle: React.CSSProperties = reducedMotion
+    ? {}
+    : {
+        perspective: '1200px',
+        transformStyle: 'preserve-3d',
+        transform: `perspective(1200px) rotateX(${(p * 6).toFixed(2)}deg) rotateY(${(p * -5).toFixed(2)}deg)`,
+        willChange: 'transform',
+      };
+
+  const haloScrollStyle: React.CSSProperties = reducedMotion
+    ? {}
+    : {
+        opacity: visible ? 1 : 0,
+        transform: `translate3d(${(p * -12).toFixed(1)}px, ${(p * -16).toFixed(1)}px, -60px) scale(${visible ? (1.05 - Math.abs(p) * 0.12).toFixed(3) : 0.72})`,
+        transition: 'opacity 900ms ease-out',
+        willChange: 'transform, opacity',
+      };
 
   return (
-    <section id="section-accueil" className="relative min-h-[85vh] pt-12 sm:pt-16 pb-20 flex items-center justify-center overflow-hidden bg-[#07080c]">
-      {/* Dynamic Background Ambient Gradients */}
+    <section
+      id="section-accueil"
+      aria-label="Télécharger l'application mobile OZI"
+      className="relative py-12 sm:py-16 lg:py-20 overflow-hidden bg-[#07080c] border-b border-slate-800/80"
+    >
+      {/* Subtle Ambient Coral Glow */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[750px] h-[550px] bg-gradient-to-tr from-[#ff8679]/20 via-amber-500/10 to-transparent rounded-full blur-[130px]" />
-        <div className="absolute top-20 right-10 w-[450px] h-[450px] bg-[#ff8679]/15 rounded-full blur-[120px]" />
-        <div className="absolute bottom-10 left-10 w-[400px] h-[400px] bg-rose-700/10 rounded-full blur-[110px]" />
-        
-        {/* Subtle geometric grid texture overlay */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff08_1px,transparent_1px),linear-gradient(to_bottom,#ffffff08_1px,transparent_1px)] bg-[size:3.5rem_3.5rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_40%,#000_70%,transparent_100%)]" />
+        <div className="absolute top-1/2 right-[12%] -translate-y-1/2 w-[520px] h-[420px] bg-[#ff8679]/18 rounded-full blur-[120px]" />
+        <div className="absolute -bottom-24 left-[8%] w-[380px] h-[320px] bg-[#ff8679]/10 rounded-full blur-[110px]" />
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
-          
-          {/* Left Column: Copy, Tagline & Main CTAs (7 cols) */}
-          <div className="lg:col-span-7 flex flex-col items-start text-left">
-
-            {/* Main Punchy Heading */}
-            <h1 className="text-4xl sm:text-6xl xl:text-7xl font-black text-white tracking-tight leading-[1.08] font-almodobar mb-6">
-              L'Univers des <br />
-              <span className="text-gradient">Webtoons & Mangas</span> <br />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-8 items-center">
+          {/* Text & CTA Column: second on mobile (below visuals), first on desktop (left) */}
+          <div className="order-2 lg:order-1 lg:col-span-6 flex flex-col items-center text-center lg:items-start lg:text-left">
+            <h1 className="text-3xl sm:text-5xl xl:text-[3.25rem] font-black text-white tracking-tight leading-[1.08] font-almodobar text-balance mb-7">
+              L'Univers des{' '}
+              <span className="text-ozi-gradient">Webtoons & Mangas</span>{' '}
               sur votre Mobile.
             </h1>
 
-            {/* Subtitle / Description */}
-            <p className="text-base sm:text-xl text-slate-300 font-normal leading-relaxed max-w-2xl mb-8 font-body">
-              Lisez les meilleures séries originales, webtoons et bandes dessinées africaines et internationales avec un lecteur immersif ultra-rapide et optimisé hors-ligne.
-            </p>
-
-            {/* Action Buttons Hub */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto mb-8">
-              
-              {/* Main APK Download Button */}
+            {/* Primary Call-To-Action Button */}
+            <div className="flex items-center justify-center lg:justify-start w-full sm:w-auto">
               <button
                 id="hero-apk-download-btn"
+                type="button"
                 onClick={handleDownloadApk}
                 disabled={downloading}
-                className="relative group overflow-hidden flex items-center justify-center gap-3.5 px-7 py-4 rounded-2xl bg-ozi-primary hover:opacity-95 text-white font-black text-base shadow-xl glow-ozi hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-80 tap-active cursor-pointer"
+                className="inline-flex items-center justify-center gap-3 px-7 py-4 rounded-2xl bg-ozi-primary bg-ozi-primary-hover text-white font-black text-base shadow-xl glow-ozi hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-80 tap-active cursor-pointer whitespace-nowrap shrink-0 font-almodobar"
               >
-                <div className="p-2 rounded-xl bg-black/20 text-white">
-                  {downloading ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : downloadSuccess ? (
-                    <CheckCircle2 className="w-5 h-5 text-white" />
-                  ) : (
-                    <Download className="w-5 h-5 animate-bounce" />
-                  )}
-                </div>
-                <div className="flex flex-col items-start text-left">
-                  <span className="text-[11px] uppercase font-black tracking-wider opacity-90">
-                    {downloadSuccess ? 'Téléchargé !' : 'Téléchargement Direct'}
-                  </span>
-                  <span className="text-base font-black tracking-tight font-almodobar">
-                    {downloading ? 'Téléchargement...' : `Télécharger l'APK (${appVersion.version})`}
-                  </span>
-                </div>
-              </button>
-
-              {/* Install / Options Button */}
-              <button
-                onClick={() => setApkModalOpen(true)}
-                className="flex items-center justify-center gap-2.5 px-5 py-4 rounded-2xl bg-[#0d0e15] hover:bg-[#161724] text-slate-200 hover:text-white border border-slate-800 hover:border-slate-700 font-bold text-sm transition-all duration-200 shadow-lg tap-active cursor-pointer"
-                title="Options d'installation PWA ou APK"
-              >
-                <Smartphone className="w-4 h-4 text-[#ff8679]" />
-                <span className="font-heading">Options d'installation</span>
-              </button>
-
-              {/* Watch Trailer / Teaser Button */}
-              <button
-                id="hero-trailer-btn"
-                onClick={handleWatchTrailer}
-                className="flex items-center justify-center gap-2.5 px-5 py-4 rounded-2xl bg-[#0d0e15] hover:bg-[#161724] text-slate-200 hover:text-white border border-slate-800 hover:border-[#ff8679]/50 font-bold text-sm transition-all duration-200 group shadow-lg tap-active cursor-pointer"
-              >
-                <div className="w-7 h-7 rounded-xl bg-[#ff8679]/20 text-[#ff8679] flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Play className="w-3.5 h-3.5 fill-[#ff8679] ml-0.5" />
-                </div>
-                <span className="font-heading">Teasers</span>
+                {downloading ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                ) : downloadSuccess ? (
+                  <CheckCircle2 className="w-5 h-5 text-white shrink-0" />
+                ) : (
+                  <Download className="w-5 h-5 shrink-0" />
+                )}
+                <span>
+                  {downloading
+                    ? 'Téléchargement...'
+                    : downloadSuccess
+                    ? 'Téléchargement lancé !'
+                    : 'Télécharger'}
+                </span>
               </button>
             </div>
 
-            {/* Quick Status / Trust Proof */}
+            {/* Direct download confirmation */}
             {downloadSuccess && (
-              <div className="mb-6 p-4 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 text-sm flex items-center justify-between gap-3 animate-in fade-in w-full max-w-xl">
-                <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                  <div>
-                    <strong className="font-bold text-emerald-200">Téléchargement lancé !</strong> Ouvrez le fichier sur votre smartphone pour installer OZI.
-                  </div>
+              <div className="mt-5 p-3.5 rounded-2xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 text-xs sm:text-sm flex items-center justify-between gap-3 animate-in fade-in w-full max-w-xl font-body text-left">
+                <div className="flex items-center gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>
+                    Ouvrez le fichier téléchargé sur votre smartphone pour installer OZI.
+                  </span>
                 </div>
-                <a href={apkUrl} target="_blank" rel="noopener noreferrer" className="underline font-bold text-xs shrink-0 text-white">
+                <a
+                  href={apkUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline font-bold text-xs shrink-0 text-white whitespace-nowrap"
+                >
                   Lien direct
                 </a>
               </div>
             )}
-
-            {/* Live Metrics Strip */}
-            <div className="w-full grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6 border-t border-slate-800/80">
-              <div className="flex flex-col">
-                <span className="text-2xl sm:text-3xl font-black text-[#ff8679] tracking-tight font-almodobar">
-                  +54 000
-                </span>
-                <span className="text-xs text-slate-400 font-medium mt-0.5">Lecteurs actifs</span>
-              </div>
-
-              <div className="flex flex-col">
-                <span className="text-2xl sm:text-3xl font-black text-white tracking-tight font-almodobar">
-                  +1.08M
-                </span>
-                <span className="text-xs text-slate-400 font-medium mt-0.5">Chapitres lus</span>
-              </div>
-
-              <div className="flex flex-col">
-                <span className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight font-almodobar">
-                  4.9 ★
-                </span>
-                <span className="text-xs text-slate-400 font-medium mt-0.5">Note globale</span>
-              </div>
-
-              <div className="flex flex-col">
-                <span className="text-2xl sm:text-3xl font-black text-emerald-400 tracking-tight font-almodobar flex items-center gap-1">
-                  100%
-                </span>
-                <span className="text-xs text-slate-400 font-medium mt-0.5">Gratuit & VIP</span>
-              </div>
-            </div>
-
           </div>
 
-          {/* Right Column: Interactive Featured Series Card & Hero Showcase (5 cols) */}
-          <div className="lg:col-span-5 relative">
-            
-            {/* Glow backing */}
-            <div className="absolute -inset-1 bg-gradient-to-r from-[#ff8679] to-amber-500 rounded-3xl blur-xl opacity-30 group-hover:opacity-60 transition duration-1000 group-hover:duration-200 animate-pulse" />
+          {/* Composed 3D Scroll Visual Column: first on mobile (above title), second on desktop (right) */}
+          <div className="order-1 lg:order-2 lg:col-span-6 flex items-center justify-center lg:justify-end">
+            <div
+              ref={stageRef}
+              style={stage3DStyle}
+              className="relative w-full max-w-[340px] sm:max-w-[440px] lg:max-w-[500px] h-[270px] sm:h-[350px] lg:h-[400px] flex items-end justify-center select-none"
+            >
+              {/* Soft Coral Backdrop Halo behind the composition */}
+              <div
+                aria-hidden="true"
+                style={haloScrollStyle}
+                className="absolute inset-x-8 bottom-4 top-8 rounded-full bg-gradient-to-tr from-[#ff8679]/25 via-[#ff8679]/10 to-transparent blur-2xl pointer-events-none"
+              />
 
-            <div className="relative rounded-3xl bg-[#0d0e15] border border-slate-800 overflow-hidden shadow-2xl">
-              
-              {/* Series Poster Showcase */}
-              <div 
-                onClick={() => openOeuvrePage(currentHero.slug || currentHero.id)}
-                className="relative h-96 sm:h-[420px] overflow-hidden group cursor-pointer"
+              {/* OZI 3D Phone Mockup (back Z-plane) */}
+              <div
+                style={phoneEntranceStyle}
+                className="absolute right-0 sm:right-2 bottom-0 h-[92%] flex items-end justify-end z-10 pointer-events-none"
               >
                 <img
-                  src={currentHero.bannerUrl || currentHero.coverUrl}
-                  alt={currentHero.title}
-                  className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-105"
-                  loading="eager"
+                  src="/assets/aistudio/phone_250f2707.png"
+                  alt="Application mobile OZI sur smartphone"
                   referrerPolicy="no-referrer"
+                  style={phoneScrollStyle}
+                  className="h-full w-auto object-contain pointer-events-none drop-shadow-[0_24px_45px_rgba(255,134,121,0.24)]"
                 />
-
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0d0e15] via-[#0d0e15]/40 to-transparent" />
-
-                {/* Genre & Tag badges overlay */}
-                <div className="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-none">
-                  <span className="px-3 py-1 rounded-full bg-[#ff8679] text-white text-xs font-black uppercase tracking-wider font-almodobar shadow-lg">
-                    {currentHero.genre}
-                  </span>
-                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md text-amber-300 text-xs font-bold font-heading border border-white/10">
-                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                    <span>{(typeof currentHero.rating === 'number' ? currentHero.rating : 4.9).toFixed(1)}</span>
-                  </div>
-                </div>
-
-                {/* Bottom Quick Info inside image */}
-                <div className="absolute bottom-4 left-4 right-4 text-left">
-                  <div className="flex items-center gap-2 text-xs text-slate-300 font-medium mb-1">
-                    <span>Par {currentHero.author || 'Auteur OZI'}</span>
-                    <span>•</span>
-                    <span>{currentHero.country || 'Côte d\'Ivoire'}</span>
-                  </div>
-                  <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight font-almodobar line-clamp-1 group-hover:text-purple-300 transition-colors">
-                    {currentHero.title}
-                  </h3>
-                </div>
               </div>
 
-              {/* Card Bottom: Synopsis + Direct Read Action */}
-              <div className="p-6 bg-[#0d0e15] flex flex-col gap-4 text-left">
-                <p className="text-xs sm:text-sm text-slate-300 line-clamp-2 leading-relaxed font-body">
-                  {currentHero.synopsis}
-                </p>
-
-                <div className="flex items-center justify-between gap-3 pt-2">
-                  <div className="flex items-center gap-3 text-xs text-slate-400 font-heading">
-                    <span className="flex items-center gap-1">
-                      <BookOpen className="w-3.5 h-3.5 text-[#ff8679]" />
-                      <span>{currentHero.chaptersCount || (currentHero.chapters ? currentHero.chapters.length : 1)} chapitres</span>
-                    </span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1">
-                      <Eye className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>{(typeof currentHero.totalReads === 'number' ? currentHero.totalReads : 1000).toLocaleString()} lectures</span>
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      id="hero-read-chapter1-btn"
-                      onClick={() => openOeuvrePage(currentHero.slug || currentHero.id)}
-                      className="flex items-center justify-center gap-1.5 py-3 px-5 rounded-xl bg-ozi-primary hover:opacity-95 text-white font-bold text-xs shadow-lg glow-ozi transition-all tap-active font-almodobar cursor-pointer"
-                    >
-                      <span>Fiche Oeuvre</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-
-                    <button
-                      id="hero-explore-catalog-btn"
-                      onClick={() => {
-                        setViewMode('oeuvres');
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
-                      className="flex items-center justify-center gap-1.5 py-3 px-4 rounded-xl bg-[#161724] hover:bg-[#1f2033] text-slate-200 font-bold text-xs border border-slate-800 transition-colors tap-active font-heading cursor-pointer"
-                    >
-                      <span>Catalogue</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Series Switcher Tabs */}
-                <div className="px-5 py-3 bg-[#07080c] border-t border-slate-800 flex items-center justify-between rounded-xl">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                    Séries en vedette ({activeHeroIndex + 1}/{featuredSeries.length})
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    {featuredSeries.map((s, idx) => (
-                      <button
-                        key={s.id}
-                        id={`hero-tab-${idx}`}
-                        onClick={() => setActiveHeroIndex(idx)}
-                        className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
-                          activeHeroIndex === idx 
-                            ? 'w-6 bg-[#ff8679]' 
-                            : 'w-2 bg-slate-700 hover:bg-slate-500'
-                        }`}
-                        title={s.title}
-                        aria-label={`Afficher ${s.title}`}
-                      />
-                    ))}
-                  </div>
-                </div>
-
+              {/* OZI Illustrated Reader Character (foreground Z-plane) */}
+              <div
+                style={characterEntranceStyle}
+                className="absolute -left-10 sm:-left-6 bottom-0 h-[86%] flex items-end justify-start z-20 pointer-events-none"
+              >
+                <img
+                  src="/assets/aistudio/Fichier_1_f06887c1.png"
+                  alt="Lectrice découvrant les webtoons OZI sur mobile"
+                  referrerPolicy="no-referrer"
+                  style={characterScrollStyle}
+                  className="h-full w-auto object-contain pointer-events-none drop-shadow-[0_22px_36px_rgba(0,0,0,0.8)]"
+                />
               </div>
             </div>
           </div>
-
         </div>
       </div>
-
-      {/* APK & PWA Download Modal */}
-      <ApkDownloadModal isOpen={apkModalOpen} onClose={() => setApkModalOpen(false)} />
     </section>
   );
 };

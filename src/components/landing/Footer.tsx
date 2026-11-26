@@ -15,7 +15,7 @@ export const Footer: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const navigateTo = (mode: 'accueil' | 'oeuvres' | 'artistes' | 'articles' | 'recherche' | 'admin', anchorId?: string) => {
+  const navigateTo = (mode: 'accueil' | 'oeuvres' | 'artistes' | 'articles' | 'discussion' | 'recherche' | 'admin', anchorId?: string) => {
     setViewMode(mode);
     setTimeout(() => {
       if (anchorId) {
@@ -74,23 +74,18 @@ export const Footer: React.FC = () => {
                 </button>
               </li>
               <li>
+                <button onClick={() => navigateTo('discussion')} className="hover:text-[#ffa296] transition-colors cursor-pointer">
+                  Discussion communautaire
+                </button>
+              </li>
+              <li>
                 <button onClick={() => navigateTo('recherche')} className="hover:text-[#ffa296] transition-colors cursor-pointer">
                   Recherche globale
                 </button>
               </li>
               <li>
-                <button onClick={() => navigateTo('accueil', 'section-teasers')} className="hover:text-[#ffa296] transition-colors cursor-pointer">
-                  Bandes-Annonces & Teasers
-                </button>
-              </li>
-              <li>
-                <button onClick={() => navigateTo('accueil', 'section-download')} className="hover:text-[#ffa296] transition-colors cursor-pointer">
+                <button onClick={() => navigateTo('accueil', 'section-accueil')} className="hover:text-[#ffa296] transition-colors cursor-pointer">
                   Téléchargement APK Android ({appVersion.version})
-                </button>
-              </li>
-              <li>
-                <button onClick={() => navigateTo('accueil', 'section-creators')} className="hover:text-[#ffa296] transition-colors cursor-pointer">
-                  Espace Créateurs
                 </button>
               </li>
             </ul>
