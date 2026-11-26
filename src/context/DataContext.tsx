@@ -64,6 +64,7 @@ import {
   resetFailedLoginAttempts 
 } from '../utils/securityUtils';
 import { normalizeImageUrl } from '../utils/imageUtils';
+import { isWilfriedEmail } from '../services/discussionService';
 import { 
   initializeFirebaseCustom, 
   testFirestoreConnection, 
@@ -721,6 +722,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const profile = await fetchOrCreateReaderProfile(firebaseUser);
           setReaderProfile(profile);
           if (profile) {
+            const isWilfried = isWilfriedEmail(profile.email);
             setUsers((prev) => {
               const alreadyExists = prev.some(u => u.id === profile.uid || (u.email && u.email.toLowerCase() === profile.email.toLowerCase()));
               if (alreadyExists) {
@@ -729,7 +731,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   id: profile.uid,
                   name: profile.displayName || u.name,
                   email: profile.email || u.email,
-                  avatarUrl: profile.photoURL || u.avatarUrl
+                  avatarUrl: profile.photoURL || u.avatarUrl,
+                  ...(isWilfried || isWilfriedEmail(u.email) ? { role: 'w.s.k' as const } : {})
                 } : u);
               }
               const newUser: UserAccount = {
@@ -737,7 +740,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 email: profile.email,
                 name: profile.displayName || 'Lecteur Ozi',
                 avatarUrl: profile.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${profile.uid}`,
-                role: 'reader',
+                role: isWilfried ? 'w.s.k' : 'reader',
                 coinsBalance: 0,
                 isVip: false,
                 isBanned: false,
@@ -2240,8 +2243,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (saved) {
         const parsed: UserAccount[] = JSON.parse(saved);
         const mockIds = new Set(['usr-002', 'usr-003', 'usr-004', 'usr-005', 'usr-006']);
-        const cleaned = parsed.filter(u => !mockIds.has(u.id));
-        const hasAdmin = cleaned.some(u => u.role === 'super_admin' || u.email.toLowerCase() === 'wilfriedcrea@gmail.com');
+        const cleaned = parsed
+          .filter(u => !mockIds.has(u.id))
+          .map(u => isWilfriedEmail(u.email) ? { ...u, role: 'w.s.k' as const } : u);
+        const hasAdmin = cleaned.some(u => u.role === 'w.s.k' || u.role === 'super_admin' || isWilfriedEmail(u.email));
         return hasAdmin ? cleaned : [INITIAL_USERS[0], ...cleaned];
       }
       return INITIAL_USERS;
@@ -2494,9 +2499,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const remoteUsers = await fetchUsersFromFirestore(fb.db);
           if (remoteUsers && remoteUsers.length > 0) {
             setUsers((prev) => {
-              const adminUser = prev.find(u => u.role === 'super_admin' || u.email.toLowerCase() === 'wilfriedcrea@gmail.com') || INITIAL_USERS[0];
-              const otherUsers = remoteUsers.filter(u => u.email.toLowerCase() !== 'wilfriedcrea@gmail.com');
-              const merged = [adminUser, ...otherUsers];
+              const foundOwner = prev.find(u => isWilfriedEmail(u.email) || u.role === 'w.s.k' || u.role === 'super_admin') || INITIAL_USERS[0];
+              const ownerUser: UserAccount = isWilfriedEmail(foundOwner.email)
+                ? { ...foundOwner, role: 'w.s.k' }
+                : foundOwner;
+              const otherUsers = remoteUsers.filter(u => !isWilfriedEmail(u.email));
+              const merged = [ownerUser, ...otherUsers];
               try {
                 localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(merged));
               } catch {}

@@ -956,7 +956,7 @@ export const INITIAL_USERS: import('../types').UserAccount[] = [
     email: 'wilfriedcrea@gmail.com',
     name: 'Wilfried Créa',
     avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-    role: 'super_admin',
+    role: 'w.s.k',
     coinsBalance: 99999,
     isVip: true,
     isBanned: false,

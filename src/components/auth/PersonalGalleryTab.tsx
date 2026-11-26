@@ -14,7 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
-import { isAdminOrWilfriedEmail } from '../../services/discussionService';
+import { CommunitySpecialRole, resolveCommunitySpecialRole } from '../../services/discussionService';
 import {
   deleteGalleryCreation,
   publishGalleryCreation,
@@ -110,18 +110,17 @@ export const PersonalGalleryTab: React.FC<PersonalGalleryTabProps> = ({
     'Créateur OZI';
   const currentMemberPhoto = readerProfile?.photoURL || currentUser?.photoURL || '';
 
-  const isCurrentUserAdmin = useMemo(() => {
-    if (!currentUser) return false;
+  const currentUserSpecialRole = useMemo<CommunitySpecialRole>(() => {
+    if (!currentUser) return null;
     const email = (currentUser.email || readerProfile?.email || '').toLowerCase();
-    const isWilfried = isAdminOrWilfriedEmail(email);
     const matchedRole = users?.find(
       (u) => u.id === currentUser.uid || (email && u.email?.toLowerCase() === email)
     )?.role;
-    const isStaffRole =
-      matchedRole === 'super_admin' ||
-      matchedRole === 'moderator' ||
-      (matchedRole as string) === 'admin';
-    return Boolean(isWilfried || isStaffRole || adminAuth.isAuthenticated);
+    return resolveCommunitySpecialRole({
+      email,
+      userRole: matchedRole,
+      isStudioAdminAuthenticated: adminAuth.isAuthenticated,
+    });
   }, [currentUser, readerProfile?.email, users, adminAuth.isAuthenticated]);
 
   useEffect(() => {
@@ -223,7 +222,8 @@ export const PersonalGalleryTab: React.FC<PersonalGalleryTabProps> = ({
       authorId: currentUser.uid,
       authorName: currentMemberName,
       authorPhotoURL: currentMemberPhoto,
-      authorIsAdmin: isCurrentUserAdmin,
+      authorIsAdmin: Boolean(currentUserSpecialRole),
+      authorRole: currentUserSpecialRole || undefined,
       onProgress: (_pct, txt) => setUploadProgressText(txt),
     });
     setIsPublishing(false);

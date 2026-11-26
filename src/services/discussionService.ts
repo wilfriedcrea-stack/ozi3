@@ -15,9 +15,34 @@ const COLLECTION_NAME = 'discussion_messages';
 const GUEST_ID_STORAGE_KEY = 'ozi_discussion_guest_id';
 const GUEST_NAME_STORAGE_KEY = 'ozi_discussion_guest_name';
 
-export function isAdminOrWilfriedEmail(email?: string | null): boolean {
+export type CommunitySpecialRole = 'w.s.k' | 'admin' | null;
+
+export function isWilfriedEmail(email?: string | null): boolean {
   const clean = (email || '').trim().toLowerCase();
   return clean === 'wilfriedcrea@gmail.com' || clean === 'wilfriedcrea@gmail';
+}
+
+export function isAdminOrWilfriedEmail(email?: string | null): boolean {
+  return isWilfriedEmail(email);
+}
+
+export function resolveCommunitySpecialRole(params: {
+  email?: string | null;
+  userRole?: string | null;
+  isStudioAdminAuthenticated?: boolean;
+}): CommunitySpecialRole {
+  if (isWilfriedEmail(params.email) || params.userRole === 'w.s.k') {
+    return 'w.s.k';
+  }
+  if (
+    params.userRole === 'super_admin' ||
+    params.userRole === 'admin' ||
+    params.userRole === 'moderator' ||
+    params.isStudioAdminAuthenticated
+  ) {
+    return 'admin';
+  }
+  return null;
 }
 
 export enum DiscussionOperationType {
@@ -119,6 +144,7 @@ export function subscribeToDiscussionMessages(
           guestSessionId: typeof data.guestSessionId === 'string' ? data.guestSessionId : undefined,
           isGuest: Boolean(data.isGuest),
           authorIsAdmin: Boolean(data.authorIsAdmin),
+          authorRole: typeof data.authorRole === 'string' && data.authorRole ? data.authorRole : undefined,
           replyTo: data.replyTo && typeof data.replyTo === 'object' ? (data.replyTo as DiscussionReplyRef) : null,
           createdAt: String(data.createdAt || new Date().toISOString()),
         });
@@ -152,6 +178,7 @@ export async function sendDiscussionMessage(params: {
   guestSessionId?: string;
   isGuest: boolean;
   authorIsAdmin?: boolean;
+  authorRole?: string;
   replyTo?: DiscussionReplyRef | null;
 }): Promise<{ success: boolean; message?: DiscussionMessage; error?: string }> {
   const cleanText = params.text.trim();
@@ -167,7 +194,10 @@ export async function sendDiscussionMessage(params: {
   const createdAt = new Date().toISOString();
 
   const isGuest = params.isGuest || !params.userId;
-  const authorIsAdmin = !isGuest && Boolean(params.authorIsAdmin);
+  const cleanRole = !isGuest && (params.authorRole === 'w.s.k' || params.authorRole === 'admin')
+    ? params.authorRole
+    : undefined;
+  const authorIsAdmin = !isGuest && (Boolean(params.authorIsAdmin) || Boolean(cleanRole));
   const payload: DiscussionMessage = {
     id,
     text: cleanText,
@@ -177,6 +207,7 @@ export async function sendDiscussionMessage(params: {
     guestSessionId: isGuest ? (params.guestSessionId || getOrCreateGuestSessionId()).slice(0, 64) : '',
     isGuest,
     ...(authorIsAdmin ? { authorIsAdmin: true } : {}),
+    ...(cleanRole ? { authorRole: cleanRole } : {}),
     replyTo: params.replyTo
       ? {
           id: String(params.replyTo.id).slice(0, 128),
@@ -191,11 +222,12 @@ export async function sendDiscussionMessage(params: {
     await setDoc(doc(db, COLLECTION_NAME, id), payload);
     return { success: true, message: payload };
   } catch (error) {
-    if (authorIsAdmin) {
-      // Retry without privileged flag if current auth token does not carry server admin claim
+    if (authorIsAdmin || cleanRole) {
+      // Retry without privileged flags if current auth token does not carry server claim
       try {
         const fallbackPayload: DiscussionMessage = { ...payload };
         delete fallbackPayload.authorIsAdmin;
+        delete fallbackPayload.authorRole;
         await setDoc(doc(db, COLLECTION_NAME, id), fallbackPayload);
         return { success: true, message: fallbackPayload };
       } catch (retryErr) {

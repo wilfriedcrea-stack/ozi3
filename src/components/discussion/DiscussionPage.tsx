@@ -14,10 +14,11 @@ import {
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import {
+  CommunitySpecialRole,
   deleteDiscussionMessage,
   getOrCreateGuestSessionId,
   getSavedGuestName,
-  isAdminOrWilfriedEmail,
+  resolveCommunitySpecialRole,
   saveGuestName,
   sendDiscussionMessage,
   subscribeToDiscussionMessages,
@@ -148,19 +149,19 @@ export const DiscussionPage: React.FC = () => {
     'Lecteur OZI';
   const currentMemberPhoto = readerProfile?.photoURL || currentUser?.photoURL || '';
 
-  const isCurrentUserAdmin = useMemo(() => {
-    if (!currentUser) return false;
+  const currentUserSpecialRole = useMemo<CommunitySpecialRole>(() => {
+    if (!currentUser) return null;
     const email = (currentUser.email || readerProfile?.email || '').toLowerCase();
-    const isWilfried = isAdminOrWilfriedEmail(email);
     const matchedRole = users?.find(
       (u) => u.id === currentUser.uid || (email && u.email?.toLowerCase() === email)
     )?.role;
-    const isStaffRole =
-      matchedRole === 'super_admin' ||
-      matchedRole === 'moderator' ||
-      (matchedRole as string) === 'admin';
-    return Boolean(isWilfried || isStaffRole || adminAuth.isAuthenticated);
+    return resolveCommunitySpecialRole({
+      email,
+      userRole: matchedRole,
+      isStudioAdminAuthenticated: adminAuth.isAuthenticated,
+    });
   }, [currentUser, readerProfile?.email, users, adminAuth.isAuthenticated]);
+  const isCurrentUserSpecial = Boolean(currentUserSpecialRole);
 
   useEffect(() => {
     setSyncError(null);
@@ -285,7 +286,8 @@ export const DiscussionPage: React.FC = () => {
       userId: currentUser ? currentUser.uid : null,
       guestSessionId: isGuest ? guestSessionId : undefined,
       isGuest,
-      authorIsAdmin: !isGuest && isCurrentUserAdmin,
+      authorIsAdmin: !isGuest && isCurrentUserSpecial,
+      authorRole: !isGuest && currentUserSpecialRole ? currentUserSpecialRole : undefined,
       replyTo,
     });
 
@@ -395,13 +397,13 @@ export const DiscussionPage: React.FC = () => {
             type="button"
             onClick={() => openProfileModal()}
             className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border transition-colors cursor-pointer shrink-0 ${
-              isCurrentUserAdmin ? 'border-yellow-400/50' : 'border-zinc-800'
+              isCurrentUserSpecial ? 'border-yellow-400/50' : 'border-zinc-800'
             }`}
             title="Modifier ma photo de profil"
           >
             <div
               className={`w-7 h-7 rounded-full overflow-hidden shrink-0 ${
-                isCurrentUserAdmin
+                isCurrentUserSpecial
                   ? 'bg-gradient-to-tr from-yellow-300 via-amber-400 to-yellow-500 p-[2px] ring-2 ring-yellow-400/80 shadow-[0_0_10px_rgba(250,204,21,0.35)]'
                   : 'bg-gradient-to-tr from-[#ff8679] to-[#fb923c] p-0.5'
               }`}
@@ -416,7 +418,7 @@ export const DiscussionPage: React.FC = () => {
               ) : (
                 <div
                   className={`w-full h-full rounded-full bg-zinc-900 flex items-center justify-center text-[11px] font-black ${
-                    isCurrentUserAdmin ? 'text-yellow-300' : 'text-[#ff8679]'
+                    isCurrentUserSpecial ? 'text-yellow-300' : 'text-[#ff8679]'
                   }`}
                 >
                   {currentMemberName.charAt(0).toUpperCase()}
@@ -425,19 +427,19 @@ export const DiscussionPage: React.FC = () => {
             </div>
             <span
               className={`text-xs font-bold truncate max-w-[120px] hidden sm:inline ${
-                isCurrentUserAdmin ? 'text-yellow-300' : 'text-white'
+                isCurrentUserSpecial ? 'text-yellow-300' : 'text-white'
               }`}
             >
               {currentMemberName}
             </span>
-            {isCurrentUserAdmin && (
+            {currentUserSpecialRole && (
               <span className="hidden sm:inline text-[11px] font-bold text-yellow-400">
-                Admin
+                {currentUserSpecialRole === 'w.s.k' ? 'w.s.k' : 'Admin'}
               </span>
             )}
             <Camera
               className={`w-3.5 h-3.5 shrink-0 ${
-                isCurrentUserAdmin ? 'text-yellow-400' : 'text-[#ff8679]'
+                isCurrentUserSpecial ? 'text-yellow-400' : 'text-[#ff8679]'
               }`}
             />
           </button>
@@ -511,10 +513,25 @@ export const DiscussionPage: React.FC = () => {
             messages.map((msg) => {
               const isOwnAccountMessage =
                 Boolean(currentUser) && !msg.isGuest && msg.userId === currentUser?.uid;
-              const isAdminAuthor = Boolean(
-                !msg.isGuest &&
-                  (msg.authorIsAdmin || (isOwnAccountMessage && isCurrentUserAdmin))
-              );
+              const matchedMsgUser =
+                !msg.isGuest && msg.userId
+                  ? users?.find((u) => u.id === msg.userId)
+                  : undefined;
+              const msgSpecialRole: CommunitySpecialRole = msg.isGuest
+                ? null
+                : msg.authorRole === 'w.s.k' || msg.authorRole === 'admin'
+                ? msg.authorRole
+                : matchedMsgUser
+                ? resolveCommunitySpecialRole({
+                    email: matchedMsgUser.email,
+                    userRole: matchedMsgUser.role,
+                  })
+                : isOwnAccountMessage && currentUserSpecialRole
+                ? currentUserSpecialRole
+                : msg.authorIsAdmin
+                ? 'admin'
+                : null;
+              const isSpecialAuthor = Boolean(msgSpecialRole);
               const canDelete = Boolean(adminAuth.isAuthenticated || isOwnAccountMessage);
 
               return (
@@ -522,7 +539,7 @@ export const DiscussionPage: React.FC = () => {
                   key={msg.id}
                   className="group flex items-start gap-3.5 px-3 py-2 rounded-xl hover:bg-white/[0.03] transition-colors"
                 >
-                  <MessageAvatar message={msg} isAdminAuthor={isAdminAuthor} />
+                  <MessageAvatar message={msg} isAdminAuthor={isSpecialAuthor} />
 
                   <div className="flex-1 min-w-0">
                     {/* Author + Quiet Unboxed Metadata */}
@@ -530,7 +547,7 @@ export const DiscussionPage: React.FC = () => {
                       <div className="flex items-baseline flex-wrap gap-x-2 gap-y-0.5 min-w-0">
                         <span
                           className={`text-sm font-bold truncate max-w-[200px] sm:max-w-xs ${
-                            isAdminAuthor
+                            isSpecialAuthor
                               ? 'text-yellow-300'
                               : msg.isGuest
                               ? 'text-zinc-300'
@@ -540,8 +557,10 @@ export const DiscussionPage: React.FC = () => {
                           {msg.authorName}
                         </span>
                         <span className="text-[11px] text-zinc-500 font-body whitespace-nowrap">
-                          {isAdminAuthor ? (
-                            <span className="text-yellow-400 font-bold">Admin</span>
+                          {msgSpecialRole ? (
+                            <span className="text-yellow-400 font-bold">
+                              {msgSpecialRole === 'w.s.k' ? 'w.s.k' : 'Admin'}
+                            </span>
                           ) : msg.isGuest ? (
                             'Visiteur'
                           ) : (

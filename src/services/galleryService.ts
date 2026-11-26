@@ -116,6 +116,7 @@ export function subscribeToGalleryCreations(
           authorName: String(data.authorName || 'Créateur OZI'),
           authorPhotoURL: typeof data.authorPhotoURL === 'string' ? data.authorPhotoURL : '',
           authorIsAdmin: Boolean(data.authorIsAdmin),
+          authorRole: typeof data.authorRole === 'string' && data.authorRole ? data.authorRole : undefined,
           likesCount: Math.max(0, Number(data.likesCount || 0)),
           createdAt: String(data.createdAt || new Date().toISOString()),
         });
@@ -169,6 +170,7 @@ export function subscribeToUserGalleryCreations(
           authorName: String(data.authorName || 'Créateur OZI'),
           authorPhotoURL: typeof data.authorPhotoURL === 'string' ? data.authorPhotoURL : '',
           authorIsAdmin: Boolean(data.authorIsAdmin),
+          authorRole: typeof data.authorRole === 'string' && data.authorRole ? data.authorRole : undefined,
           likesCount: Math.max(0, Number(data.likesCount || 0)),
           createdAt: String(data.createdAt || new Date().toISOString()),
         });
@@ -312,6 +314,7 @@ export async function publishGalleryCreation(params: {
   authorName: string;
   authorPhotoURL: string;
   authorIsAdmin?: boolean;
+  authorRole?: string;
   onProgress?: (percent: number, statusText: string) => void;
 }): Promise<{ success: boolean; creation?: GalleryCreation; error?: string }> {
   if (!auth.currentUser || auth.currentUser.uid !== params.authorId) {
@@ -361,7 +364,11 @@ export async function publishGalleryCreation(params: {
 
     const cleanTitle = params.title.trim().slice(0, 80);
     const cleanAuthor = (params.authorName || 'Créateur OZI').trim().slice(0, 40) || 'Créateur OZI';
-    const isAdminFlag = Boolean(params.authorIsAdmin);
+    const cleanRole =
+      params.authorRole === 'w.s.k' || params.authorRole === 'admin'
+        ? params.authorRole
+        : undefined;
+    const isAdminFlag = Boolean(params.authorIsAdmin) || Boolean(cleanRole);
     const creation: GalleryCreation = {
       id: creationId,
       title: cleanTitle,
@@ -371,6 +378,7 @@ export async function publishGalleryCreation(params: {
       authorName: cleanAuthor,
       authorPhotoURL: (params.authorPhotoURL || '').slice(0, 120_000),
       ...(isAdminFlag ? { authorIsAdmin: true } : {}),
+      ...(cleanRole ? { authorRole: cleanRole } : {}),
       likesCount: 0,
       createdAt: new Date().toISOString(),
     };
@@ -378,9 +386,10 @@ export async function publishGalleryCreation(params: {
     try {
       await setDoc(doc(db, GALLERY_COLLECTION, creationId), creation);
     } catch (writeErr) {
-      if (isAdminFlag) {
+      if (isAdminFlag || cleanRole) {
         const fallbackCreation: GalleryCreation = { ...creation };
         delete fallbackCreation.authorIsAdmin;
+        delete fallbackCreation.authorRole;
         await setDoc(doc(db, GALLERY_COLLECTION, creationId), fallbackCreation);
         params.onProgress?.(100, 'Publié !');
         return { success: true, creation: fallbackCreation };

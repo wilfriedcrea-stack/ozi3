@@ -223,7 +223,7 @@ export interface FirebaseSyncConfig {
   errorMessage?: string;
 }
 
-export type UserRole = 'reader' | 'creator' | 'moderator' | 'super_admin';
+export type UserRole = 'reader' | 'creator' | 'moderator' | 'super_admin' | 'w.s.k';
 
 export interface ReaderProfile {
   uid: string;
@@ -580,6 +580,7 @@ export interface DiscussionMessage {
   guestSessionId?: string;
   isGuest: boolean;
   authorIsAdmin?: boolean;
+  authorRole?: string;
   replyTo?: DiscussionReplyRef | null;
   createdAt: string;
 }
@@ -593,6 +594,7 @@ export interface GalleryCreation {
   authorName: string;
   authorPhotoURL: string;
   authorIsAdmin?: boolean;
+  authorRole?: string;
   likesCount: number;
   createdAt: string;
 }

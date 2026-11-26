@@ -22,6 +22,7 @@ import {
   X
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { isWilfriedEmail } from '../../services/discussionService';
 import { UserAccount } from '../../types';
 
 export const AdminUsersManager: React.FC = () => {
@@ -45,11 +46,14 @@ export const AdminUsersManager: React.FC = () => {
   const [coinAmount, setCoinAmount] = useState<number>(100);
   const [coinReason, setCoinReason] = useState<string>('Bonus de bienvenue');
 
+  const getEffectiveRole = (u: UserAccount): UserAccount['role'] =>
+    isWilfriedEmail(u.email) ? 'w.s.k' : u.role;
+
   const filteredUsers = users.filter(u => {
     const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           u.country.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = roleFilter === 'all' || u.role === roleFilter;
+    const matchesRole = roleFilter === 'all' || getEffectiveRole(u) === roleFilter;
     return matchesSearch && matchesRole;
   });
 
@@ -123,7 +127,7 @@ export const AdminUsersManager: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto">
-          {(['all', 'super_admin', 'creator', 'moderator', 'reader'] as const).map((r) => (
+          {(['all', 'w.s.k', 'super_admin', 'creator', 'moderator', 'reader'] as const).map((r) => (
             <button
               key={r}
               onClick={() => setRoleFilter(r)}
@@ -134,6 +138,7 @@ export const AdminUsersManager: React.FC = () => {
               }`}
             >
               {r === 'all' && 'Tous'}
+              {r === 'w.s.k' && 'w.s.k'}
               {r === 'super_admin' && 'Super Admins'}
               {r === 'creator' && 'Créateurs'}
               {r === 'moderator' && 'Modérateurs'}
@@ -158,18 +163,30 @@ export const AdminUsersManager: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
-              {filteredUsers.map((user) => (
+              {filteredUsers.map((user) => {
+                const effectiveRole = getEffectiveRole(user);
+                const isWskAccount = effectiveRole === 'w.s.k';
+                return (
                 <tr key={user.id} className="hover:bg-slate-800/40 transition-colors">
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
                       <img
                         src={user.avatarUrl}
                         alt={user.name}
-                        className="w-10 h-10 rounded-full object-cover border border-amber-500/30"
+                        className={`w-10 h-10 rounded-full object-cover ${
+                          isWskAccount
+                            ? 'ring-2 ring-yellow-400 border border-yellow-300 shadow-[0_0_10px_rgba(250,204,21,0.35)]'
+                            : 'border border-amber-500/30'
+                        }`}
                       />
                       <div>
-                        <div className="font-bold text-white flex items-center gap-2">
+                        <div className={`font-bold flex items-center gap-2 ${isWskAccount ? 'text-yellow-300' : 'text-white'}`}>
                           <span>{user.name}</span>
+                          {isWskAccount && (
+                            <span className="text-[11px] font-black text-yellow-400">
+                              w.s.k
+                            </span>
+                          )}
                           {user.isBanned && (
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/40">
                               Banni
@@ -183,11 +200,16 @@ export const AdminUsersManager: React.FC = () => {
 
                   <td className="px-5 py-4">
                     <select
-                      value={user.role}
+                      value={effectiveRole}
                       onChange={(e) => updateUserRole(user.id, e.target.value as UserAccount['role'])}
-                      disabled={user.email === 'wilfriedcrea@gmail.com'}
-                      className="bg-slate-950 border border-slate-700 text-xs font-bold text-white rounded-lg px-2.5 py-1.5 focus:border-amber-500 focus:outline-none"
+                      disabled={isWilfriedEmail(user.email)}
+                      className={`bg-slate-950 border text-xs font-bold rounded-lg px-2.5 py-1.5 focus:border-amber-500 focus:outline-none ${
+                        isWskAccount
+                          ? 'border-yellow-400/60 text-yellow-300'
+                          : 'border-slate-700 text-white'
+                      }`}
                     >
+                      <option value="w.s.k">w.s.k</option>
                       <option value="reader">Lecteur</option>
                       <option value="creator">Créateur / Auteur</option>
                       <option value="moderator">Modérateur</option>
@@ -239,7 +261,7 @@ export const AdminUsersManager: React.FC = () => {
                     <div className="flex items-center justify-end gap-2">
                       <button
                         onClick={() => toggleUserBan(user.id)}
-                        disabled={user.email === 'wilfriedcrea@gmail.com'}
+                        disabled={isWilfriedEmail(user.email)}
                         className={`p-2 rounded-xl text-xs font-bold transition-all ${
                           user.isBanned
                             ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30'
@@ -252,7 +274,8 @@ export const AdminUsersManager: React.FC = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

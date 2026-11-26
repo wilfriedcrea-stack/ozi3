@@ -3,6 +3,7 @@ import { Firestore, collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, getD
 import { Series, Teaser, PressRelease, AppVersionInfo, CreatorSubmission, Article, HomeHeroSlide, Artist, Artbook, ArtbookDownloadRecord, ArtbookPurchaseRecord, MonetizationSettings, UserAccount } from '../types';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 import { normalizeImageUrl } from '../utils/imageUtils';
+import { isWilfriedEmail } from './discussionService';
 
 export const KNOWN_PERMANENTLY_DELETED_SERIES: string[] = [];
 
@@ -1662,13 +1663,19 @@ export async function fetchUsersFromFirestore(databaseInstance: Firestore = db):
     
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
-      // Ensure passwords or private credentials are never exposed
+      const emailStr = String(data.email || '');
+      const rawRole = String(data.role || '');
+      const resolvedRole: UserAccount['role'] = isWilfriedEmail(emailStr) || rawRole === 'w.s.k'
+        ? 'w.s.k'
+        : rawRole === 'super_admin' || rawRole === 'moderator' || rawRole === 'creator'
+        ? rawRole
+        : 'reader';
       users.push({
         id: docSnap.id,
-        email: data.email || '',
+        email: emailStr,
         name: data.displayName || data.name || 'Lecteur Ozi',
         avatarUrl: data.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${docSnap.id}`,
-        role: (data.role as any) === 'super_admin' ? 'super_admin' : 'reader',
+        role: resolvedRole,
         coinsBalance: typeof data.coinsBalance === 'number' ? data.coinsBalance : 0,
         isVip: Boolean(data.isVip),
         vipExpiresAt: data.vipExpiresAt,

@@ -12,7 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
-import { isAdminOrWilfriedEmail } from '../../services/discussionService';
+import { CommunitySpecialRole, resolveCommunitySpecialRole } from '../../services/discussionService';
 import {
   deleteGalleryCreation,
   getCachedLikedCreationIds,
@@ -109,19 +109,35 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ onCountChange }) => {
     'Créateur OZI';
   const currentMemberPhoto = readerProfile?.photoURL || currentUser?.photoURL || '';
 
-  const isCurrentUserAdmin = useMemo(() => {
-    if (!currentUser) return false;
+  const currentUserSpecialRole = useMemo<CommunitySpecialRole>(() => {
+    if (!currentUser) return null;
     const email = (currentUser.email || readerProfile?.email || '').toLowerCase();
-    const isWilfried = isAdminOrWilfriedEmail(email);
     const matchedRole = users?.find(
       (u) => u.id === currentUser.uid || (email && u.email?.toLowerCase() === email)
     )?.role;
-    const isStaffRole =
-      matchedRole === 'super_admin' ||
-      matchedRole === 'moderator' ||
-      (matchedRole as string) === 'admin';
-    return Boolean(isWilfried || isStaffRole || adminAuth.isAuthenticated);
+    return resolveCommunitySpecialRole({
+      email,
+      userRole: matchedRole,
+      isStudioAdminAuthenticated: adminAuth.isAuthenticated,
+    });
   }, [currentUser, readerProfile?.email, users, adminAuth.isAuthenticated]);
+
+  const getCreationSpecialRole = (item: GalleryCreation): CommunitySpecialRole => {
+    if (item.authorRole === 'w.s.k' || item.authorRole === 'admin') {
+      return item.authorRole;
+    }
+    const matchedAuthor = users?.find((u) => u.id === item.authorId);
+    if (matchedAuthor) {
+      return resolveCommunitySpecialRole({
+        email: matchedAuthor.email,
+        userRole: matchedAuthor.role,
+      });
+    }
+    if (currentUser && item.authorId === currentUser.uid && currentUserSpecialRole) {
+      return currentUserSpecialRole;
+    }
+    return item.authorIsAdmin ? 'admin' : null;
+  };
 
   useEffect(() => {
     setSyncError(null);
@@ -249,7 +265,8 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ onCountChange }) => {
       authorId: currentUser.uid,
       authorName: currentMemberName,
       authorPhotoURL: currentMemberPhoto,
-      authorIsAdmin: isCurrentUserAdmin,
+      authorIsAdmin: Boolean(currentUserSpecialRole),
+      authorRole: currentUserSpecialRole || undefined,
       onProgress: (_pct, txt) => setUploadProgressText(txt),
     });
     setIsPublishing(false);
@@ -449,16 +466,15 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ onCountChange }) => {
               {creations.map((item, idx) => {
                 const isLiked = likedIds.has(item.id);
                 const isOwnCreation = Boolean(currentUser && item.authorId === currentUser.uid);
-                const isAdminAuthor = Boolean(
-                  item.authorIsAdmin || (isOwnCreation && isCurrentUserAdmin)
-                );
+                const creationSpecialRole = getCreationSpecialRole(item);
+                const isSpecialAuthor = Boolean(creationSpecialRole);
                 const canDelete = Boolean(adminAuth.isAuthenticated || isOwnCreation);
 
                 return (
                   <article
                     key={item.id}
                     className={`group rounded-2xl overflow-hidden bg-[#111218] border transition-colors flex flex-col ${
-                      isAdminAuthor
+                      isSpecialAuthor
                         ? 'border-yellow-400/40 hover:border-yellow-400/70'
                         : 'border-zinc-800/80 hover:border-zinc-700'
                     }`}
@@ -482,7 +498,7 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ onCountChange }) => {
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div
                           className={`w-8 h-8 rounded-full overflow-hidden shrink-0 ${
-                            isAdminAuthor
+                            isSpecialAuthor
                               ? 'bg-gradient-to-tr from-yellow-300 via-amber-400 to-yellow-500 p-[2px] ring-2 ring-yellow-400/80 shadow-[0_0_12px_rgba(250,204,21,0.3)]'
                               : 'bg-gradient-to-tr from-[#ff8679] to-[#fb923c] p-0.5'
                           }`}
@@ -497,7 +513,7 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ onCountChange }) => {
                           ) : (
                             <div
                               className={`w-full h-full rounded-full bg-zinc-900 flex items-center justify-center text-xs font-black ${
-                                isAdminAuthor ? 'text-yellow-300' : 'text-[#ff8679]'
+                                isSpecialAuthor ? 'text-yellow-300' : 'text-[#ff8679]'
                               }`}
                             >
                               {item.authorName.charAt(0).toUpperCase()}
@@ -507,15 +523,17 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ onCountChange }) => {
                         <div className="min-w-0">
                           <div
                             className={`text-sm font-bold truncate ${
-                              isAdminAuthor ? 'text-yellow-300' : 'text-white'
+                              isSpecialAuthor ? 'text-yellow-300' : 'text-white'
                             }`}
                           >
                             {item.title || item.authorName}
                           </div>
                           <div className="text-[11px] text-zinc-400 truncate font-body">
-                            {isAdminAuthor ? (
+                            {creationSpecialRole ? (
                               <>
-                                <span className="text-yellow-400 font-bold">Admin</span>
+                                <span className="text-yellow-400 font-bold">
+                                  {creationSpecialRole === 'w.s.k' ? 'w.s.k' : 'Admin'}
+                                </span>
                                 {item.title ? ` · ${item.authorName}` : ''}
                               </>
                             ) : item.title ? (
@@ -754,18 +772,14 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ onCountChange }) => {
         >
           {/* Lightbox Top Bar */}
           {(() => {
-            const isLightboxAdmin = Boolean(
-              activeLightboxCreation.authorIsAdmin ||
-                (currentUser &&
-                  activeLightboxCreation.authorId === currentUser.uid &&
-                  isCurrentUserAdmin)
-            );
+            const lightboxSpecialRole = getCreationSpecialRole(activeLightboxCreation);
+            const isLightboxSpecial = Boolean(lightboxSpecialRole);
             return (
           <div className="shrink-0 flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-zinc-800/70">
             <div className="flex items-center gap-3 min-w-0">
               <div
                 className={`w-9 h-9 rounded-full overflow-hidden shrink-0 ${
-                  isLightboxAdmin
+                  isLightboxSpecial
                     ? 'bg-gradient-to-tr from-yellow-300 via-amber-400 to-yellow-500 p-[2px] ring-2 ring-yellow-400/80 shadow-[0_0_12px_rgba(250,204,21,0.35)]'
                     : 'bg-gradient-to-tr from-[#ff8679] to-[#fb923c] p-0.5'
                 }`}
@@ -780,7 +794,7 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ onCountChange }) => {
                 ) : (
                   <div
                     className={`w-full h-full rounded-full bg-zinc-900 flex items-center justify-center text-xs font-black ${
-                      isLightboxAdmin ? 'text-yellow-300' : 'text-[#ff8679]'
+                      isLightboxSpecial ? 'text-yellow-300' : 'text-[#ff8679]'
                     }`}
                   >
                     {activeLightboxCreation.authorName.charAt(0).toUpperCase()}
@@ -790,15 +804,17 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ onCountChange }) => {
               <div className="min-w-0">
                 <div
                   className={`text-sm font-bold truncate ${
-                    isLightboxAdmin ? 'text-yellow-300' : 'text-white'
+                    isLightboxSpecial ? 'text-yellow-300' : 'text-white'
                   }`}
                 >
                   {activeLightboxCreation.title || activeLightboxCreation.authorName}
                 </div>
                 <div className="text-xs text-zinc-400 truncate font-body">
-                  {isLightboxAdmin && (
+                  {lightboxSpecialRole && (
                     <>
-                      <span className="text-yellow-400 font-bold">Admin</span>
+                      <span className="text-yellow-400 font-bold">
+                        {lightboxSpecialRole === 'w.s.k' ? 'w.s.k' : 'Admin'}
+                      </span>
                       <span aria-hidden="true" className="mx-1.5">·</span>
                     </>
                   )}

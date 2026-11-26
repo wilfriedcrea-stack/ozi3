@@ -282,6 +282,7 @@
         "guestSessionId": { "type": "string", "maxLength": 64 },
         "isGuest": { "type": "boolean" },
         "authorIsAdmin": { "type": "boolean" },
+        "authorRole": { "type": "string", "maxLength": 24 },
         "replyTo": { "type": "object" },
         "createdAt": { "type": "string", "maxLength": 64 }
       },
@@ -300,6 +301,7 @@
         "authorName": { "type": "string", "minLength": 1, "maxLength": 40 },
         "authorPhotoURL": { "type": "string", "maxLength": 120000 },
         "authorIsAdmin": { "type": "boolean" },
+        "authorRole": { "type": "string", "maxLength": 24 },
         "likesCount": { "type": "number" },
         "createdAt": { "type": "string", "maxLength": 64 }
       },

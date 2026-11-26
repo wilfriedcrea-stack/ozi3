@@ -24,6 +24,7 @@ import {
   verifyPaystackPayment 
 } from '../../services/paystackClientService';
 import { AVATAR_PRESETS, processAndUploadAvatar } from '../../services/avatarService';
+import { resolveCommunitySpecialRole } from '../../services/discussionService';
 import { PersonalGalleryTab } from './PersonalGalleryTab';
 import { SubscriptionRecord, ArtbookPurchaseRecord, CoinPack } from '../../types';
 import { formatPriceXofWithEur } from '../../utils/currency';
@@ -36,6 +37,7 @@ export const UserProfileModal: React.FC = () => {
     currentUser, 
     readerProfile, 
     users,
+    adminAuth,
     logoutReader, 
     updateReaderProfileData,
     monetization,
@@ -43,7 +45,7 @@ export const UserProfileModal: React.FC = () => {
     artbookPurchases: localArtbookPurchases
   } = useData();
 
-  const userAccount = users?.find(u => u.id === currentUser?.uid || (currentUser?.email && u.email === currentUser.email));
+  const userAccount = users?.find(u => u.id === currentUser?.uid || (currentUser?.email && u.email?.toLowerCase() === currentUser.email.toLowerCase()));
   const userCoinsBalance = userAccount?.coinsBalance ?? readerProfile?.coinsBalance ?? 0;
 
   const [activeTab, setActiveTab] = useState<'profile' | 'gallery' | 'subscriptions' | 'artbooks' | 'coins'>('profile');
@@ -123,6 +125,12 @@ export const UserProfileModal: React.FC = () => {
   const displayName = readerProfile?.displayName || currentUser.displayName || currentUser.email?.split('@')[0] || 'Lecteur OZI';
   const email = currentUser.email || readerProfile?.email || 'Non renseigné';
   const photoURL = readerProfile?.photoURL || currentUser.photoURL;
+  const profileSpecialRole = resolveCommunitySpecialRole({
+    email,
+    userRole: userAccount?.role,
+    isStudioAdminAuthenticated: adminAuth?.isAuthenticated,
+  });
+  const isSpecialProfile = Boolean(profileSpecialRole);
   const createdAt = readerProfile?.createdAt 
     ? new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(readerProfile.createdAt))
     : 'Récemment';
@@ -281,7 +289,13 @@ export const UserProfileModal: React.FC = () => {
         {/* User Card Top */}
         <div className="flex flex-col items-center text-center mb-6">
           <div className="relative mb-3">
-            <div className="relative w-20 h-20 rounded-full overflow-hidden bg-gradient-to-tr from-[#ff8679] to-[#fb923c] p-0.5 shadow-xl">
+            <div
+              className={`relative w-20 h-20 rounded-full overflow-hidden shadow-xl ${
+                isSpecialProfile
+                  ? 'bg-gradient-to-tr from-yellow-300 via-amber-400 to-yellow-500 p-[2.5px] ring-2 ring-yellow-400/80 shadow-[0_0_16px_rgba(250,204,21,0.35)]'
+                  : 'bg-gradient-to-tr from-[#ff8679] to-[#fb923c] p-0.5'
+              }`}
+            >
               {photoURL ? (
                 <img 
                   src={photoURL} 
@@ -290,7 +304,11 @@ export const UserProfileModal: React.FC = () => {
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="w-full h-full rounded-full bg-zinc-900 flex items-center justify-center text-2xl font-black text-[#ff8679]">
+                <div
+                  className={`w-full h-full rounded-full bg-zinc-900 flex items-center justify-center text-2xl font-black ${
+                    isSpecialProfile ? 'text-yellow-300' : 'text-[#ff8679]'
+                  }`}
+                >
                   {displayName.charAt(0).toUpperCase()}
                 </div>
               )}
@@ -379,7 +397,12 @@ export const UserProfileModal: React.FC = () => {
             </div>
           ) : (
             <div className="flex items-center justify-center gap-2">
-              <h2 id="profile-modal-title" className="text-xl font-black text-white tracking-tight">
+              <h2
+                id="profile-modal-title"
+                className={`text-xl font-black tracking-tight ${
+                  isSpecialProfile ? 'text-yellow-300' : 'text-white'
+                }`}
+              >
                 {displayName}
               </h2>
               <button
@@ -394,10 +417,19 @@ export const UserProfileModal: React.FC = () => {
 
           <p className="text-xs text-zinc-400 mt-0.5">{email}</p>
 
-          <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-bold">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Compte Lecteur Vérifié</span>
-          </div>
+          {profileSpecialRole ? (
+            <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-yellow-400/10 border border-yellow-400/30 text-yellow-300 text-[11px] font-bold">
+              <ShieldCheck className="w-3.5 h-3.5 text-yellow-400" />
+              <span>
+                {profileSpecialRole === 'w.s.k' ? 'Rôle unique : w.s.k' : 'Rôle : Admin'}
+              </span>
+            </div>
+          ) : (
+            <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-bold">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Compte Lecteur Vérifié</span>
+            </div>
+          )}
         </div>
 
         {/* Tab Switcher */}
@@ -483,7 +515,17 @@ export const UserProfileModal: React.FC = () => {
                 <BookOpen className="w-4 h-4 text-zinc-500" />
                 <span>Statut plateforme</span>
               </span>
-              <span className="text-zinc-300 font-medium">Lecteur OZI</span>
+              <span
+                className={`font-bold ${
+                  isSpecialProfile ? 'text-yellow-400' : 'text-zinc-300 font-medium'
+                }`}
+              >
+                {profileSpecialRole === 'w.s.k'
+                  ? 'w.s.k'
+                  : profileSpecialRole === 'admin'
+                  ? 'Admin'
+                  : 'Lecteur OZI'}
+              </span>
             </div>
 
             {/* Solde Coins OZI */}

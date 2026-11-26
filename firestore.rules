@@ -22,12 +22,17 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Vérifie si le compte authentifié est administrateur / modérateur en base ou wilfriedcrea@gmail.com
+    // Vérifie si l'utilisateur authentifié est le titulaire du rôle unique w.s.k
+    function isWskOwner() {
+      return isAuthenticated() && request.auth.token.email == 'wilfriedcrea@gmail.com';
+    }
+
+    // Vérifie si le compte authentifié est administrateur / modérateur / w.s.k en base ou wilfriedcrea@gmail.com
     function isAdminOrStaffUser() {
       return isAdmin() || (
         isAuthenticated()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'admin', 'moderator']
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'admin', 'moderator', 'w.s.k']
       );
     }
 
@@ -340,7 +345,7 @@ service cloud.firestore {
           'id', 'text', 'authorName', 'authorPhotoURL', 'userId', 'isGuest', 'createdAt'
         ])
         && data.keys().hasOnly([
-          'id', 'text', 'authorName', 'authorPhotoURL', 'userId', 'guestSessionId', 'isGuest', 'authorIsAdmin', 'replyTo', 'createdAt'
+          'id', 'text', 'authorName', 'authorPhotoURL', 'userId', 'guestSessionId', 'isGuest', 'authorIsAdmin', 'authorRole', 'replyTo', 'createdAt'
         ])
         && data.id is string && data.id.size() > 0 && data.id.size() <= 128
         && data.text is string && data.text.size() >= 1 && data.text.size() <= 1000
@@ -348,6 +353,7 @@ service cloud.firestore {
         && data.authorPhotoURL is string && data.authorPhotoURL.size() <= 120000
         && data.isGuest is bool
         && (!('authorIsAdmin' in data) || data.authorIsAdmin is bool)
+        && (!('authorRole' in data) || (data.authorRole is string && data.authorRole.size() <= 24))
         && data.createdAt is string && data.createdAt.size() <= 64
         && (!('guestSessionId' in data) || (data.guestSessionId is string && data.guestSessionId.size() <= 64))
         && (!('replyTo' in data) || data.replyTo == null || isValidReplyRef(data.replyTo))
@@ -368,6 +374,12 @@ service cloud.firestore {
           !('authorIsAdmin' in request.resource.data)
           || request.resource.data.authorIsAdmin == false
           || (request.resource.data.isGuest == false && isAdminOrStaffUser())
+        )
+        && (
+          !('authorRole' in request.resource.data)
+          || request.resource.data.authorRole == ''
+          || (request.resource.data.isGuest == false && request.resource.data.authorRole == 'w.s.k' && isWskOwner())
+          || (request.resource.data.isGuest == false && request.resource.data.authorRole == 'admin' && isAdminOrStaffUser())
         );
 
       allow update: if isAdmin();
@@ -405,7 +417,7 @@ service cloud.firestore {
           'id', 'title', 'imageUrl', 'authorId', 'authorName', 'authorPhotoURL', 'likesCount', 'createdAt'
         ])
         && data.keys().hasOnly([
-          'id', 'title', 'imageUrl', 'storagePath', 'authorId', 'authorName', 'authorPhotoURL', 'authorIsAdmin', 'likesCount', 'createdAt'
+          'id', 'title', 'imageUrl', 'storagePath', 'authorId', 'authorName', 'authorPhotoURL', 'authorIsAdmin', 'authorRole', 'likesCount', 'createdAt'
         ])
         && data.id is string && data.id.size() > 0 && data.id.size() <= 128
         && data.title is string && data.title.size() <= 80
@@ -415,6 +427,7 @@ service cloud.firestore {
         && data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 40
         && data.authorPhotoURL is string && data.authorPhotoURL.size() <= 120000
         && (!('authorIsAdmin' in data) || data.authorIsAdmin is bool)
+        && (!('authorRole' in data) || (data.authorRole is string && data.authorRole.size() <= 24))
         && data.likesCount is int && data.likesCount >= 0
         && data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 64;
     }
@@ -441,6 +454,12 @@ service cloud.firestore {
           !('authorIsAdmin' in request.resource.data)
           || request.resource.data.authorIsAdmin == false
           || isAdminOrStaffUser()
+        )
+        && (
+          !('authorRole' in request.resource.data)
+          || request.resource.data.authorRole == ''
+          || (request.resource.data.authorRole == 'w.s.k' && isWskOwner())
+          || (request.resource.data.authorRole == 'admin' && isAdminOrStaffUser())
         );
 
       allow update: if isAdmin() || (
