@@ -146,41 +146,22 @@ export const HeroSection: React.FC = () => {
   const p = reducedMotion ? 0 : scrollProgress;
   const visible = reducedMotion || isInView;
 
-  const visualEntranceStyle: React.CSSProperties = reducedMotion
+  const visualWrapperStyle: React.CSSProperties = reducedMotion
     ? {}
     : {
         opacity: visible ? 1 : 0,
         transform: visible
-          ? 'perspective(1200px) translate3d(0px, 0px, 0px) rotateY(0deg) rotateX(0deg) scale(1)'
-          : 'perspective(1200px) translate3d(32px, 56px, -90px) rotateY(-24deg) rotateX(12deg) scale(0.84)',
-        transition:
-          'transform 950ms cubic-bezier(0.16, 1, 0.3, 1) 80ms, opacity 750ms ease-out 80ms',
-        willChange: 'transform, opacity',
-      };
-
-  const visualScrollStyle: React.CSSProperties = reducedMotion
-    ? {}
-    : {
-        transform: `perspective(1100px) translate3d(${(p * 10).toFixed(1)}px, ${(p * -16).toFixed(1)}px, ${(30 - Math.abs(p) * 20).toFixed(1)}px) rotateY(${(-4 + p * 14).toFixed(2)}deg) rotateX(${(p * -8).toFixed(2)}deg) rotateZ(${(p * 2).toFixed(2)}deg) scale(${(1.02 - Math.abs(p) * 0.04).toFixed(3)})`,
-        willChange: 'transform',
-      };
-
-  const stage3DStyle: React.CSSProperties = reducedMotion
-    ? {}
-    : {
-        perspective: '1200px',
-        transformStyle: 'preserve-3d',
-        transform: `perspective(1200px) rotateX(${(p * 6).toFixed(2)}deg) rotateY(${(p * -5).toFixed(2)}deg)`,
-        willChange: 'transform',
+          ? `translateY(${Math.round(p * -12)}px)`
+          : 'translateY(28px)',
+        transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1), opacity 600ms ease-out',
       };
 
   const haloScrollStyle: React.CSSProperties = reducedMotion
     ? {}
     : {
         opacity: visible ? 1 : 0,
-        transform: `translate3d(${(p * -12).toFixed(1)}px, ${(p * -16).toFixed(1)}px, -60px) scale(${visible ? (1.05 - Math.abs(p) * 0.12).toFixed(3) : 0.72})`,
-        transition: 'opacity 900ms ease-out',
-        willChange: 'transform, opacity',
+        transform: `translateY(${Math.round(p * -8)}px)`,
+        transition: 'opacity 700ms ease-out',
       };
 
   return (
@@ -256,8 +237,7 @@ export const HeroSection: React.FC = () => {
           <div className="order-1 lg:order-2 lg:col-span-6 flex items-center justify-center lg:justify-end">
             <div
               ref={stageRef}
-              style={stage3DStyle}
-              className="relative w-full max-w-[340px] sm:max-w-[440px] lg:max-w-[500px] h-[270px] sm:h-[350px] lg:h-[400px] flex items-end justify-center select-none"
+              className="relative w-full max-w-[360px] sm:max-w-[460px] lg:max-w-[520px] h-[300px] sm:h-[380px] lg:h-[440px] flex items-end justify-center select-none"
             >
               {/* Soft Coral Backdrop Halo behind the composition */}
               <div
@@ -266,17 +246,18 @@ export const HeroSection: React.FC = () => {
                 className="absolute inset-x-8 bottom-4 top-8 rounded-full bg-gradient-to-tr from-[#ff8679]/25 via-[#ff8679]/10 to-transparent blur-2xl pointer-events-none"
               />
 
-              {/* Combined OZI Character & 3D Phone Mockup */}
+              {/* Combined OZI Character & Phone Mockup */}
               <div
-                style={visualEntranceStyle}
+                style={visualWrapperStyle}
                 className="relative h-full w-full flex items-end justify-center z-10 pointer-events-none"
               >
                 <img
                   src="/assets/aistudio/PHONE_5d3c9f93.png"
                   alt="Personnage et application mobile OZI sur smartphone"
-                  referrerPolicy="no-referrer"
-                  style={visualScrollStyle}
-                  className="h-full w-auto max-w-full object-contain pointer-events-none drop-shadow-[0_24px_45px_rgba(255,134,121,0.24)]"
+                  decoding="sync"
+                  loading="eager"
+                  fetchPriority="high"
+                  className="h-full w-auto max-w-full object-contain pointer-events-none"
                 />
               </div>
             </div>
