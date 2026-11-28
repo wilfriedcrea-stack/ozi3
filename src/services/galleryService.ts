@@ -503,14 +503,17 @@ export async function deleteGalleryCreation(
     }
     return { success: true };
   } catch (error) {
-    logGalleryFirestoreError(
+    const info = logGalleryFirestoreError(
       error,
       GalleryOperationType.DELETE,
       `${GALLERY_COLLECTION}/${creation.id}`
     );
+    const isPermissionError = info.error.toLowerCase().includes('permission');
     return {
       success: false,
-      error: 'Impossible de supprimer cette création.',
+      error: isPermissionError
+        ? 'Autorisation requise : connectez-vous à votre compte w.s.k ou admin pour supprimer cette création.'
+        : 'Impossible de supprimer cette création.',
     };
   }
 }

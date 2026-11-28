@@ -9,7 +9,7 @@ import {
   setDoc,
 } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
-import { DiscussionMessage, DiscussionReplyRef } from '../types';
+import { AdminAccountRecord, DiscussionMessage, DiscussionReplyRef } from '../types';
 
 const COLLECTION_NAME = 'discussion_messages';
 const GUEST_ID_STORAGE_KEY = 'ozi_discussion_guest_id';
@@ -30,9 +30,19 @@ export function resolveCommunitySpecialRole(params: {
   email?: string | null;
   userRole?: string | null;
   isStudioAdminAuthenticated?: boolean;
+  adminAccounts?: AdminAccountRecord[];
 }): CommunitySpecialRole {
-  if (isWilfriedEmail(params.email) || params.userRole === 'w.s.k') {
+  const cleanEmail = (params.email || '').trim().toLowerCase();
+  if (isWilfriedEmail(cleanEmail) || params.userRole === 'w.s.k') {
     return 'w.s.k';
+  }
+  if (cleanEmail && Array.isArray(params.adminAccounts)) {
+    const matchedAdmin = params.adminAccounts.find(
+      (a) => a.email.trim().toLowerCase() === cleanEmail && a.status === 'active'
+    );
+    if (matchedAdmin) {
+      return matchedAdmin.role === 'w.s.k' ? 'w.s.k' : 'admin';
+    }
   }
   if (
     params.userRole === 'super_admin' ||
@@ -250,14 +260,17 @@ export async function deleteDiscussionMessage(
     await deleteDoc(doc(db, COLLECTION_NAME, messageId));
     return { success: true };
   } catch (error) {
-    logDiscussionFirestoreError(
+    const info = logDiscussionFirestoreError(
       error,
       DiscussionOperationType.DELETE,
       `${COLLECTION_NAME}/${messageId}`
     );
+    const isPermissionError = info.error.toLowerCase().includes('permission');
     return {
       success: false,
-      error: 'Impossible de supprimer ce message.',
+      error: isPermissionError
+        ? 'Autorisation requise : connectez-vous à votre compte lecteur w.s.k ou admin pour supprimer les messages des autres membres.'
+        : 'Impossible de supprimer ce message.',
     };
   }
 }

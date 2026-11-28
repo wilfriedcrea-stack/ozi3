@@ -89,6 +89,7 @@ function buildEndpoints(mode: 'node' | 'php') {
       logout: '/api/studio-data.php?action=logout',
       session: '/api/studio-data.php?action=session',
       changePassword: '/api/studio-data.php?action=change-password',
+      allowedEmails: '/api/admin/allowed-emails',
       data: '/api/studio-data.php',
     };
   }
@@ -98,6 +99,7 @@ function buildEndpoints(mode: 'node' | 'php') {
     logout: '/api/admin/logout',
     session: '/api/admin/session',
     changePassword: '/api/admin/change-password',
+    allowedEmails: '/api/admin/allowed-emails',
     data: '/api/studio-data',
   };
 }
@@ -246,6 +248,14 @@ export async function changeStudioServerPassword(passwordHash: string): Promise<
   const res = await fetchJsonWithFallback('changePassword', {
     method: 'POST',
     body: JSON.stringify({ passwordHash }),
+  });
+  return Boolean(res.ok && res.json?.success);
+}
+
+export async function syncAllowedAdminEmailsToServer(allowedUsernames: string[]): Promise<boolean> {
+  const res = await fetchJsonWithFallback('allowedEmails', {
+    method: 'POST',
+    body: JSON.stringify({ allowedUsernames }),
   });
   return Boolean(res.ok && res.json?.success);
 }

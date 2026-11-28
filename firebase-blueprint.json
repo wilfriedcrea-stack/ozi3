@@ -318,6 +318,25 @@
         "createdAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "creationId", "userId", "createdAt"]
+    },
+    "AdminAccount": {
+      "title": "AdminAccount",
+      "description": "Compte administrateur ou modérateur géré depuis le panneau du Studio",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 160 },
+        "email": { "type": "string", "maxLength": 160 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "role": { "type": "string", "enum": ["w.s.k", "super_admin", "admin", "moderator"] },
+        "permissions": { "type": "array" },
+        "status": { "type": "string", "enum": ["active", "suspended"] },
+        "photoURL": { "type": "string", "maxLength": 120000 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "addedBy": { "type": "string", "maxLength": 160 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "email", "name", "role", "permissions", "status", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -397,6 +416,10 @@
     "/gallery_creations/{creationId}/likes/{likerId}": {
       "schema": "GalleryLike",
       "description": "Likes sur les créations de la galerie"
+    },
+    "/admin_accounts/{adminId}": {
+      "schema": "AdminAccount",
+      "description": "Liste officielle des administrateurs et modérateurs gérés depuis le Dashboard"
     }
   }
 }

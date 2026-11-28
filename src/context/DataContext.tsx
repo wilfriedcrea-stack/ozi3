@@ -30,7 +30,9 @@ import {
   Artbook,
   ArtbookDownloadRecord,
   ArtbookPurchaseRecord,
-  SubscriptionRecord
+  SubscriptionRecord,
+  AdminAccountRecord,
+  AdminAccountRole
 } from '../types';
 import { 
   INITIAL_SERIES, 
@@ -65,6 +67,15 @@ import {
 } from '../utils/securityUtils';
 import { normalizeImageUrl } from '../utils/imageUtils';
 import { isWilfriedEmail } from '../services/discussionService';
+import {
+  DEFAULT_OWNER_ADMIN_ACCOUNT,
+  deleteAdminAccountFromFirestore,
+  fetchMyAdminAccountRecord,
+  mapAdminRoleToUserRole,
+  normalizeAdminEmail,
+  saveAdminAccountToFirestore,
+  subscribeToAdminAccounts,
+} from '../services/adminService';
 import { 
   initializeFirebaseCustom, 
   testFirestoreConnection, 
@@ -133,7 +144,8 @@ import {
   pushStudioDataPatch,
   mergeEntitiesByRecency,
   mergeIdSets,
-  clearInMemoryServerToken
+  clearInMemoryServerToken,
+  syncAllowedAdminEmailsToServer
 } from '../services/studioSyncService';
 import { 
   signInReaderWithGoogle, 
@@ -171,6 +183,8 @@ interface DataContextType {
   reportedComments: ReportedComment[];
   moderationLogs: ModerationLog[];
   users: UserAccount[];
+  adminAccounts: AdminAccountRecord[];
+  currentAdminRecord: AdminAccountRecord | null;
   coinTransactions: CoinTransaction[];
   ads: AdBanner[];
   lwsFiles: LwsStorageFile[];
@@ -319,6 +333,19 @@ interface DataContextType {
   toggleUserBan: (userId: string) => void;
   toggleUserVip: (userId: string) => void;
 
+  // Administrators management
+  upsertAdminAccount: (input: {
+    email: string;
+    name: string;
+    role: AdminAccountRole;
+    permissions: string[];
+    status?: 'active' | 'suspended';
+    photoURL?: string;
+    userId?: string;
+  }) => Promise<{ success: boolean; syncedToCloud: boolean; error?: string }>;
+  toggleAdminAccountStatus: (email: string) => Promise<{ success: boolean; error?: string }>;
+  removeAdminAccount: (email: string) => Promise<{ success: boolean; error?: string }>;
+
   // Ads & Banners
   addAdBanner: (ad: Omit<AdBanner, 'id' | 'impressions' | 'clicks'>) => void;
   updateAdBanner: (id: string, updates: Partial<AdBanner>) => void;
@@ -417,7 +444,8 @@ const STORAGE_KEYS = {
   ARTBOOKS: 'ozi_artbooks_data_v1',
   DELETED_ARTBOOKS: 'ozi_deleted_artbooks_ids_v1',
   ARTBOOK_DOWNLOADS: 'ozi_artbook_downloads_v1',
-  ARTBOOK_PURCHASES: 'ozi_artbook_purchases_v1'
+  ARTBOOK_PURCHASES: 'ozi_artbook_purchases_v1',
+  ADMIN_ACCOUNTS: 'ozi_admin_accounts_v1'
 };
 
 export const KNOWN_DELETED_SERIES_IDS: string[] = [];
@@ -645,8 +673,51 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isReaderAuthLoading, setIsReaderAuthLoading] = useState<boolean>(true);
   const [lastCloudError, setLastCloudError] = useState<{ message: string; needsGoogleAuth: boolean; code?: string } | null>(null);
   const clearLastCloudError = useCallback(() => setLastCloudError(null), []);
+  const [adminAccounts, setAdminAccounts] = useState<AdminAccountRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.ADMIN_ACCOUNTS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const normalized = parsed
+            .filter((item: any) => item && typeof item.email === 'string')
+            .map((item: any) => {
+              const email = normalizeAdminEmail(item.email);
+              const isOwner = isWilfriedEmail(email);
+              return {
+                ...item,
+                id: email,
+                email,
+                role: isOwner ? ('w.s.k' as const) : (item.role || 'admin'),
+                status: isOwner ? ('active' as const) : (item.status === 'suspended' ? 'suspended' : 'active'),
+                permissions: Array.isArray(item.permissions) ? item.permissions : DEFAULT_OWNER_ADMIN_ACCOUNT.permissions,
+              } as AdminAccountRecord;
+            });
+          const hasOwner = normalized.some((a) => isWilfriedEmail(a.email));
+          return hasOwner ? normalized : [DEFAULT_OWNER_ADMIN_ACCOUNT, ...normalized];
+        }
+      }
+    } catch {}
+    return [DEFAULT_OWNER_ADMIN_ACCOUNT];
+  });
+  const adminAccountsRef = useRef<AdminAccountRecord[]>(adminAccounts);
+  useEffect(() => {
+    adminAccountsRef.current = adminAccounts;
+    try {
+      localStorage.setItem(STORAGE_KEYS.ADMIN_ACCOUNTS, JSON.stringify(adminAccounts));
+    } catch {}
+  }, [adminAccounts]);
+
   const firebaseAuthEmail = currentUser?.email || null;
-  const isFirebaseAdminConnected = Boolean(firebaseAuthEmail && firebaseAuthEmail.toLowerCase() === 'wilfriedcrea@gmail.com');
+  const isFirebaseAdminConnected = Boolean(
+    firebaseAuthEmail &&
+      (isWilfriedEmail(firebaseAuthEmail) ||
+        adminAccounts.some(
+          (a) =>
+            normalizeAdminEmail(a.email) === normalizeAdminEmail(firebaseAuthEmail) &&
+            a.status === 'active'
+        ))
+  );
   const isFirebaseAdminConnectedRef = useRef<boolean>(isFirebaseAdminConnected);
   useEffect(() => { isFirebaseAdminConnectedRef.current = isFirebaseAdminConnected; }, [isFirebaseAdminConnected]);
 
@@ -723,6 +794,39 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setReaderProfile(profile);
           if (profile) {
             const isWilfried = isWilfriedEmail(profile.email);
+            const matchedAdminRecord =
+              adminAccountsRef.current.find(
+                (a) =>
+                  normalizeAdminEmail(a.email) === normalizeAdminEmail(profile.email) &&
+                  a.status === 'active'
+              ) || (await fetchMyAdminAccountRecord(profile.email));
+            const derivedStaffRole = isWilfried
+              ? ('w.s.k' as const)
+              : matchedAdminRecord && matchedAdminRecord.status === 'active'
+              ? mapAdminRoleToUserRole(matchedAdminRecord.role)
+              : null;
+
+            if (matchedAdminRecord && matchedAdminRecord.status === 'active') {
+              setAdminAccounts((prev) => {
+                const exists = prev.some(
+                  (a) => normalizeAdminEmail(a.email) === normalizeAdminEmail(matchedAdminRecord.email)
+                );
+                const updatedItem: AdminAccountRecord = {
+                  ...matchedAdminRecord,
+                  userId: profile.uid,
+                  photoURL: profile.photoURL || matchedAdminRecord.photoURL,
+                  name: matchedAdminRecord.name || profile.displayName || 'Administrateur OZI',
+                };
+                return exists
+                  ? prev.map((a) =>
+                      normalizeAdminEmail(a.email) === normalizeAdminEmail(matchedAdminRecord.email)
+                        ? updatedItem
+                        : a
+                    )
+                  : [...prev, updatedItem];
+              });
+            }
+
             setUsers((prev) => {
               const alreadyExists = prev.some(u => u.id === profile.uid || (u.email && u.email.toLowerCase() === profile.email.toLowerCase()));
               if (alreadyExists) {
@@ -732,7 +836,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   name: profile.displayName || u.name,
                   email: profile.email || u.email,
                   avatarUrl: profile.photoURL || u.avatarUrl,
-                  ...(isWilfried || isWilfriedEmail(u.email) ? { role: 'w.s.k' as const } : {})
+                  ...(derivedStaffRole ? { role: derivedStaffRole } : {})
                 } : u);
               }
               const newUser: UserAccount = {
@@ -740,7 +844,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 email: profile.email,
                 name: profile.displayName || 'Lecteur Ozi',
                 avatarUrl: profile.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${profile.uid}`,
-                role: isWilfried ? 'w.s.k' : 'reader',
+                role: derivedStaffRole || 'reader',
                 coinsBalance: 0,
                 isVip: false,
                 isBanned: false,
@@ -2100,6 +2204,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return false;
   });
 
+  // Subscribe in real time to Firestore admin_accounts when authenticated as admin/staff
+  useEffect(() => {
+    if (!currentUser && !isAuthenticated) return;
+    const unsubscribe = subscribeToAdminAccounts((incoming) => {
+      setAdminAccounts(incoming);
+    });
+    return () => unsubscribe();
+  }, [currentUser, isAuthenticated]);
+
   // Continuous Cryptographic Session Audit
   useEffect(() => {
     let isMounted = true;
@@ -2819,8 +2932,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const user = result.user;
       const userEmail = (user.email || '').toLowerCase().trim();
 
+      const matchedDynamicAdmin =
+        adminAccountsRef.current.find(
+          (a) => normalizeAdminEmail(a.email) === userEmail && a.status === 'active'
+        ) || (await fetchMyAdminAccountRecord(userEmail));
+
       const isAuthorizedAdmin = 
         userEmail === 'wilfriedcrea@gmail.com' ||
+        (Boolean(matchedDynamicAdmin) && matchedDynamicAdmin?.status === 'active') ||
         adminCredentials.allowedUsernames.some(u => u.toLowerCase() === userEmail) ||
         userEmail === adminUser.email.toLowerCase() ||
         userEmail.includes('wilfried') ||
@@ -2836,13 +2955,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsAuthenticated(true);
         setLastCloudError(null);
         const now = new Date().toISOString();
+        const mappedStudioRole =
+          matchedDynamicAdmin?.role === 'moderator' ? 'Modérateur' : 'Super Admin';
         setAdminUserState(prev => ({
           ...prev,
           email: user.email || prev.email,
-          name: user.displayName || prev.name,
-          avatarUrl: user.photoURL || prev.avatarUrl,
+          name: user.displayName || matchedDynamicAdmin?.name || prev.name,
+          avatarUrl: user.photoURL || matchedDynamicAdmin?.photoURL || prev.avatarUrl,
           lastLogin: now,
-          role: 'Super Admin'
+          role: mappedStudioRole
         }));
         localStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, sessionPayload.token);
         return { success: true };
@@ -3745,6 +3866,222 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   }, [addModerationLog]);
 
+  // Administrators management
+  const syncAllowedEmailsFromAccounts = useCallback(
+    async (nextAccounts: AdminAccountRecord[]) => {
+      const activeEmails = nextAccounts
+        .filter((a) => a.status === 'active')
+        .map((a) => normalizeAdminEmail(a.email));
+      const mergedAllowed = Array.from(
+        new Set<string>([
+          ...DEFAULT_ADMIN_CREDENTIALS.allowedUsernames,
+          ...activeEmails,
+        ])
+      );
+      const updatedCreds: AdminCredentials = {
+        ...adminCredentials,
+        allowedUsernames: mergedAllowed,
+      };
+      setAdminCredentials(updatedCreds);
+      try {
+        localStorage.setItem(STORAGE_KEYS.ADMIN_CREDENTIALS, JSON.stringify(updatedCreds));
+      } catch {}
+      await syncAllowedAdminEmailsToServer(mergedAllowed).catch(() => false);
+    },
+    [adminCredentials]
+  );
+
+  const upsertAdminAccount = useCallback(
+    async (input: {
+      email: string;
+      name: string;
+      role: AdminAccountRole;
+      permissions: string[];
+      status?: 'active' | 'suspended';
+      photoURL?: string;
+      userId?: string;
+    }): Promise<{ success: boolean; syncedToCloud: boolean; error?: string }> => {
+      const cleanEmail = normalizeAdminEmail(input.email);
+      if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        return {
+          success: false,
+          syncedToCloud: false,
+          error: 'Veuillez saisir une adresse e-mail valide.',
+        };
+      }
+
+      const isOwner = isWilfriedEmail(cleanEmail);
+      const now = new Date().toISOString();
+      const existing = adminAccountsRef.current.find(
+        (a) => normalizeAdminEmail(a.email) === cleanEmail
+      );
+      const matchedUser = users.find(
+        (u) => u.id === input.userId || normalizeAdminEmail(u.email || '') === cleanEmail
+      );
+
+      const finalRole: AdminAccountRole = isOwner ? 'w.s.k' : input.role === 'w.s.k' ? 'super_admin' : input.role;
+      const finalStatus: 'active' | 'suspended' = isOwner
+        ? 'active'
+        : input.status || existing?.status || 'active';
+
+      const record: AdminAccountRecord = {
+        id: cleanEmail,
+        email: cleanEmail,
+        name: input.name.trim() || matchedUser?.name || existing?.name || cleanEmail.split('@')[0],
+        role: finalRole,
+        permissions: isOwner
+          ? DEFAULT_OWNER_ADMIN_ACCOUNT.permissions
+          : Array.from(new Set(input.permissions)),
+        status: finalStatus,
+        photoURL: input.photoURL || matchedUser?.avatarUrl || existing?.photoURL || '',
+        userId: input.userId || matchedUser?.id || existing?.userId,
+        addedBy: existing?.addedBy || adminUser.email,
+        createdAt: existing?.createdAt || now,
+        updatedAt: now,
+      };
+
+      const nextList = existing
+        ? adminAccountsRef.current.map((a) =>
+            normalizeAdminEmail(a.email) === cleanEmail ? record : a
+          )
+        : [...adminAccountsRef.current, record];
+
+      nextList.sort((a, b) => {
+        if (a.role === 'w.s.k' && b.role !== 'w.s.k') return -1;
+        if (b.role === 'w.s.k' && a.role !== 'w.s.k') return 1;
+        return a.name.localeCompare(b.name, 'fr');
+      });
+
+      adminAccountsRef.current = nextList;
+      setAdminAccounts(nextList);
+
+      // Keep local users table synchronized
+      const nextUserRole: UserAccount['role'] =
+        finalStatus === 'suspended' ? 'reader' : mapAdminRoleToUserRole(finalRole);
+      setUsers((prev) =>
+        prev.map((u) =>
+          (record.userId && u.id === record.userId) ||
+          normalizeAdminEmail(u.email || '') === cleanEmail
+            ? { ...u, role: isWilfriedEmail(u.email) ? 'w.s.k' : nextUserRole }
+            : u
+        )
+      );
+
+      await syncAllowedEmailsFromAccounts(nextList);
+      const cloudRes = await saveAdminAccountToFirestore(record);
+
+      addModerationLog(
+        existing ? 'Mise à jour Administrateur' : 'Ajout Administrateur',
+        'user',
+        cleanEmail,
+        `${record.name} (${cleanEmail}) · Rôle: ${record.role} · Statut: ${record.status}`
+      );
+
+      return cloudRes;
+    },
+    [users, adminUser.email, syncAllowedEmailsFromAccounts, addModerationLog]
+  );
+
+  const toggleAdminAccountStatus = useCallback(
+    async (email: string): Promise<{ success: boolean; error?: string }> => {
+      const cleanEmail = normalizeAdminEmail(email);
+      if (isWilfriedEmail(cleanEmail)) {
+        return {
+          success: false,
+          error: 'Le compte fondateur w.s.k (wilfriedcrea@gmail.com) est protégé et ne peut pas être suspendu.',
+        };
+      }
+      const existing = adminAccountsRef.current.find(
+        (a) => normalizeAdminEmail(a.email) === cleanEmail
+      );
+      if (!existing) {
+        return { success: false, error: 'Administrateur introuvable.' };
+      }
+      const nextStatus: 'active' | 'suspended' =
+        existing.status === 'active' ? 'suspended' : 'active';
+      const updated: AdminAccountRecord = {
+        ...existing,
+        status: nextStatus,
+        updatedAt: new Date().toISOString(),
+      };
+      const nextList = adminAccountsRef.current.map((a) =>
+        normalizeAdminEmail(a.email) === cleanEmail ? updated : a
+      );
+      adminAccountsRef.current = nextList;
+      setAdminAccounts(nextList);
+
+      const nextUserRole: UserAccount['role'] =
+        nextStatus === 'suspended' ? 'reader' : mapAdminRoleToUserRole(updated.role);
+      setUsers((prev) =>
+        prev.map((u) =>
+          (updated.userId && u.id === updated.userId) ||
+          normalizeAdminEmail(u.email || '') === cleanEmail
+            ? { ...u, role: nextUserRole }
+            : u
+        )
+      );
+
+      await syncAllowedEmailsFromAccounts(nextList);
+      await saveAdminAccountToFirestore(updated);
+      addModerationLog(
+        nextStatus === 'active' ? 'Réactivation Administrateur' : 'Suspension Administrateur',
+        'user',
+        cleanEmail,
+        `Accès administrateur ${nextStatus === 'active' ? 'réactivé' : 'suspendu'} pour ${updated.name} (${cleanEmail})`
+      );
+      return { success: true };
+    },
+    [syncAllowedEmailsFromAccounts, addModerationLog]
+  );
+
+  const removeAdminAccount = useCallback(
+    async (email: string): Promise<{ success: boolean; error?: string }> => {
+      const cleanEmail = normalizeAdminEmail(email);
+      if (isWilfriedEmail(cleanEmail)) {
+        return {
+          success: false,
+          error: 'Le compte fondateur w.s.k (wilfriedcrea@gmail.com) ne peut pas être supprimé.',
+        };
+      }
+      const existing = adminAccountsRef.current.find(
+        (a) => normalizeAdminEmail(a.email) === cleanEmail
+      );
+      if (!existing) {
+        return { success: false, error: 'Administrateur introuvable.' };
+      }
+
+      const nextList = adminAccountsRef.current.filter(
+        (a) => normalizeAdminEmail(a.email) !== cleanEmail
+      );
+      adminAccountsRef.current = nextList;
+      setAdminAccounts(nextList);
+
+      setUsers((prev) =>
+        prev.map((u) =>
+          (existing.userId && u.id === existing.userId) ||
+          normalizeAdminEmail(u.email || '') === cleanEmail
+            ? { ...u, role: 'reader' }
+            : u
+        )
+      );
+
+      await syncAllowedEmailsFromAccounts(nextList);
+      await deleteAdminAccountFromFirestore(cleanEmail, existing.userId);
+      addModerationLog(
+        'Révocation Administrateur',
+        'user',
+        cleanEmail,
+        `Droits administrateur retirés pour ${existing.name} (${cleanEmail})`
+      );
+      return { success: true };
+    },
+    [syncAllowedEmailsFromAccounts, addModerationLog]
+  );
+
+  const activeLookupEmail = normalizeAdminEmail(currentUser?.email || adminUser.email || '');
+  const currentAdminRecord =
+    adminAccounts.find((a) => normalizeAdminEmail(a.email) === activeLookupEmail) || null;
+
   // Ads & Banners
   const addAdBanner = useCallback((adData: Omit<AdBanner, 'id' | 'impressions' | 'clicks'>) => {
     const newAd: AdBanner = {
@@ -4233,6 +4570,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       reportedComments,
       moderationLogs,
       users,
+      adminAccounts,
+      currentAdminRecord,
       coinTransactions,
       ads,
       lwsFiles,
@@ -4312,6 +4651,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       adjustUserCoins,
       toggleUserBan,
       toggleUserVip,
+      upsertAdminAccount,
+      toggleAdminAccountStatus,
+      removeAdminAccount,
       addAdBanner,
       updateAdBanner,
       deleteAdBanner,

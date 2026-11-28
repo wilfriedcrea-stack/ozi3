@@ -17,10 +17,22 @@ import {
   ExternalLink,
   ChevronRight,
   Sparkles,
-  Info
+  Info,
+  Hash,
+  Loader2
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
-import { ReportedComment, CreatorSubmission, ModerationLog } from '../../types';
+import {
+  deleteDiscussionMessage,
+  resolveCommunitySpecialRole,
+  subscribeToDiscussionMessages,
+} from '../../services/discussionService';
+import {
+  ReportedComment,
+  CreatorSubmission,
+  ModerationLog,
+  DiscussionMessage,
+} from '../../types';
 
 export const AdminModerationManager: React.FC = () => {
   const { 
@@ -30,14 +42,75 @@ export const AdminModerationManager: React.FC = () => {
     submissions, 
     updateSubmissionStatus,
     moderationLogs,
+    addModerationLog,
     adminUser,
+    adminAccounts,
+    users,
     series
   } = useData();
 
-  const [activeSubTab, setActiveSubTab] = useState<'comments' | 'submissions' | 'compliance' | 'audit'>('comments');
+  const [activeSubTab, setActiveSubTab] = useState<'discussion' | 'comments' | 'submissions' | 'compliance' | 'audit'>('discussion');
   const [commentFilter, setCommentFilter] = useState<'all' | 'pending' | 'hidden' | 'approved'>('pending');
   const [commentReasonFilter, setCommentReasonFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Live #discussion messages moderation state
+  const [liveMessages, setLiveMessages] = useState<DiscussionMessage[]>([]);
+  const [discussionLoading, setDiscussionLoading] = useState(true);
+  const [discussionSearch, setDiscussionSearch] = useState('');
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
+  const [discussionFeedback, setDiscussionFeedback] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
+
+  React.useEffect(() => {
+    const unsubscribe = subscribeToDiscussionMessages(
+      120,
+      (incoming) => {
+        setLiveMessages([...incoming].reverse());
+        setDiscussionLoading(false);
+      },
+      (errMsg) => {
+        setDiscussionLoading(false);
+        setDiscussionFeedback({ type: 'error', text: errMsg });
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  const filteredLiveMessages = liveMessages.filter((msg) => {
+    const q = discussionSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      msg.text.toLowerCase().includes(q) ||
+      msg.authorName.toLowerCase().includes(q)
+    );
+  });
+
+  const handleDeleteLiveMessage = async (msg: DiscussionMessage) => {
+    setDeletingMessageId(msg.id);
+    setDiscussionFeedback(null);
+    const res = await deleteDiscussionMessage(msg.id);
+    setDeletingMessageId(null);
+    if (res.success) {
+      addModerationLog(
+        'Suppression Message #discussion',
+        'comment',
+        msg.id,
+        `Message de ${msg.authorName} supprimé par ${adminUser.email} : "${msg.text.slice(0, 80)}"`
+      );
+      setDiscussionFeedback({
+        type: 'success',
+        text: `Message de ${msg.authorName} supprimé de #discussion.`,
+      });
+    } else {
+      setDiscussionFeedback({
+        type: 'error',
+        text: res.error || 'Impossible de supprimer ce message.',
+      });
+    }
+  };
   
   // Selected item modal/drawer for deep inspection
   const [selectedComment, setSelectedComment] = useState<ReportedComment | null>(null);
@@ -121,8 +194,23 @@ export const AdminModerationManager: React.FC = () => {
       {/* Sub Tabs Navigation */}
       <div className="flex items-center gap-2 border-b border-[#202030] pb-2 overflow-x-auto scrollbar-none">
         <button
+          onClick={() => setActiveSubTab('discussion')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+            activeSubTab === 'discussion'
+              ? 'bg-[#ff8679] text-zinc-950 shadow-lg shadow-[#ff8679]/20'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+          }`}
+        >
+          <Hash className="w-4 h-4" />
+          <span>Messages #discussion</span>
+          <span className="px-1.5 py-0.5 text-[10px] rounded-md bg-black/20 font-mono">
+            {liveMessages.length}
+          </span>
+        </button>
+
+        <button
           onClick={() => setActiveSubTab('comments')}
-          className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-black transition-all ${
+          className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap shrink-0 cursor-pointer ${
             activeSubTab === 'comments'
               ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20'
               : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
@@ -139,7 +227,7 @@ export const AdminModerationManager: React.FC = () => {
 
         <button
           onClick={() => setActiveSubTab('submissions')}
-          className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-black transition-all ${
+          className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap shrink-0 cursor-pointer ${
             activeSubTab === 'submissions'
               ? 'bg-amber-500 text-zinc-950 shadow-lg shadow-amber-500/20'
               : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
@@ -156,7 +244,7 @@ export const AdminModerationManager: React.FC = () => {
 
         <button
           onClick={() => setActiveSubTab('compliance')}
-          className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-black transition-all ${
+          className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap shrink-0 cursor-pointer ${
             activeSubTab === 'compliance'
               ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
               : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
@@ -168,7 +256,7 @@ export const AdminModerationManager: React.FC = () => {
 
         <button
           onClick={() => setActiveSubTab('audit')}
-          className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-black transition-all ${
+          className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap shrink-0 cursor-pointer ${
             activeSubTab === 'audit'
               ? 'bg-zinc-800 text-zinc-100 shadow-lg'
               : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
@@ -178,6 +266,119 @@ export const AdminModerationManager: React.FC = () => {
           <span>Journal d'Audit Modérateur</span>
         </button>
       </div>
+
+      {/* TAB 0: Live #discussion Messages Moderation */}
+      {activeSubTab === 'discussion' && (
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-zinc-900/70 p-4 rounded-2xl border border-zinc-800">
+            <div>
+              <h3 className="text-sm font-black text-white">
+                Messages en direct du salon #discussion
+              </h3>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Les rôles <strong className="text-yellow-300">w.s.k</strong> et <strong className="text-yellow-300">admin</strong> peuvent supprimer tout message en direct.
+              </p>
+            </div>
+            <div className="relative w-full sm:w-72">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input
+                type="text"
+                placeholder="Filtrer par auteur ou contenu..."
+                value={discussionSearch}
+                onChange={(e) => setDiscussionSearch(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 pl-9 pr-3 py-2 rounded-xl text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[#ff8679]"
+              />
+            </div>
+          </div>
+
+          {discussionFeedback && (
+            <div
+              className={`p-3.5 rounded-xl border text-xs font-medium ${
+                discussionFeedback.type === 'success'
+                  ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-200'
+                  : 'bg-rose-950/60 border-rose-500/40 text-rose-200'
+              }`}
+            >
+              {discussionFeedback.text}
+            </div>
+          )}
+
+          {discussionLoading ? (
+            <div className="p-10 rounded-2xl bg-zinc-900/50 border border-zinc-800 text-center text-xs text-zinc-400">
+              Chargement des messages #discussion...
+            </div>
+          ) : filteredLiveMessages.length === 0 ? (
+            <div className="p-10 rounded-2xl bg-zinc-900/50 border border-zinc-800 text-center text-xs text-zinc-400">
+              Aucun message à afficher dans #discussion.
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {filteredLiveMessages.map((msg) => {
+                const matchedUser = msg.userId ? users.find((u) => u.id === msg.userId) : undefined;
+                const role = msg.isGuest
+                  ? null
+                  : msg.authorRole === 'w.s.k' || msg.authorRole === 'admin'
+                  ? msg.authorRole
+                  : matchedUser
+                  ? resolveCommunitySpecialRole({
+                      email: matchedUser.email,
+                      userRole: matchedUser.role,
+                      adminAccounts,
+                    })
+                  : msg.authorIsAdmin
+                  ? 'admin'
+                  : null;
+                const isSpecial = Boolean(role);
+
+                return (
+                  <div
+                    key={msg.id}
+                    className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-center flex-wrap gap-2 text-xs">
+                        <span className={`font-bold ${isSpecial ? 'text-yellow-300' : 'text-white'}`}>
+                          {msg.authorName}
+                        </span>
+                        {role ? (
+                          <span className="text-[11px] font-bold text-yellow-400">
+                            {role === 'w.s.k' ? 'w.s.k' : 'Admin'}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-500">
+                            {msg.isGuest ? 'Visiteur' : 'Membre'}
+                          </span>
+                        )}
+                        <span className="text-zinc-600">·</span>
+                        <span className="text-[11px] text-zinc-500 tabular-nums font-mono">
+                          {new Date(msg.createdAt).toLocaleString('fr-FR')}
+                        </span>
+                      </div>
+                      <p className="text-sm text-zinc-200 break-words whitespace-pre-wrap">
+                        {msg.text}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={deletingMessageId === msg.id}
+                      onClick={() => handleDeleteLiveMessage(msg)}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold transition-colors shrink-0 self-end sm:self-center cursor-pointer disabled:opacity-50"
+                    >
+                      {deletingMessageId === msg.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                      <span>Supprimer</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* TAB 1: Reported Comments */}
       {activeSubTab === 'comments' && (

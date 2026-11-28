@@ -146,41 +146,22 @@ export const HeroSection: React.FC = () => {
   const p = reducedMotion ? 0 : scrollProgress;
   const visible = reducedMotion || isInView;
 
-  const phoneEntranceStyle: React.CSSProperties = reducedMotion
+  const visualEntranceStyle: React.CSSProperties = reducedMotion
     ? {}
     : {
         opacity: visible ? 1 : 0,
         transform: visible
           ? 'perspective(1200px) translate3d(0px, 0px, 0px) rotateY(0deg) rotateX(0deg) scale(1)'
-          : 'perspective(1200px) translate3d(56px, 72px, -130px) rotateY(-36deg) rotateX(18deg) rotateZ(6deg) scale(0.8)',
+          : 'perspective(1200px) translate3d(32px, 56px, -90px) rotateY(-24deg) rotateX(12deg) scale(0.84)',
         transition:
           'transform 950ms cubic-bezier(0.16, 1, 0.3, 1) 80ms, opacity 750ms ease-out 80ms',
         willChange: 'transform, opacity',
       };
 
-  const phoneScrollStyle: React.CSSProperties = reducedMotion
+  const visualScrollStyle: React.CSSProperties = reducedMotion
     ? {}
     : {
-        transform: `perspective(1100px) translate3d(${(p * 14).toFixed(1)}px, ${(p * -26).toFixed(1)}px, ${(-30 + (1 - Math.abs(p)) * 30).toFixed(1)}px) rotateY(${(-6 + p * 18).toFixed(2)}deg) rotateX(${(p * -10).toFixed(2)}deg) rotateZ(${(p * 3).toFixed(2)}deg) scale(${(1 - Math.abs(p) * 0.04).toFixed(3)})`,
-        willChange: 'transform',
-      };
-
-  const characterEntranceStyle: React.CSSProperties = reducedMotion
-    ? {}
-    : {
-        opacity: visible ? 1 : 0,
-        transform: visible
-          ? 'perspective(1200px) translate3d(0px, 0px, 0px) rotateY(0deg) rotateX(0deg) scale(1)'
-          : 'perspective(1200px) translate3d(-56px, 56px, 90px) rotateY(30deg) rotateX(-12deg) rotateZ(-5deg) scale(0.84)',
-        transition:
-          'transform 1050ms cubic-bezier(0.16, 1, 0.3, 1) 180ms, opacity 800ms ease-out 180ms',
-        willChange: 'transform, opacity',
-      };
-
-  const characterScrollStyle: React.CSSProperties = reducedMotion
-    ? {}
-    : {
-        transform: `perspective(1100px) translate3d(${(p * -18).toFixed(1)}px, ${(p * 20).toFixed(1)}px, ${(70 - Math.abs(p) * 20).toFixed(1)}px) rotateY(${(6 - p * 20).toFixed(2)}deg) rotateX(${(p * 8).toFixed(2)}deg) rotateZ(${(p * -3.5).toFixed(2)}deg) scale(${(1.03 - Math.abs(p) * 0.04).toFixed(3)})`,
+        transform: `perspective(1100px) translate3d(${(p * 10).toFixed(1)}px, ${(p * -16).toFixed(1)}px, ${(30 - Math.abs(p) * 20).toFixed(1)}px) rotateY(${(-4 + p * 14).toFixed(2)}deg) rotateX(${(p * -8).toFixed(2)}deg) rotateZ(${(p * 2).toFixed(2)}deg) scale(${(1.02 - Math.abs(p) * 0.04).toFixed(3)})`,
         willChange: 'transform',
       };
 
@@ -285,31 +266,17 @@ export const HeroSection: React.FC = () => {
                 className="absolute inset-x-8 bottom-4 top-8 rounded-full bg-gradient-to-tr from-[#ff8679]/25 via-[#ff8679]/10 to-transparent blur-2xl pointer-events-none"
               />
 
-              {/* OZI 3D Phone Mockup (back Z-plane) */}
+              {/* Combined OZI Character & 3D Phone Mockup */}
               <div
-                style={phoneEntranceStyle}
-                className="absolute right-0 sm:right-2 bottom-0 h-[92%] flex items-end justify-end z-10 pointer-events-none"
+                style={visualEntranceStyle}
+                className="relative h-full w-full flex items-end justify-center z-10 pointer-events-none"
               >
                 <img
-                  src="/assets/aistudio/phone_250f2707.png"
-                  alt="Application mobile OZI sur smartphone"
+                  src="/assets/aistudio/PHONE_5d3c9f93.png"
+                  alt="Personnage et application mobile OZI sur smartphone"
                   referrerPolicy="no-referrer"
-                  style={phoneScrollStyle}
-                  className="h-full w-auto object-contain pointer-events-none drop-shadow-[0_24px_45px_rgba(255,134,121,0.24)]"
-                />
-              </div>
-
-              {/* OZI Illustrated Reader Character (foreground Z-plane) */}
-              <div
-                style={characterEntranceStyle}
-                className="absolute -left-10 sm:-left-6 bottom-0 h-[86%] flex items-end justify-start z-20 pointer-events-none"
-              >
-                <img
-                  src="/assets/aistudio/Fichier_1_f06887c1.png"
-                  alt="Lectrice découvrant les webtoons OZI sur mobile"
-                  referrerPolicy="no-referrer"
-                  style={characterScrollStyle}
-                  className="h-full w-auto object-contain pointer-events-none drop-shadow-[0_22px_36px_rgba(0,0,0,0.8)]"
+                  style={visualScrollStyle}
+                  className="h-full w-auto max-w-full object-contain pointer-events-none drop-shadow-[0_24px_45px_rgba(255,134,121,0.24)]"
                 />
               </div>
             </div>

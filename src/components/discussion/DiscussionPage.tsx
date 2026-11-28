@@ -111,6 +111,7 @@ export const DiscussionPage: React.FC = () => {
     currentUser,
     readerProfile,
     users,
+    adminAccounts,
     adminAuth,
     openAuthModal,
     openProfileModal,
@@ -150,17 +151,32 @@ export const DiscussionPage: React.FC = () => {
   const currentMemberPhoto = readerProfile?.photoURL || currentUser?.photoURL || '';
 
   const currentUserSpecialRole = useMemo<CommunitySpecialRole>(() => {
-    if (!currentUser) return null;
-    const email = (currentUser.email || readerProfile?.email || '').toLowerCase();
-    const matchedRole = users?.find(
-      (u) => u.id === currentUser.uid || (email && u.email?.toLowerCase() === email)
-    )?.role;
+    if (!currentUser && !adminAuth.isAuthenticated) return null;
+    const email = (
+      currentUser?.email ||
+      readerProfile?.email ||
+      (adminAuth.isAuthenticated ? adminAuth.user?.email : '') ||
+      ''
+    ).toLowerCase();
+    const matchedRole = currentUser
+      ? users?.find(
+          (u) => u.id === currentUser.uid || (email && u.email?.toLowerCase() === email)
+        )?.role
+      : undefined;
     return resolveCommunitySpecialRole({
       email,
       userRole: matchedRole,
       isStudioAdminAuthenticated: adminAuth.isAuthenticated,
+      adminAccounts,
     });
-  }, [currentUser, readerProfile?.email, users, adminAuth.isAuthenticated]);
+  }, [
+    currentUser,
+    readerProfile?.email,
+    users,
+    adminAuth.isAuthenticated,
+    adminAuth.user?.email,
+    adminAccounts,
+  ]);
   const isCurrentUserSpecial = Boolean(currentUserSpecialRole);
 
   useEffect(() => {
@@ -525,6 +541,7 @@ export const DiscussionPage: React.FC = () => {
                 ? resolveCommunitySpecialRole({
                     email: matchedMsgUser.email,
                     userRole: matchedMsgUser.role,
+                    adminAccounts,
                   })
                 : isOwnAccountMessage && currentUserSpecialRole
                 ? currentUserSpecialRole
@@ -532,7 +549,9 @@ export const DiscussionPage: React.FC = () => {
                 ? 'admin'
                 : null;
               const isSpecialAuthor = Boolean(msgSpecialRole);
-              const canDelete = Boolean(adminAuth.isAuthenticated || isOwnAccountMessage);
+              const canDelete = Boolean(
+                adminAuth.isAuthenticated || currentUserSpecialRole || isOwnAccountMessage
+              );
 
               return (
                 <div
@@ -574,7 +593,13 @@ export const DiscussionPage: React.FC = () => {
                       </div>
 
                       {/* Row Quick Actions */}
-                      <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
+                      <div
+                        className={`flex items-center gap-1 transition-opacity shrink-0 ${
+                          canDelete
+                            ? 'opacity-100 sm:opacity-65 sm:group-hover:opacity-100 focus-within:opacity-100'
+                            : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100'
+                        }`}
+                      >
                         <button
                           type="button"
                           onClick={() => handleReplyClick(msg)}

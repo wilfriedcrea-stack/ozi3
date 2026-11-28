@@ -254,6 +254,22 @@ export interface UserAccount {
   unlockedSeriesCount: number;
 }
 
+export type AdminAccountRole = 'w.s.k' | 'super_admin' | 'admin' | 'moderator';
+
+export interface AdminAccountRecord {
+  id: string;
+  email: string;
+  name: string;
+  role: AdminAccountRole;
+  permissions: string[];
+  status: 'active' | 'suspended';
+  photoURL?: string;
+  userId?: string;
+  addedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AdminUser {
   email: string;
   name: string;

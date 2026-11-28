@@ -20,6 +20,7 @@ import { AdminArtistsManager } from './AdminArtistsManager';
 import { AdminHeroSlidesManager } from './AdminHeroSlidesManager';
 import { AdminPasswordModal } from './AdminPasswordModal';
 import { AdminPaystackManager } from './AdminPaystackManager';
+import { AdminAdminsManager } from './AdminAdminsManager';
 import { useData } from '../../context/DataContext';
 
 export const AdminStudio: React.FC = () => {
@@ -86,6 +87,8 @@ export const AdminStudio: React.FC = () => {
           {activeTab === 'monetization' && <AdminMonetizationManager />}
 
           {activeTab === 'users' && <AdminUsersManager />}
+
+          {activeTab === 'admins' && <AdminAdminsManager />}
 
           {activeTab === 'moderation' && <AdminModerationManager />}
 

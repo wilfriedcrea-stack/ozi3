@@ -82,7 +82,9 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ activeTab, onNewSeries
       case 'articles': return 'Articles & Carnets de Création';
       case 'paystack': return 'Paystack • Clés API, Pass & Paiements';
       case 'monetization': return 'Monétisation, Tarifs Coins & Payouts Mobile Money';
-      case 'moderation': return 'Modération des Commentaires & Salubrité';
+      case 'users': return 'Utilisateurs, Lecteurs & Statuts VIP';
+      case 'admins': return 'Gestion des Administrateurs & Permissions';
+      case 'moderation': return 'Modération des Messages, Commentaires & Salubrité';
       case 'teasers': return 'Gestion des Teasers & Vidéos';
       case 'press': return 'Espace Presse & Communiqués';
       case 'version': return 'Distribution APK & Versions Mobiles';

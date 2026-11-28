@@ -18,7 +18,8 @@ import {
   KeyRound,
   Sparkles,
   Palette,
-  CreditCard
+  CreditCard,
+  ShieldCheck
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { OziLogo } from '../common/OziLogo';
@@ -39,6 +40,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ activeTab, setActive
     creatorPayouts, 
     reportedComments, 
     users, 
+    adminAccounts,
     ads, 
     lwsFiles, 
     articles, 
@@ -49,6 +51,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ activeTab, setActive
   const pendingSubmissionsCount = submissions.filter(s => s.status === 'pending').length;
   const pendingPayoutsCount = creatorPayouts.filter(p => p.status === 'pending').length;
   const pendingReportsCount = reportedComments.filter(c => c.status === 'pending').length;
+  const activeAdminsCount = adminAccounts.filter(a => a.status === 'active').length;
 
   const NAV_ITEMS = [
     { id: 'dashboard', label: 'Vue d\'ensemble', icon: BarChart3, badge: null },
@@ -59,6 +62,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ activeTab, setActive
     { id: 'paystack', label: 'Pass Paystack', icon: CreditCard, badge: 'Clés API', badgeColor: 'bg-amber-500/20 text-amber-300 border border-amber-500/30' },
     { id: 'monetization', label: 'Monétisation & Payouts', icon: Coins, badge: pendingPayoutsCount > 0 ? `${pendingPayoutsCount} virement` : null, badgeColor: 'bg-amber-500/20 text-amber-300 border border-amber-500/30' },
     { id: 'users', label: 'Utilisateurs & VIP', icon: UserCheck, badge: `${users.length}` },
+    { id: 'admins', label: 'Administrateurs', icon: ShieldCheck, badge: `${activeAdminsCount}`, badgeColor: 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' },
     { id: 'moderation', label: 'Modération & Charte', icon: ShieldAlert, badge: pendingReportsCount > 0 ? `${pendingReportsCount} report` : null, badgeColor: 'bg-rose-500/20 text-rose-300 border border-rose-500/30' },
     { id: 'submissions', label: 'Projets Créateurs', icon: Users, badge: pendingSubmissionsCount > 0 ? `${pendingSubmissionsCount} new` : null, badgeColor: 'bg-[#ff8679] text-white' },
     { id: 'ads', label: 'Publicités & Bannières', icon: Megaphone, badge: `${ads.length}` },

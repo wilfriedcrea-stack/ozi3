@@ -71,7 +71,7 @@ const GalleryCardImage: React.FC<{ item: GalleryCreation }> = ({ item }) => {
 };
 
 export const GalleryTab: React.FC<GalleryTabProps> = ({ onCountChange }) => {
-  const { currentUser, readerProfile, users, adminAuth, openAuthModal, openProfileModal } = useData();
+  const { currentUser, readerProfile, users, adminAccounts, adminAuth, openAuthModal, openProfileModal } = useData();
 
   const [creations, setCreations] = useState<GalleryCreation[]>([]);
   const [limitCount, setLimitCount] = useState(INITIAL_LIMIT);
@@ -110,17 +110,32 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ onCountChange }) => {
   const currentMemberPhoto = readerProfile?.photoURL || currentUser?.photoURL || '';
 
   const currentUserSpecialRole = useMemo<CommunitySpecialRole>(() => {
-    if (!currentUser) return null;
-    const email = (currentUser.email || readerProfile?.email || '').toLowerCase();
-    const matchedRole = users?.find(
-      (u) => u.id === currentUser.uid || (email && u.email?.toLowerCase() === email)
-    )?.role;
+    if (!currentUser && !adminAuth.isAuthenticated) return null;
+    const email = (
+      currentUser?.email ||
+      readerProfile?.email ||
+      (adminAuth.isAuthenticated ? adminAuth.user?.email : '') ||
+      ''
+    ).toLowerCase();
+    const matchedRole = currentUser
+      ? users?.find(
+          (u) => u.id === currentUser.uid || (email && u.email?.toLowerCase() === email)
+        )?.role
+      : undefined;
     return resolveCommunitySpecialRole({
       email,
       userRole: matchedRole,
       isStudioAdminAuthenticated: adminAuth.isAuthenticated,
+      adminAccounts,
     });
-  }, [currentUser, readerProfile?.email, users, adminAuth.isAuthenticated]);
+  }, [
+    currentUser,
+    readerProfile?.email,
+    users,
+    adminAuth.isAuthenticated,
+    adminAuth.user?.email,
+    adminAccounts,
+  ]);
 
   const getCreationSpecialRole = (item: GalleryCreation): CommunitySpecialRole => {
     if (item.authorRole === 'w.s.k' || item.authorRole === 'admin') {
@@ -131,6 +146,7 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ onCountChange }) => {
       return resolveCommunitySpecialRole({
         email: matchedAuthor.email,
         userRole: matchedAuthor.role,
+        adminAccounts,
       });
     }
     if (currentUser && item.authorId === currentUser.uid && currentUserSpecialRole) {
@@ -468,7 +484,9 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ onCountChange }) => {
                 const isOwnCreation = Boolean(currentUser && item.authorId === currentUser.uid);
                 const creationSpecialRole = getCreationSpecialRole(item);
                 const isSpecialAuthor = Boolean(creationSpecialRole);
-                const canDelete = Boolean(adminAuth.isAuthenticated || isOwnCreation);
+                const canDelete = Boolean(
+                  adminAuth.isAuthenticated || currentUserSpecialRole || isOwnCreation
+                );
 
                 return (
                   <article
@@ -774,6 +792,12 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ onCountChange }) => {
           {(() => {
             const lightboxSpecialRole = getCreationSpecialRole(activeLightboxCreation);
             const isLightboxSpecial = Boolean(lightboxSpecialRole);
+            const isOwnLightboxCreation = Boolean(
+              currentUser && activeLightboxCreation.authorId === currentUser.uid
+            );
+            const canDeleteLightbox = Boolean(
+              adminAuth.isAuthenticated || currentUserSpecialRole || isOwnLightboxCreation
+            );
             return (
           <div className="shrink-0 flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-zinc-800/70">
             <div className="flex items-center gap-3 min-w-0">
@@ -850,6 +874,23 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ onCountChange }) => {
                   {activeLightboxCreation.likesCount}
                 </span>
               </button>
+
+              {canDeleteLightbox && (
+                <button
+                  type="button"
+                  onClick={() => handleDelete(activeLightboxCreation)}
+                  disabled={deletingId === activeLightboxCreation.id}
+                  className="p-2 rounded-xl bg-zinc-900 hover:bg-rose-950/60 border border-zinc-700 hover:border-rose-500/40 text-zinc-300 hover:text-rose-400 cursor-pointer disabled:opacity-50"
+                  title="Supprimer cette création"
+                  aria-label="Supprimer cette création"
+                >
+                  {deletingId === activeLightboxCreation.id ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-5 h-5" />
+                  )}
+                </button>
+              )}
 
               <button
                 type="button"

@@ -411,6 +411,32 @@ studioDataRouter.post('/admin/change-password', (req: Request, res: Response) =>
   return res.status(200).json({ success: true });
 });
 
+studioDataRouter.post('/admin/allowed-emails', (req: Request, res: Response) => {
+  if (!isAdminAuthorized(req)) {
+    return res.status(401).json({ success: false, error: 'Session administrateur requise.' });
+  }
+  const rawList = Array.isArray(req.body?.allowedUsernames) ? req.body.allowedUsernames : [];
+  const normalized = Array.from(
+    new Set<string>([
+      ...DEFAULT_ALLOWED_USERNAMES,
+      ...rawList
+        .filter((item: unknown): item is string => typeof item === 'string')
+        .map((item) => item.trim().toLowerCase())
+        .filter((item) => item.length > 0 && item.length <= 160),
+    ])
+  ).slice(0, 100);
+
+  ensureDataDir();
+  const cfg = readAuthConfig();
+  const nextCfg = {
+    ...cfg,
+    allowedUsernames: normalized,
+    updatedAt: new Date().toISOString(),
+  };
+  fs.writeFileSync(safeResolveInDataDir(AUTH_FILE), JSON.stringify(nextCfg, null, 2), 'utf8');
+  return res.status(200).json({ success: true, allowedUsernames: normalized });
+});
+
 studioDataRouter.get('/studio-data', (_req: Request, res: Response) => {
   res.setHeader('Cache-Control', 'no-store');
   const data = readStudioDataFile();

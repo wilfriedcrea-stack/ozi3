@@ -41,6 +41,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
     appVersion, 
     analytics, 
     submissions, 
+    adminAccounts,
     firebaseConfig, 
     openOeuvrePage, 
     openReader,
@@ -186,6 +187,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onNe
           >
             <CreditCard className="w-4 h-4 text-amber-400 group-hover:text-zinc-950 transition-colors" />
             <span>Pass Paystack ({(paystackStats?.totalRevenueXof || 0).toLocaleString('fr-FR')} FCFA)</span>
+          </button>
+
+          <button
+            onClick={() => onNavigate('admins')}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 border border-yellow-500/40 text-xs font-bold transition-colors cursor-pointer"
+            title="Ajouter, modifier ou révoquer les administrateurs"
+          >
+            <ShieldCheck className="w-4 h-4 text-yellow-400" />
+            <span>Administrateurs ({adminAccounts.filter(a => a.status === 'active').length})</span>
           </button>
 
           <button
